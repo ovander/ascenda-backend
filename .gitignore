@@ -1,0 +1,42 @@
+# OS
+.DS_Store
+
+# Env
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+
+# Go build
+/bin/
+/build/
+/dist/
+*.exe
+*.out
+*.test
+
+# Logs
+*.log
+
+# Coverage
+coverage.out
+
+# Vendor (si go mod utilisé)
+vendor/
+
+# Temporary
+tmp/
+
+# Business / generated / noise
+BIZPREV_*
+FILES_*
+GENERATION_*
+KERPLAN_*
+SPRINT_*
+AUDIT_*.docx
+*.txt
+
+# Optional (si tu veux être strict)
+IMPLEMENTATION_SUMMARY.md

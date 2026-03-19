@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  # ── PostgreSQL ────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kerplan
+      POSTGRES_PASSWORD: kerplan
+      POSTGRES_DB: kerplan
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kerplan"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── KerPlan API ───────────────────────
+  api:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: development
+      PORT: 8080
+      DATABASE_URL: postgres://kerplan:kerplan@postgres:5432/kerplan?sslmode=disable
+      CORS_ORIGINS: http://localhost:5173
+      SOCRATE_BASE_URL: ${SOCRATE_BASE_URL:-http://localhost:9000}
+      SOCRATE_CLIENT_ID: ${SOCRATE_CLIENT_ID:-kerplan-api}
+      SOCRATE_CLIENT_SECRET: ${SOCRATE_CLIENT_SECRET:-dev-secret}
+      SOCRATE_JWKS_URL: ${SOCRATE_JWKS_URL:-http://localhost:9000/.well-known/jwks.json}
+      SOCRATE_REDIRECT_URL: ${SOCRATE_REDIRECT_URL:-http://localhost:5173/auth/callback}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
