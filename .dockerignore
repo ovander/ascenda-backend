@@ -1,0 +1,40 @@
+# Environment files — NEVER bake credentials into images
+.env
+.env.*
+!.env.example
+
+# Version control
+.git
+.gitignore
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Go test artefacts
+**/*_test.go
+**/testdata/
+coverage.out
+*.out
+*.test
+
+# Documentation & planning
+docs/
+*.md
+*.txt
+BIZPREV_*
+FILES_*
+KERPLAN_*
+SPRINT_*
+*.docx
+AUDIT_REPORT*
+
+# Migrations source — already copied via Dockerfile; no need for duplicates
+migrations/*.md
+
+# Temp / build
+tmp/
+bin/
+build/
+dist/

@@ -4,8 +4,9 @@
 APP_NAME     := kerplan-api
 VERSION      := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME   := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+GIT_COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GO           := go
-GOFLAGS      := -ldflags "-X kerplan/internal/config.Version=$(VERSION) -X kerplan/internal/config.BuildTime=$(BUILD_TIME)"
+GOFLAGS      := -ldflags "-X main.buildTime=$(BUILD_TIME) -X main.gitCommit=$(GIT_COMMIT)"
 
 DATABASE_URL ?= postgres://kerplan:kerplan@localhost:5432/kerplan?sslmode=disable
 MIGRATE      := migrate -database "$(DATABASE_URL)" -path migrations
