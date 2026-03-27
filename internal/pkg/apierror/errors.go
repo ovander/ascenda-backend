@@ -79,6 +79,14 @@ func Internal(msg string) *AppError {
 	}
 }
 
+func ServiceUnavailable(msg string) *AppError {
+	return &AppError{
+		Code:       "service_unavailable",
+		StatusCode: http.StatusServiceUnavailable,
+		Message:    msg,
+	}
+}
+
 // WriteJSON writes an AppError as a JSON response.
 func (e *AppError) WriteJSON(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")

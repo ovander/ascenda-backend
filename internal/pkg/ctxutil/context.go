@@ -10,15 +10,16 @@ import (
 type contextKey string
 
 const (
-	TenantIDKey  contextKey = "tenant_id"
-	UserIDKey    contextKey = "user_id"
-	UserRoleKey  contextKey = "user_role"
-	UserEmailKey contextKey = "user_email"
-	UserNameKey  contextKey = "user_name"
-	UserSubKey   contextKey = "user_sub"
-	LoggerKey    contextKey = "logger"
-	ClaimsKey    contextKey = "claims"
-	RequestIDKey contextKey = "request_id"
+	TenantIDKey   contextKey = "tenant_id"
+	TenantTierKey contextKey = "tenant_tier" // subscription tier: "free", "pro", "enterprise"
+	UserIDKey     contextKey = "user_id"
+	UserRoleKey   contextKey = "user_role"
+	UserEmailKey  contextKey = "user_email"
+	UserNameKey   contextKey = "user_name"
+	UserSubKey    contextKey = "user_sub"
+	LoggerKey     contextKey = "logger"
+	ClaimsKey     contextKey = "claims"
+	RequestIDKey  contextKey = "request_id"
 )
 
 // GetTenantID extracts the tenant UUID from context.
@@ -73,6 +74,20 @@ func GetTenantIDStr(ctx context.Context) string {
 // WithTenantID returns a new context with the tenant_id set.
 func WithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
 	return context.WithValue(ctx, TenantIDKey, tenantID)
+}
+
+// GetTenantTier extracts the subscription tier string from context.
+// Returns "" if not set (caller should treat as "free").
+func GetTenantTier(ctx context.Context) string {
+	if v, ok := ctx.Value(TenantTierKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// WithTenantTier returns a new context with the subscription tier set.
+func WithTenantTier(ctx context.Context, tier string) context.Context {
+	return context.WithValue(ctx, TenantTierKey, tier)
 }
 
 // WithUserID returns a new context with the user_id set.

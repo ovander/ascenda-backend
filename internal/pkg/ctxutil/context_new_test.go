@@ -52,14 +52,14 @@ func TestContextCombinationsWithNewFields(t *testing.T) {
 	ctx = WithTenantID(ctx, tenantID)
 	ctx = WithUserID(ctx, userID)
 	ctx = WithUserRole(ctx, "editor")
-	ctx = WithUserEmail(ctx, "test@kerplan.io")
+	ctx = WithUserEmail(ctx, "test@ascenda.io")
 	ctx = WithUserName(ctx, "Test User")
 	ctx = WithUserSub(ctx, "1")
 
 	assert.Equal(t, tenantID, GetTenantID(ctx))
 	assert.Equal(t, userID, GetUserID(ctx))
 	assert.Equal(t, "editor", GetUserRole(ctx))
-	assert.Equal(t, "test@kerplan.io", GetUserEmail(ctx))
+	assert.Equal(t, "test@ascenda.io", GetUserEmail(ctx))
 	assert.Equal(t, "Test User", GetUserName(ctx))
 	assert.Equal(t, "1", GetUserSub(ctx))
 }
