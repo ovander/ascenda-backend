@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // SnapshotResponse is the API representation of a plan snapshot (without data payload).

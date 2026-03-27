@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )

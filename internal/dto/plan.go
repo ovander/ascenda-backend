@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // PlanResponse is the API representation of a business plan.
@@ -11,6 +11,7 @@ type PlanResponse struct {
 	Description string `json:"description"`
 	Status      string `json:"status"`
 	CreatedBy   string `json:"createdBy"`
+	IsDemo      bool   `json:"isDemo"`
 	Timestamps
 }
 
@@ -22,6 +23,7 @@ func PlanFromModel(p model.BusinessPlan) PlanResponse {
 		Description: p.Description,
 		Status:      p.Status,
 		CreatedBy:   p.CreatedBy.String(),
+		IsDemo:      p.IsDemo,
 		Timestamps: Timestamps{
 			CreatedAt: p.CreatedAt,
 			UpdatedAt: p.UpdatedAt,
@@ -40,20 +42,22 @@ func PlansFromModels(plans []model.BusinessPlan) []PlanResponse {
 
 // ScenarioResponse is the API representation of a scenario.
 type ScenarioResponse struct {
-	ID        string `json:"id"`
-	PlanID    string `json:"planId"`
-	Name      string `json:"name"`
-	IsDefault bool   `json:"isDefault"`
+	ID          string `json:"id"`
+	PlanID      string `json:"planId"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	IsDefault   bool   `json:"isDefault"`
 	Timestamps
 }
 
 // ScenarioFromModel converts a model.Scenario to a ScenarioResponse.
 func ScenarioFromModel(s model.Scenario) ScenarioResponse {
 	return ScenarioResponse{
-		ID:        s.ID.String(),
-		PlanID:    s.PlanID.String(),
-		Name:      s.Name,
-		IsDefault: s.IsDefault,
+		ID:          s.ID.String(),
+		PlanID:      s.PlanID.String(),
+		Name:        s.Name,
+		Description: s.Description,
+		IsDefault:   s.IsDefault,
 		Timestamps: Timestamps{
 			CreatedAt: s.CreatedAt,
 			UpdatedAt: s.UpdatedAt,

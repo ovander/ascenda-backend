@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -107,12 +107,80 @@ func IncentivesFromModels(incs []model.StaffIncentive) []IncentiveResponse {
 	return out
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Payroll Summary DTO
+// ─────────────────────────────────────────────────────────────────────────
+
+// StaffPayrollYearDTO flattens payroll + functional breakdown for one year into
+// the shape expected by the frontend summary table.
+type StaffPayrollYearDTO struct {
+	YearIndex        int                        `json:"yearIndex"`
+	TotalPayroll     decimal.Decimal            `json:"totalPayroll"`     // gross salary (excl. employer charges)
+	EmployerCharges  decimal.Decimal            `json:"employerCharges"`  // employer social/tax charges
+	TotalWithCharges decimal.Decimal            `json:"totalWithCharges"` // gross + employer charges
+	Incentives       decimal.Decimal            `json:"incentives"`       // total incentives (amount + specific)
+	TotalStaffCost   decimal.Decimal            `json:"totalStaffCost"`   // totalWithCharges + incentives
+	ByFunction       map[string]decimal.Decimal `json:"byFunction"`       // rnd, production, sales_marketing, ga
+}
+
+// StaffPayrollSummaryResponse is the flattened API response for GET /staff/summary.
+type StaffPayrollSummaryResponse struct {
+	ScenarioID string                `json:"scenarioId"`
+	Years      []StaffPayrollYearDTO `json:"years"`
+}
+
+// StaffPayrollSummaryFromModel converts a model.StaffPayrollSummary to the API response DTO.
+func StaffPayrollSummaryFromModel(s *model.StaffPayrollSummary, scenarioID string) StaffPayrollSummaryResponse {
+	resp := StaffPayrollSummaryResponse{
+		ScenarioID: scenarioID,
+		Years:      make([]StaffPayrollYearDTO, 5),
+	}
+
+	// EmployerTaxRate is stored as a fraction (e.g. 0.45 = 45%).
+	// SubtotalPayroll = grossBase × (1 + EmployerTaxRate)
+	// → grossBase     = SubtotalPayroll / (1 + EmployerTaxRate)
+	// → employerCharges = SubtotalPayroll − grossBase
+	onePlusRate := decimal.NewFromInt(1).Add(s.EmployerTaxRate)
+
+	for i := range s.Payroll {
+		year := s.Payroll[i]
+		fb := s.FunctionalBreakdown[i]
+
+		var grossBase, employerCharges decimal.Decimal
+		if !onePlusRate.IsZero() {
+			grossBase = year.SubtotalPayroll.Div(onePlusRate)
+			employerCharges = year.SubtotalPayroll.Sub(grossBase)
+		}
+
+		resp.Years[i] = StaffPayrollYearDTO{
+			YearIndex:        year.YearIndex,
+			TotalPayroll:     grossBase,
+			EmployerCharges:  employerCharges,
+			TotalWithCharges: year.SubtotalPayroll,
+			Incentives:       year.SubtotalIncentives,
+			TotalStaffCost:   year.TotalPayroll,
+			ByFunction: map[string]decimal.Decimal{
+				"rnd":            fb.RnD,
+				"production":     fb.Production,
+				"sales_marketing": fb.Sales,
+				"ga":             fb.GnA,
+			},
+		}
+	}
+
+	return resp
+}
+
 // TenantResponse is the API representation of a tenant.
 type TenantResponse struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	IsActive bool   `json:"isActive"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Tier      string `json:"tier"`
+	MaxPlans  int    `json:"maxPlans"`
+	MaxUsers  int    `json:"maxUsers"`
+	AICredits int    `json:"aiCredits"`
+	IsActive  bool   `json:"isActive"`
 	Timestamps
 }
 
@@ -122,6 +190,10 @@ func TenantFromModel(t model.Tenant) TenantResponse {
 		ID:         t.ID.String(),
 		Name:       t.Name,
 		Slug:       t.Slug,
+		Tier:       t.Tier,
+		MaxPlans:   t.MaxPlans,
+		MaxUsers:   t.MaxUsers,
+		AICredits:  t.AICredits,
 		IsActive:   t.IsActive,
 		Timestamps: Timestamps{CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt},
 	}
