@@ -9,14 +9,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
 )
 
 // MockSettingsService is a mock implementation of SettingsServicer.
@@ -101,15 +100,6 @@ func (m *MockSettingsService) UpdateCapexPerHire(ctx context.Context, tenantID, 
 		return m.UpdateCapexPerHireFunc(ctx, tenantID, scenarioID, capexPerHire)
 	}
 	return apierror.Internal("mock not implemented")
-}
-
-// Helper to set up chi router context with URL parameters.
-func withChiParams(r *http.Request, params map[string]string) *http.Request {
-	chiCtx := chi.NewRouteContext()
-	for k, v := range params {
-		chiCtx.URLParams.Add(k, v)
-	}
-	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, chiCtx))
 }
 
 // TestGetConfig_Success tests successful retrieval of plan config.
@@ -225,20 +215,7 @@ func TestUpdateConfig_Success(t *testing.T) {
 	tenantID := uuid.New()
 	scenarioID := uuid.New()
 
-	mockSvc := &MockSettingsService{
-		UpdateConfigFunc: func(ctx context.Context, tid, sid uuid.UUID, cfg *model.PlanConfig) error {
-			assert.Equal(t, tenantID, tid)
-			assert.Equal(t, scenarioID, sid)
-			assert.Equal(t, 12, cfg.SalaryMonthsPerYear)
-			return nil
-		},
-	}
-
-	handler := NewSettingsHandler(mockSvc, logger)
-	ctx := context.Background()
-	ctx = ctxutil.WithTenantID(ctx, tenantID)
-
-	configBody := model.PlanConfig{
+	savedConfig := &model.PlanConfig{
 		SalaryMonthsPerYear:   12,
 		FirstFiscalYearMonths: 12,
 		DiscountRate:          decimal.RequireFromString("0.10"),
@@ -246,7 +223,24 @@ func TestUpdateConfig_Success(t *testing.T) {
 		Country:               "BE",
 	}
 
-	bodyBytes, _ := json.Marshal(configBody)
+	mockSvc := &MockSettingsService{
+		UpdateConfigFunc: func(ctx context.Context, tid, sid uuid.UUID, cfg *model.PlanConfig) error {
+			assert.Equal(t, tenantID, tid)
+			assert.Equal(t, scenarioID, sid)
+			assert.Equal(t, 12, cfg.SalaryMonthsPerYear)
+			return nil
+		},
+		// UpdateConfig now re-fetches config to return PlanConfigComputed
+		GetConfigFunc: func(ctx context.Context, tid, sid uuid.UUID) (*model.PlanConfig, error) {
+			return savedConfig, nil
+		},
+	}
+
+	handler := NewSettingsHandler(mockSvc, logger)
+	ctx := context.Background()
+	ctx = ctxutil.WithTenantID(ctx, tenantID)
+
+	bodyBytes, _ := json.Marshal(savedConfig)
 	r := httptest.NewRequest("PUT", "/settings/config", bytes.NewReader(bodyBytes)).WithContext(ctx)
 	r = withChiParams(r, map[string]string{"scenarioId": scenarioID.String()})
 	r.Header.Set("Content-Type", "application/json")
@@ -254,7 +248,11 @@ func TestUpdateConfig_Success(t *testing.T) {
 
 	handler.UpdateConfig(w, r)
 
-	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var result map[string]any
+	_ = json.NewDecoder(w.Body).Decode(&result)
+	assert.Contains(t, result, "yearHeaders")
 }
 
 // TestUpdateConfig_InvalidJSON tests invalid JSON body.
@@ -528,7 +526,7 @@ func TestUpdateWCConfig_Success(t *testing.T) {
 
 	handler.UpdateWCConfig(w, r)
 
-	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 // TestUpdateWCConfig_MissingScenarioId tests missing scenarioId in WC update.

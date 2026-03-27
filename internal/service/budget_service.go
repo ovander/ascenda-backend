@@ -5,23 +5,27 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // BudgetService orchestrates budget CRUD and reporting.
 type BudgetService struct {
 	budgetRepo    repo.BudgetRepository
 	reportService *ReportService
+	emitter       *event.Emitter
 	logger        *logrus.Entry
 }
 
 // NewBudgetService creates a new BudgetService.
-func NewBudgetService(budgetRepo repo.BudgetRepository, reportService *ReportService, logger *logrus.Entry) *BudgetService {
+func NewBudgetService(budgetRepo repo.BudgetRepository, reportService *ReportService, emitter *event.Emitter, logger *logrus.Entry) *BudgetService {
 	return &BudgetService{
 		budgetRepo:    budgetRepo,
 		reportService: reportService,
+		emitter:       emitter,
 		logger:        logger,
 	}
 }
@@ -57,7 +61,21 @@ func (s *BudgetService) UpdateOverrides(ctx context.Context, tenantID, scenarioI
 		return apierror.Internal("failed to update budget overrides")
 	}
 
+	lines := countUnique(overrides, func(o model.BudgetMonthlyOverride) string {
+		return string(o.LineID)
+	})
 	s.logger.WithField("scenario_id", scenarioID).WithField("year", year).Info("budget overrides updated")
+	if s.emitter != nil {
+		s.emitter.Publish(event.Event{
+			Type:       event.DataChanged,
+			TenantID:   tenantID,
+			UserID:     ctxutil.GetUserID(ctx),
+			ScenarioID: scenarioID,
+			EntityType: "budget",
+			Action:     event.ActionUpdate,
+			Changes:    marshalChanges(map[string]any{"rows": len(overrides), "year": year, "lines": lines}),
+		})
+	}
 	return nil
 }
 

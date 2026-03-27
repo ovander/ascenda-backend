@@ -5,18 +5,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/service"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/service"
 )
 
 // BSheetHandler handles balance sheet operations (read-only).
 type BSheetHandler struct {
-	svc    *service.BSheetService
+	svc    service.BSheetServicer
 	logger *logrus.Entry
 }
 
 // NewBSheetHandler creates a new BSheetHandler.
-func NewBSheetHandler(svc *service.BSheetService, logger *logrus.Entry) *BSheetHandler {
+func NewBSheetHandler(svc service.BSheetServicer, logger *logrus.Entry) *BSheetHandler {
 	return &BSheetHandler{
 		svc:    svc,
 		logger: logger,
@@ -27,14 +27,14 @@ func NewBSheetHandler(svc *service.BSheetService, logger *logrus.Entry) *BSheetH
 func (h *BSheetHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	report, err := h.svc.GetReport(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -45,14 +45,14 @@ func (h *BSheetHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 func (h *BSheetHandler) GetChartData(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	chartData, err := h.svc.GetChartData(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 

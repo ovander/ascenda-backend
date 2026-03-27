@@ -1,22 +1,29 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/service"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
 )
+
+// ReportServicer interface for dependency injection.
+type ReportServicer interface {
+	GetFullReport(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.FullPlanOutput, error)
+}
 
 // ReportHandler handles full plan report operations.
 type ReportHandler struct {
-	svc    *service.ReportService
+	svc    ReportServicer
 	logger *logrus.Entry
 }
 
 // NewReportHandler creates a new ReportHandler.
-func NewReportHandler(svc *service.ReportService, logger *logrus.Entry) *ReportHandler {
+func NewReportHandler(svc ReportServicer, logger *logrus.Entry) *ReportHandler {
 	return &ReportHandler{
 		svc:    svc,
 		logger: logger,
@@ -27,14 +34,14 @@ func NewReportHandler(svc *service.ReportService, logger *logrus.Entry) *ReportH
 func (h *ReportHandler) GetFullReport(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	fullReport, err := h.svc.GetFullReport(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 

@@ -5,23 +5,27 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // WCRService orchestrates working capital requirements CRUD and reporting.
 type WCRService struct {
 	wcrRepo       repo.WCRRepository
 	reportService *ReportService
+	emitter       *event.Emitter
 	logger        *logrus.Entry
 }
 
 // NewWCRService creates a new WCRService.
-func NewWCRService(wcrRepo repo.WCRRepository, reportService *ReportService, logger *logrus.Entry) *WCRService {
+func NewWCRService(wcrRepo repo.WCRRepository, reportService *ReportService, emitter *event.Emitter, logger *logrus.Entry) *WCRService {
 	return &WCRService{
 		wcrRepo:       wcrRepo,
 		reportService: reportService,
+		emitter:       emitter,
 		logger:        logger,
 	}
 }
@@ -54,6 +58,17 @@ func (s *WCRService) UpdateEntries(ctx context.Context, tenantID, scenarioID uui
 	}
 
 	s.logger.WithField("scenario_id", scenarioID).Info("wcr entries updated")
+	if s.emitter != nil {
+		s.emitter.Publish(event.Event{
+			Type:       event.DataChanged,
+			TenantID:   tenantID,
+			UserID:     ctxutil.GetUserID(ctx),
+			ScenarioID: scenarioID,
+			EntityType: "wcr",
+			Action:     event.ActionUpdate,
+			Changes:    marshalChanges(map[string]any{"rows": len(entries)}),
+		})
+	}
 	return nil
 }
 

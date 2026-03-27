@@ -1,25 +1,34 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/dto"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/service"
+	"ascenda/internal/dto"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
 )
+
+// BudgetServicer interface for dependency injection.
+type BudgetServicer interface {
+	ListOverrides(ctx context.Context, tenantID, scenarioID uuid.UUID, year int) ([]model.BudgetMonthlyOverride, error)
+	UpdateOverrides(ctx context.Context, tenantID, scenarioID uuid.UUID, year int, overrides []model.BudgetMonthlyOverride) error
+	GetBudget1Report(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.Budget1Report, error)
+	GetBudget2Report(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.Budget2Report, error)
+}
 
 // BudgetHandler handles budget operations.
 type BudgetHandler struct {
-	svc    *service.BudgetService
+	svc    BudgetServicer
 	logger *logrus.Entry
 }
 
 // NewBudgetHandler creates a new BudgetHandler.
-func NewBudgetHandler(svc *service.BudgetService, logger *logrus.Entry) *BudgetHandler {
+func NewBudgetHandler(svc BudgetServicer, logger *logrus.Entry) *BudgetHandler {
 	return &BudgetHandler{
 		svc:    svc,
 		logger: logger,
@@ -30,7 +39,7 @@ func NewBudgetHandler(svc *service.BudgetService, logger *logrus.Entry) *BudgetH
 func (h *BudgetHandler) ListOverrides(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -42,7 +51,7 @@ func (h *BudgetHandler) ListOverrides(w http.ResponseWriter, r *http.Request) {
 	tenantID := ctxutil.GetTenantID(r.Context())
 	overrides, err := h.svc.ListOverrides(r.Context(), tenantID, scenarioID, year)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -54,7 +63,7 @@ func (h *BudgetHandler) ListOverrides(w http.ResponseWriter, r *http.Request) {
 func (h *BudgetHandler) UpdateOverrides(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -65,13 +74,13 @@ func (h *BudgetHandler) UpdateOverrides(w http.ResponseWriter, r *http.Request) 
 
 	var overrides []model.BudgetMonthlyOverride
 	if err := decodeAndValidate(r, &overrides); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.UpdateOverrides(r.Context(), tenantID, scenarioID, year, overrides); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -82,14 +91,14 @@ func (h *BudgetHandler) UpdateOverrides(w http.ResponseWriter, r *http.Request) 
 func (h *BudgetHandler) GetBudget1Report(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	report, err := h.svc.GetBudget1Report(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -100,14 +109,14 @@ func (h *BudgetHandler) GetBudget1Report(w http.ResponseWriter, r *http.Request)
 func (h *BudgetHandler) GetBudget2Report(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	report, err := h.svc.GetBudget2Report(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 

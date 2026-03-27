@@ -5,10 +5,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // CapexService orchestrates capital expenditure CRUD and computation.
@@ -60,8 +61,13 @@ func (s *CapexService) UpdateEntries(ctx context.Context, tenantID, scenarioID u
 		return apierror.Internal("failed to update capex entries")
 	}
 
+	categories := countUnique(entries, func(e model.CapexEntry) string { return string(e.Category) })
 	s.logger.WithField("scenario_id", scenarioID).Info("capex entries updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "capex", Action: event.ActionUpdate})
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "capex", Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(entries), "categories": categories}),
+	})
 	return nil
 }
 

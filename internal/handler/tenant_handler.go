@@ -4,64 +4,65 @@ import (
 	"net/http"
 
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/dto"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/service"
 )
 
 // TenantHandler handles tenant management operations.
 type TenantHandler struct {
+	svc    service.TenantServicer
 	logger *logrus.Entry
 }
 
 // NewTenantHandler creates a new TenantHandler.
-func NewTenantHandler(logger *logrus.Entry) *TenantHandler {
+func NewTenantHandler(svc service.TenantServicer, logger *logrus.Entry) *TenantHandler {
 	return &TenantHandler{
+		svc:    svc,
 		logger: logger,
 	}
-}
-
-// TenantDTO represents a tenant.
-type TenantDTO struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
 }
 
 // Get returns the current tenant info.
 func (h *TenantHandler) Get(w http.ResponseWriter, r *http.Request) {
 	tenantID := ctxutil.GetTenantID(r.Context())
 
-	tenant := TenantDTO{
-		ID:    tenantID.String(),
-		Name:  "Tenant",
-		Email: "tenant@example.com",
+	tenant, err := h.svc.GetTenant(r.Context(), tenantID)
+	if err != nil {
+		handleError(w, r, err)
+		return
 	}
 
-	respondJSON(w, http.StatusOK, tenant)
+	respondJSON(w, http.StatusOK, dto.TenantFromModel(*tenant))
 }
 
-// UpdateRequest represents a tenant update request.
+// UpdateTenantRequest represents a tenant update request.
 type UpdateTenantRequest struct {
-	Name string `json:"name"`
+	Name string `json:"name" validate:"required"`
 }
 
 // Update updates tenant details.
 func (h *TenantHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req UpdateTenantRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	role := ctxutil.GetUserRole(r.Context())
 
-	// Stub: check RBAC permission for PermManageTenant
+	// Belt-and-suspenders RBAC check (route-level PermManageTenant already applied).
 	if role != "admin" && role != "owner" {
-		handleError(w, apierror.Forbidden("insufficient permissions to manage tenant"))
+		handleError(w, r, apierror.Forbidden("insufficient permissions to manage tenant"))
 		return
 	}
 
-	_ = tenantID
+	if err := h.svc.UpdateTenant(r.Context(), tenantID, req.Name); err != nil {
+		handleError(w, r, err)
+		return
+	}
+
 	respondNoContent(w)
 }

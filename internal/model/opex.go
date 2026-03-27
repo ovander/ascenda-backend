@@ -94,9 +94,9 @@ func UserInputOpexLines() []OpexLineConfig {
 // OpexManualEntry represents manual opex line entries (12 user-input lines only).
 type OpexManualEntry struct {
 	TenantScoped
-	ScenarioID uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	LineID     OpexLineID      `gorm:"type:varchar(100);not null" json:"lineId"`
-	YearIndex  int             `gorm:"not null" json:"yearIndex"`
+	ScenarioID uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:uix_opex_entries" json:"scenarioId"`
+	LineID     OpexLineID      `gorm:"type:varchar(100);not null;uniqueIndex:uix_opex_entries" json:"lineId"`
+	YearIndex  int             `gorm:"not null;uniqueIndex:uix_opex_entries" json:"yearIndex"`
 	Amount     decimal.Decimal `gorm:"type:numeric(15,2)" json:"amount"`
 }
 

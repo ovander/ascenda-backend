@@ -5,23 +5,27 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // CashService orchestrates monthly cash flow CRUD and reporting.
 type CashService struct {
 	cashRepo      repo.CashRepository
 	reportService *ReportService
+	emitter       *event.Emitter
 	logger        *logrus.Entry
 }
 
 // NewCashService creates a new CashService.
-func NewCashService(cashRepo repo.CashRepository, reportService *ReportService, logger *logrus.Entry) *CashService {
+func NewCashService(cashRepo repo.CashRepository, reportService *ReportService, emitter *event.Emitter, logger *logrus.Entry) *CashService {
 	return &CashService{
 		cashRepo:      cashRepo,
 		reportService: reportService,
+		emitter:       emitter,
 		logger:        logger,
 	}
 }
@@ -57,7 +61,21 @@ func (s *CashService) UpdateOverrides(ctx context.Context, tenantID, scenarioID 
 		return apierror.Internal("failed to update cash overrides")
 	}
 
+	lines := countUnique(overrides, func(o model.CashMonthlyOverride) string {
+		return string(o.LineID)
+	})
 	s.logger.WithField("scenario_id", scenarioID).Info("cash overrides updated")
+	if s.emitter != nil {
+		s.emitter.Publish(event.Event{
+			Type:       event.DataChanged,
+			TenantID:   tenantID,
+			UserID:     ctxutil.GetUserID(ctx),
+			ScenarioID: scenarioID,
+			EntityType: "cash",
+			Action:     event.ActionUpdate,
+			Changes:    marshalChanges(map[string]any{"rows": len(overrides), "lines": lines}),
+		})
+	}
 	return nil
 }
 

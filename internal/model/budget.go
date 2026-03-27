@@ -71,12 +71,14 @@ type Budget1Report struct {
 }
 
 type BudgetMonthlyRow struct {
-	LineID    BudgetLineID        `json:"lineId"`
-	Label     string              `json:"label"`
-	Annual    decimal.Decimal     `json:"annual"`
-	Monthly   [12]decimal.Decimal `json:"monthly"`
-	YearTotal decimal.Decimal     `json:"yearTotal"`
-	IsTotal   bool                `json:"isTotal"`
+	LineID           BudgetLineID        `json:"lineId"`
+	Label            string              `json:"label"`
+	Section          string              `json:"section"`
+	Annual           decimal.Decimal     `json:"annual"`
+	Monthly          [12]decimal.Decimal `json:"months"`
+	YearTotal        decimal.Decimal     `json:"annualTotal"`
+	IsTotal          bool                `json:"isTotal"`
+	DistributionRule DistributionRule    `json:"distributionRule"`
 }
 
 // Budget2Report is the computed summarised budget (not stored in DB).
@@ -94,8 +96,9 @@ type Budget2View struct {
 }
 
 type Budget2Row struct {
-	LineID  BudgetLineID        `json:"lineId"`
-	Label   string              `json:"label"`
-	Values  []decimal.Decimal   `json:"values"`
-	IsTotal bool                `json:"isTotal"`
+	LineID      BudgetLineID      `json:"lineId"`
+	Label       string            `json:"label"`
+	Values      []decimal.Decimal `json:"values"`
+	IsTotal     bool              `json:"isTotal"`
+	IsAggregate bool              `json:"isAggregate"` // alias of IsTotal for frontend GridRow mapping
 }

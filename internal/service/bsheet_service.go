@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
 )
 
 // BSheetService provides read-only balance sheet reporting.

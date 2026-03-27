@@ -3,10 +3,12 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 
-	"github.com/google/uuid"
 	"github.com/go-playground/validator/v10"
-	"kerplan/internal/pkg/apierror"
+	"github.com/google/uuid"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
 )
 
 var validate = validator.New()
@@ -24,13 +26,21 @@ func respondNoContent(w http.ResponseWriter) {
 }
 
 // handleError checks if an error is an AppError and writes appropriate JSON response.
-func handleError(w http.ResponseWriter, err error) {
+// It logs the error using the request-scoped logger: Warn for 4xx, Error for 5xx and unhandled errors.
+func handleError(w http.ResponseWriter, r *http.Request, err error) {
+	logger := ctxutil.GetLogger(r.Context())
 	if appErr, ok := err.(*apierror.AppError); ok {
+		if appErr.StatusCode >= 500 {
+			logger.WithError(err).Error("request failed: " + appErr.Message)
+		} else {
+			logger.WithError(err).Warn("request error: " + appErr.Message)
+		}
 		appErr.WriteJSON(w)
 		return
 	}
 
 	// Fallback for non-AppError errors
+	logger.WithError(err).Error("unhandled error")
 	internalErr := apierror.Internal(err.Error())
 	internalErr.WriteJSON(w)
 }
@@ -42,13 +52,22 @@ func decodeJSON(r *http.Request, target interface{}) error {
 }
 
 // decodeAndValidate reads, unmarshals, and validates the request body.
+// For struct targets, runs struct validation. For slices, skips validation
+// (validator.Struct doesn't support slices).
 func decodeAndValidate(r *http.Request, target interface{}) error {
 	if err := decodeJSON(r, target); err != nil {
 		return apierror.BadRequest("invalid request body: " + err.Error())
 	}
 
-	if err := validate.Struct(target); err != nil {
-		return apierror.ValidationError("validation failed", err.Error())
+	// Only run struct validation on struct types, not slices/maps
+	v := reflect.ValueOf(target)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() == reflect.Struct {
+		if err := validate.Struct(target); err != nil {
+			return apierror.ValidationError("validation failed", err.Error())
+		}
 	}
 
 	return nil

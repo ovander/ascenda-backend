@@ -1,25 +1,41 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/dto"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/pkg/pagination"
-	"kerplan/internal/service"
+	"ascenda/internal/dto"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/pkg/pagination"
 )
+
+// SnapshotServicer interface for dependency injection.
+// Matches the method signatures of *service.SnapshotService.
+type SnapshotServicer interface {
+	List(ctx context.Context, tenantID, scenarioID uuid.UUID, params pagination.Params) ([]model.PlanSnapshot, int64, error)
+	Get(ctx context.Context, tenantID, snapshotID uuid.UUID) (*model.PlanSnapshot, error)
+	Create(ctx context.Context, tenantID, scenarioID uuid.UUID, label, description string) (*model.PlanSnapshot, error)
+	Delete(ctx context.Context, tenantID, snapshotID uuid.UUID) error
+	Restore(ctx context.Context, tenantID, snapshotID uuid.UUID) error
+	Diff(ctx context.Context, tenantID, fromSnapshotID, toSnapshotID uuid.UUID) (map[string]interface{}, error)
+	GetData(ctx context.Context, tenantID, snapshotID uuid.UUID) (json.RawMessage, error)
+	CloneToScenario(ctx context.Context, tenantID, snapshotID, targetScenarioID uuid.UUID) error
+}
 
 // SnapshotHandler handles snapshot/versioning operations.
 type SnapshotHandler struct {
-	svc    *service.SnapshotService
+	svc    SnapshotServicer
 	logger *logrus.Entry
 }
 
 // NewSnapshotHandler creates a new SnapshotHandler.
-func NewSnapshotHandler(svc *service.SnapshotService, logger *logrus.Entry) *SnapshotHandler {
+func NewSnapshotHandler(svc SnapshotServicer, logger *logrus.Entry) *SnapshotHandler {
 	return &SnapshotHandler{
 		svc:    svc,
 		logger: logger,
@@ -30,7 +46,7 @@ func NewSnapshotHandler(svc *service.SnapshotService, logger *logrus.Entry) *Sna
 func (h *SnapshotHandler) List(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -48,7 +64,7 @@ func (h *SnapshotHandler) List(w http.ResponseWriter, r *http.Request) {
 	tenantID := ctxutil.GetTenantID(r.Context())
 	snapshots, total, err := h.svc.List(r.Context(), tenantID, scenarioID, params)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -65,20 +81,20 @@ type CreateSnapshotRequest struct {
 func (h *SnapshotHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateSnapshotRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	snapshot, err := h.svc.Create(r.Context(), tenantID, scenarioID, req.Label, req.Description)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -89,14 +105,14 @@ func (h *SnapshotHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *SnapshotHandler) Get(w http.ResponseWriter, r *http.Request) {
 	snapshotID, err := parseUUIDParam(chi.URLParam(r, "snapshotId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	snapshot, err := h.svc.Get(r.Context(), tenantID, snapshotID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -107,14 +123,14 @@ func (h *SnapshotHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *SnapshotHandler) GetData(w http.ResponseWriter, r *http.Request) {
 	snapshotID, err := parseUUIDParam(chi.URLParam(r, "snapshotId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	data, err := h.svc.GetData(r.Context(), tenantID, snapshotID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -127,13 +143,13 @@ func (h *SnapshotHandler) GetData(w http.ResponseWriter, r *http.Request) {
 func (h *SnapshotHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	snapshotID, err := parseUUIDParam(chi.URLParam(r, "snapshotId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.Restore(r.Context(), tenantID, snapshotID); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -149,25 +165,25 @@ type CloneSnapshotRequest struct {
 func (h *SnapshotHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	var req CloneSnapshotRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	snapshotID, err := parseUUIDParam(chi.URLParam(r, "snapshotId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	newScenarioID, err := parseUUID(req.NewScenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.CloneToScenario(r.Context(), tenantID, snapshotID, newScenarioID); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -178,20 +194,20 @@ func (h *SnapshotHandler) Clone(w http.ResponseWriter, r *http.Request) {
 func (h *SnapshotHandler) Diff(w http.ResponseWriter, r *http.Request) {
 	snapshot1ID, err := parseUUIDParam(chi.URLParam(r, "snapshot1Id"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	snapshot2ID, err := parseUUIDParam(chi.URLParam(r, "snapshot2Id"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	diff, err := h.svc.Diff(r.Context(), tenantID, snapshot1ID, snapshot2ID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -202,13 +218,13 @@ func (h *SnapshotHandler) Diff(w http.ResponseWriter, r *http.Request) {
 func (h *SnapshotHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	snapshotID, err := parseUUIDParam(chi.URLParam(r, "snapshotId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.Delete(r.Context(), tenantID, snapshotID); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 

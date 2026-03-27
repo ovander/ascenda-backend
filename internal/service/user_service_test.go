@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 )
 
 // ── Mock implementations ──────────────────────────────────────────
@@ -133,7 +133,7 @@ func newTestUserService() (*UserService, *MockUserRepo, *MockTenantRepoForUsers)
 		Tier:     "free",
 	})
 
-	svc := NewUserService(userRepo, tenantRepo, emitter, logger)
+	svc := NewUserService(userRepo, tenantRepo, nil, emitter, logger)
 	return svc, userRepo, tenantRepo
 }
 
@@ -210,12 +210,13 @@ func TestInviteUserSuccess(t *testing.T) {
 	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	invitedBy := uuid.New()
 
-	user, err := svc.InviteUser(context.Background(), tenantID, invitedBy, "new@test.com", "editor")
+	// Only "user" role is valid for tenant invitations
+	user, err := svc.InviteUser(context.Background(), tenantID, invitedBy, "new@test.com", "", "user")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.Equal(t, "new@test.com", user.Email)
-	assert.Equal(t, "editor", user.Role)
+	assert.Equal(t, "user", user.Role)
 	assert.Equal(t, &invitedBy, user.InvitedBy)
 	assert.Nil(t, user.JoinedAt) // Not yet joined
 }
@@ -224,7 +225,7 @@ func TestInviteUserRejectsInvalidRole(t *testing.T) {
 	svc, _, _ := newTestUserService()
 	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
-	_, err := svc.InviteUser(context.Background(), tenantID, uuid.New(), "new@test.com", "owner")
+	_, err := svc.InviteUser(context.Background(), tenantID, uuid.New(), "new@test.com", "", "owner")
 
 	assert.Error(t, err)
 }
@@ -233,8 +234,8 @@ func TestInviteUserRejectsDuplicateEmail(t *testing.T) {
 	svc, _, _ := newTestUserService()
 	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
-	svc.InviteUser(context.Background(), tenantID, uuid.New(), "dup@test.com", "viewer")
-	_, err := svc.InviteUser(context.Background(), tenantID, uuid.New(), "dup@test.com", "editor")
+	svc.InviteUser(context.Background(), tenantID, uuid.New(), "dup@test.com", "", "user")
+	_, err := svc.InviteUser(context.Background(), tenantID, uuid.New(), "dup@test.com", "", "user")
 
 	assert.Error(t, err)
 }
@@ -243,17 +244,19 @@ func TestUpdateRoleSuccess(t *testing.T) {
 	svc, userRepo, _ := newTestUserService()
 	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
+	// Tenant roles are only "user" and "owner" — owner transfer uses TransferOwnership
 	user := &model.User{
 		ID: uuid.New(), TenantID: tenantID, Email: "user@test.com",
-		Role: "viewer", IsActive: true,
+		Role: "user", IsActive: true,
 	}
 	userRepo.Create(user)
 
-	err := svc.UpdateRole(context.Background(), tenantID, user.ID, "owner", "editor")
+	// Only valid target role is "user" (owner uses TransferOwnership, admin is platform-level)
+	err := svc.UpdateRole(context.Background(), tenantID, user.ID, "owner", "user")
 	assert.NoError(t, err)
 
 	updated, _ := userRepo.GetByID(tenantID, user.ID)
-	assert.Equal(t, "editor", updated.Role)
+	assert.Equal(t, "user", updated.Role)
 }
 
 func TestUpdateRoleCannotChangeOwner(t *testing.T) {
@@ -284,23 +287,23 @@ func TestUpdateRoleCannotPromoteToOwner(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestOnlyOwnerCanPromoteToAdmin(t *testing.T) {
+func TestCannotAssignPlatformAdminRoleViaTenant(t *testing.T) {
 	svc, userRepo, _ := newTestUserService()
 	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 	user := &model.User{
 		ID: uuid.New(), TenantID: tenantID, Email: "user@test.com",
-		Role: "editor", IsActive: true,
+		Role: "user", IsActive: true,
 	}
 	userRepo.Create(user)
 
-	// Admin caller cannot promote to admin
+	// "admin" is the platform-level Ascenda operator role — it cannot be assigned
+	// through tenant-scoped UpdateRole by anyone (owner or otherwise).
 	err := svc.UpdateRole(context.Background(), tenantID, user.ID, "admin", "admin")
 	assert.Error(t, err)
 
-	// Owner caller can promote to admin
 	err = svc.UpdateRole(context.Background(), tenantID, user.ID, "owner", "admin")
-	assert.NoError(t, err)
+	assert.Error(t, err, "even owner cannot assign platform admin role via UpdateRole")
 }
 
 func TestDeactivateUser(t *testing.T) {
@@ -358,36 +361,57 @@ func TestTransferOwnership(t *testing.T) {
 	owner := &model.User{
 		ID: uuid.New(), TenantID: tenantID, Role: "owner", IsActive: true,
 	}
-	admin := &model.User{
-		ID: uuid.New(), TenantID: tenantID, Role: "admin", IsActive: true,
+	member := &model.User{
+		ID: uuid.New(), TenantID: tenantID, Role: "user", IsActive: true,
 	}
 	userRepo.Create(owner)
-	userRepo.Create(admin)
+	userRepo.Create(member)
 
-	err := svc.TransferOwnership(context.Background(), tenantID, owner.ID, admin.ID)
+	err := svc.TransferOwnership(context.Background(), tenantID, owner.ID, member.ID)
 	assert.NoError(t, err)
 
+	// Former owner becomes a regular user; new owner takes the "owner" role
 	updatedOwner, _ := userRepo.GetByID(tenantID, owner.ID)
-	updatedAdmin, _ := userRepo.GetByID(tenantID, admin.ID)
-	assert.Equal(t, "admin", updatedOwner.Role)
-	assert.Equal(t, "owner", updatedAdmin.Role)
+	updatedMember, _ := userRepo.GetByID(tenantID, member.ID)
+	assert.Equal(t, "user", updatedOwner.Role)
+	assert.Equal(t, "owner", updatedMember.Role)
 }
 
-func TestTransferOwnershipOnlyToAdmin(t *testing.T) {
+func TestTransferOwnershipToAnyNonOwner(t *testing.T) {
 	svc, userRepo, _ := newTestUserService()
 	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 	owner := &model.User{
 		ID: uuid.New(), TenantID: tenantID, Role: "owner", IsActive: true,
 	}
-	editor := &model.User{
-		ID: uuid.New(), TenantID: tenantID, Role: "editor", IsActive: true,
+	// Any non-owner active user can receive ownership
+	regularUser := &model.User{
+		ID: uuid.New(), TenantID: tenantID, Role: "user", IsActive: true,
 	}
 	userRepo.Create(owner)
-	userRepo.Create(editor)
+	userRepo.Create(regularUser)
 
-	err := svc.TransferOwnership(context.Background(), tenantID, owner.ID, editor.ID)
-	assert.Error(t, err) // Cannot transfer to non-admin
+	err := svc.TransferOwnership(context.Background(), tenantID, owner.ID, regularUser.ID)
+	assert.NoError(t, err) // Any active non-owner can receive ownership
+
+	updatedOwner, _ := userRepo.GetByID(tenantID, owner.ID)
+	updatedUser, _ := userRepo.GetByID(tenantID, regularUser.ID)
+	assert.Equal(t, "user", updatedOwner.Role)
+	assert.Equal(t, "owner", updatedUser.Role)
+}
+
+func TestTransferOwnershipCannotTransferToSelf(t *testing.T) {
+	svc, userRepo, _ := newTestUserService()
+	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+	owner := &model.User{
+		ID: uuid.New(), TenantID: tenantID, Role: "owner", IsActive: true,
+	}
+	userRepo.Create(owner)
+
+	// Cannot transfer to self (self is already the owner)
+	err := svc.TransferOwnership(context.Background(), tenantID, owner.ID, owner.ID)
+	assert.Error(t, err)
 }
 
 func TestListUsers(t *testing.T) {

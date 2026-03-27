@@ -1,15 +1,17 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/repo"
+	"gorm.io/gorm"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // PlanMemberHandler handles plan membership operations.
@@ -52,14 +54,13 @@ func (h *PlanMemberHandler) List(w http.ResponseWriter, r *http.Request) {
 	planIDStr := extractPlanIDFromRequest(r)
 	planID, err := uuid.Parse(planIDStr)
 	if err != nil {
-		handleError(w, apierror.BadRequest("invalid plan ID"))
+		handleError(w, r, apierror.BadRequest("invalid plan ID"))
 		return
 	}
 
 	members, err := h.repo.ListByPlan(tenantID, planID)
 	if err != nil {
-		h.logger.WithError(err).Error("failed to list plan members")
-		handleError(w, apierror.Internal("failed to list plan members"))
+		handleError(w, r, apierror.Internal("failed to list plan members"))
 		return
 	}
 
@@ -80,12 +81,12 @@ type GrantRequest struct {
 func (h *PlanMemberHandler) Grant(w http.ResponseWriter, r *http.Request) {
 	var req GrantRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	if req.Role != "editor" && req.Role != "viewer" {
-		handleError(w, apierror.BadRequest("role must be editor or viewer"))
+		handleError(w, r, apierror.BadRequest("role must be editor or viewer"))
 		return
 	}
 
@@ -94,20 +95,20 @@ func (h *PlanMemberHandler) Grant(w http.ResponseWriter, r *http.Request) {
 	planIDStr := extractPlanIDFromRequest(r)
 	planID, err := uuid.Parse(planIDStr)
 	if err != nil {
-		handleError(w, apierror.BadRequest("invalid plan ID"))
+		handleError(w, r, apierror.BadRequest("invalid plan ID"))
 		return
 	}
 
 	userID, err := uuid.Parse(req.UserID)
 	if err != nil {
-		handleError(w, apierror.BadRequest("invalid user ID"))
+		handleError(w, r, apierror.BadRequest("invalid user ID"))
 		return
 	}
 
 	// Check if already a member
 	existing, _ := h.repo.GetByPlanAndUser(tenantID, planID, userID)
 	if existing != nil {
-		handleError(w, apierror.Conflict("user already has access to this plan"))
+		handleError(w, r, apierror.Conflict("user already has access to this plan"))
 		return
 	}
 
@@ -121,8 +122,7 @@ func (h *PlanMemberHandler) Grant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.Create(member); err != nil {
-		h.logger.WithError(err).Error("failed to grant plan access")
-		handleError(w, apierror.Internal("failed to grant plan access"))
+		handleError(w, r, apierror.Internal("failed to grant plan access"))
 		return
 	}
 
@@ -138,12 +138,12 @@ type UpdateMemberRoleRequest struct {
 func (h *PlanMemberHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	var req UpdateMemberRoleRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	if req.Role != "editor" && req.Role != "viewer" {
-		handleError(w, apierror.BadRequest("role must be editor or viewer"))
+		handleError(w, r, apierror.BadRequest("role must be editor or viewer"))
 		return
 	}
 
@@ -151,25 +151,25 @@ func (h *PlanMemberHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	planIDStr := extractPlanIDFromRequest(r)
 	planID, err := uuid.Parse(planIDStr)
 	if err != nil {
-		handleError(w, apierror.BadRequest("invalid plan ID"))
+		handleError(w, r, apierror.BadRequest("invalid plan ID"))
 		return
 	}
 
 	userID, err := parseUUIDParam(chi.URLParam(r, "userId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	member, err := h.repo.GetByPlanAndUser(tenantID, planID, userID)
 	if err != nil || member == nil {
-		handleError(w, apierror.NotFound("plan member", userID.String()))
+		handleError(w, r, apierror.NotFound("plan member", userID.String()))
 		return
 	}
 
 	member.Role = req.Role
 	if err := h.repo.Update(member); err != nil {
-		handleError(w, apierror.Internal("failed to update role"))
+		handleError(w, r, apierror.Internal("failed to update role"))
 		return
 	}
 
@@ -182,19 +182,22 @@ func (h *PlanMemberHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	planIDStr := extractPlanIDFromRequest(r)
 	planID, err := uuid.Parse(planIDStr)
 	if err != nil {
-		handleError(w, apierror.BadRequest("invalid plan ID"))
+		handleError(w, r, apierror.BadRequest("invalid plan ID"))
 		return
 	}
 
 	userID, err := parseUUIDParam(chi.URLParam(r, "userId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	if err := h.repo.Delete(tenantID, planID, userID); err != nil {
-		h.logger.WithError(err).Error("failed to revoke plan access")
-		handleError(w, apierror.Internal("failed to revoke plan access"))
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			handleError(w, r, apierror.NotFound("plan member", userID.String()))
+			return
+		}
+		handleError(w, r, apierror.Internal("failed to revoke plan access"))
 		return
 	}
 

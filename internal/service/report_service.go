@@ -5,10 +5,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/compute"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/compute"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/repo"
 )
 
 // ReportService orchestrates full plan computation with optional caching.
@@ -84,9 +84,12 @@ func (s *ReportService) loadAllInputs(tenantID, scenarioID uuid.UUID) (*compute.
 		input.WCConfig = *wcConfig
 	}
 
-	// Load OpexPerHire
+	// Load OpexPerHire – fall back to defaults when the stored row is all-zero
+	// (rows created before the defaults feature was introduced).
 	opexPerHire, err := s.repos.Settings.GetOpexPerHire(tenantID, scenarioID)
-	if err == nil && opexPerHire != nil {
+	if err != nil || opexPerHire == nil || isZeroOpexPerHire(opexPerHire) {
+		input.OpexPerHire = *defaultOpexPerHire(tenantID, scenarioID)
+	} else {
 		input.OpexPerHire = *opexPerHire
 	}
 
@@ -133,6 +136,15 @@ func (s *ReportService) loadAllInputs(tenantID, scenarioID uuid.UUID) (*compute.
 				for _, m := range margins {
 					bundle.Margins = append(bundle.Margins, *m)
 				}
+			}
+
+			// Business Driver Framework (Phase 2): override volumes and unit
+			// economics from DriverParams when the product has a typed driver.
+			if derived, dErr := compute.ApplyDriverCompute(product, bundle); dErr != nil {
+				s.logger.WithError(dErr).WithField("product_id", product.ID).
+					Warn("driver compute failed — falling back to stored assumptions")
+			} else {
+				bundle = derived
 			}
 
 			input.ProductData[i] = bundle

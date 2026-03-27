@@ -34,17 +34,39 @@ func (WCREntry) TableName() string {
 	return "wcr_entries"
 }
 
+// WCRConfigSnapshot captures the payment-timing configuration used for this
+// computation. Included in WCRReport so audit trails and the UI can show the
+// exact pct/days distribution without a separate settings API call.
+type WCRConfigSnapshot struct {
+	// Tranche delay buckets (always [0, 30, 60, 90, 120] days)
+	Days [5]int `json:"days"`
+	// Customer allocation weights per bucket (sums to 1)
+	CustomerPcts [5]decimal.Decimal `json:"customerPcts"`
+	// Supplier allocation weights per bucket (sums to 1)
+	SupplierPcts [5]decimal.Decimal `json:"supplierPcts"`
+	// Inventory % of COGS, one per year
+	InventoryPcts [5]decimal.Decimal `json:"inventoryPcts"`
+}
+
 // WCRReport is the computed output (not stored in DB).
 type WCRReport struct {
-	VATRate      decimal.Decimal     `json:"vatRate"`
-	Customers    WCRCustomers        `json:"customers"`
-	Inventory    WCRInventory        `json:"inventory"`
-	Suppliers    WCRSuppliers        `json:"suppliers"`
-	Summary      WCRSummary          `json:"summary"`
-	FiscalSocial WCRFiscalSocial     `json:"fiscalSocial"`
-	Adjustments  WCRAdjustments      `json:"adjustments"`
-	Adjusted     WCRAdjusted         `json:"adjusted"`
-	Charts       WCRCharts           `json:"charts"`
+	VATRate      decimal.Decimal    `json:"vatRate"`
+	Customers    WCRCustomers       `json:"customers"`
+	Inventory    WCRInventory       `json:"inventory"`
+	Suppliers    WCRSuppliers       `json:"suppliers"`
+	Summary      WCRSummary         `json:"summary"`
+	FiscalSocial WCRFiscalSocial    `json:"fiscalSocial"`
+	Adjustments  WCRAdjustments     `json:"adjustments"`
+	Adjusted     WCRAdjusted        `json:"adjusted"`
+	Charts       WCRCharts          `json:"charts"`
+	// EffectiveDSO = Σ(customerPct_k × days_k) — the weighted-average customer
+	// collection delay in days implied by the tranche configuration.
+	EffectiveDSO decimal.Decimal    `json:"effectiveDso"`
+	// EffectiveDPO = Σ(supplierPct_k × days_k) — the weighted-average supplier
+	// payment delay in days implied by the tranche configuration.
+	EffectiveDPO decimal.Decimal    `json:"effectiveDpo"`
+	// ConfigSnapshot embeds the pct/days distribution for full auditability.
+	ConfigSnapshot WCRConfigSnapshot `json:"configSnapshot"`
 }
 
 type WCRCustomers struct {

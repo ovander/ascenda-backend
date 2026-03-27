@@ -32,10 +32,15 @@ var AllFiplanInputLines = []FiplanLineID{
 // FiplanEntry represents financial planning entries (10 user-input lines × 5 years).
 type FiplanEntry struct {
 	TenantScoped
-	ScenarioID uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	LineID     FiplanLineID    `gorm:"type:varchar(100);not null" json:"lineId"`
-	YearIndex  int             `gorm:"not null" json:"yearIndex"`
+	ScenarioID uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:uix_fiplan_entries" json:"scenarioId"`
+	LineID     FiplanLineID    `gorm:"type:varchar(100);not null;uniqueIndex:uix_fiplan_entries" json:"lineId"`
+	YearIndex  int             `gorm:"column:year;not null;uniqueIndex:uix_fiplan_entries" json:"yearIndex"` // DB column: year
 	Amount     decimal.Decimal `gorm:"type:numeric(15,2)" json:"amount"`
+
+	// Cap Table link — set when this capital_increase entry was pushed from a cap table round.
+	// Nullable; non-capital_increase lines always have these nil/empty.
+	CapTableRoundID    *uuid.UUID `gorm:"type:uuid;column:cap_table_round_id"           json:"capTableRoundId,omitempty"`
+	CapTableRoundLabel string     `gorm:"type:varchar(100);column:cap_table_round_label" json:"capTableRoundLabel,omitempty"`
 }
 
 func (FiplanEntry) TableName() string {
@@ -47,6 +52,11 @@ type FiplanReport struct {
 	Plan     FiplanPlan     `json:"plan"`
 	CashFlow FiplanCashFlow `json:"cashFlow"`
 	Warning  [5]bool        `json:"warning"`
+
+	// LoanInterest[y] is the interest charge on the outstanding debt balance for
+	// year y (0-based). It feeds directly into P&L FinancialExpenses once
+	// FiPlan is available (Layer-3 recompute in the engine).
+	LoanInterest [5]decimal.Decimal `json:"loanInterest"`
 }
 
 type FiplanPlan struct {

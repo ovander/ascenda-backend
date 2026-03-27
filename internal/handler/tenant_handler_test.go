@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,17 +13,48 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/dto"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
 )
 
+// mockTenantService implements service.TenantServicer for handler unit tests.
+// It decouples the handler tests from the service and repository implementations.
+type mockTenantService struct {
+	tenant *model.Tenant
+	err    error
+}
+
+func (m *mockTenantService) GetTenant(_ context.Context, _ uuid.UUID) (*model.Tenant, error) {
+	if m.err != nil {
+		return nil, apierror.NotFound("tenant", "mock")
+	}
+	return m.tenant, nil
+}
+
+func (m *mockTenantService) UpdateTenant(_ context.Context, _ uuid.UUID, name string) error {
+	return m.err
+}
+
+func newTestTenantHandler(svc *mockTenantService) *TenantHandler {
+	return NewTenantHandler(svc, logrus.NewEntry(logrus.StandardLogger()))
+}
+
 func TestTenantHandlerGet(t *testing.T) {
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	handler := NewTenantHandler(logger)
-
 	tenantID := uuid.New()
-	ctx := context.Background()
-	ctx = ctxutil.WithTenantID(ctx, tenantID)
+	svc := &mockTenantService{tenant: &model.Tenant{
+		ID:       tenantID,
+		Name:     "Acme",
+		Slug:     "acme",
+		Tier:     "pro",
+		MaxPlans: 10,
+		MaxUsers: 20,
+		IsActive: true,
+	}}
+	handler := newTestTenantHandler(svc)
 
+	ctx := ctxutil.WithTenantID(context.Background(), tenantID)
 	r := httptest.NewRequest("GET", "/tenant", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -31,44 +63,40 @@ func TestTenantHandlerGet(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-	var tenant TenantDTO
-	err := json.Unmarshal(w.Body.Bytes(), &tenant)
-	assert.NoError(t, err)
-	assert.Equal(t, tenantID.String(), tenant.ID)
-	assert.Equal(t, "Tenant", tenant.Name)
-	assert.Equal(t, "tenant@example.com", tenant.Email)
+	var resp dto.TenantResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, tenantID.String(), resp.ID)
+	assert.Equal(t, "Acme", resp.Name)
+	assert.Equal(t, "acme", resp.Slug)
+	assert.Equal(t, "pro", resp.Tier)
+	assert.Equal(t, 10, resp.MaxPlans)
+	assert.Equal(t, 20, resp.MaxUsers)
+	assert.True(t, resp.IsActive)
 }
 
-func TestTenantHandlerGetWithMissingTenantID(t *testing.T) {
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	handler := NewTenantHandler(logger)
+func TestTenantHandlerGetRepoError(t *testing.T) {
+	tenantID := uuid.New()
+	svc := &mockTenantService{err: errors.New("db error")}
+	handler := newTestTenantHandler(svc)
 
-	// Create request without tenant context
-	r := httptest.NewRequest("GET", "/tenant", nil)
+	ctx := ctxutil.WithTenantID(context.Background(), tenantID)
+	r := httptest.NewRequest("GET", "/tenant", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	handler.Get(w, r)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var tenant TenantDTO
-	err := json.Unmarshal(w.Body.Bytes(), &tenant)
-	assert.NoError(t, err)
-	// nil UUID converts to "00000000-0000-0000-0000-000000000000"
-	assert.Equal(t, "00000000-0000-0000-0000-000000000000", tenant.ID)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestTenantHandlerUpdateWithAdmin(t *testing.T) {
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	handler := NewTenantHandler(logger)
+	svc := &mockTenantService{}
+	handler := newTestTenantHandler(svc)
 
 	tenantID := uuid.New()
-	ctx := context.Background()
-	ctx = ctxutil.WithTenantID(ctx, tenantID)
+	ctx := ctxutil.WithTenantID(context.Background(), tenantID)
 	ctx = ctxutil.WithUserRole(ctx, "admin")
 
-	reqBody := `{"name": "Updated Tenant Name"}`
-	body := io.NopCloser(bytes.NewBufferString(reqBody))
+	body := io.NopCloser(bytes.NewBufferString(`{"name": "Updated Tenant Name"}`))
 	r := httptest.NewRequest("PUT", "/tenant", body).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -78,16 +106,14 @@ func TestTenantHandlerUpdateWithAdmin(t *testing.T) {
 }
 
 func TestTenantHandlerUpdateWithOwner(t *testing.T) {
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	handler := NewTenantHandler(logger)
+	svc := &mockTenantService{}
+	handler := newTestTenantHandler(svc)
 
 	tenantID := uuid.New()
-	ctx := context.Background()
-	ctx = ctxutil.WithTenantID(ctx, tenantID)
+	ctx := ctxutil.WithTenantID(context.Background(), tenantID)
 	ctx = ctxutil.WithUserRole(ctx, "owner")
 
-	reqBody := `{"name": "Updated Tenant Name"}`
-	body := io.NopCloser(bytes.NewBufferString(reqBody))
+	body := io.NopCloser(bytes.NewBufferString(`{"name": "Updated Tenant Name"}`))
 	r := httptest.NewRequest("PUT", "/tenant", body).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -97,16 +123,14 @@ func TestTenantHandlerUpdateWithOwner(t *testing.T) {
 }
 
 func TestTenantHandlerUpdateDeniesViewer(t *testing.T) {
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	handler := NewTenantHandler(logger)
+	svc := &mockTenantService{}
+	handler := newTestTenantHandler(svc)
 
 	tenantID := uuid.New()
-	ctx := context.Background()
-	ctx = ctxutil.WithTenantID(ctx, tenantID)
+	ctx := ctxutil.WithTenantID(context.Background(), tenantID)
 	ctx = ctxutil.WithUserRole(ctx, "viewer")
 
-	reqBody := `{"name": "Updated Tenant Name"}`
-	body := io.NopCloser(bytes.NewBufferString(reqBody))
+	body := io.NopCloser(bytes.NewBufferString(`{"name": "Updated Tenant Name"}`))
 	r := httptest.NewRequest("PUT", "/tenant", body).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -116,16 +140,14 @@ func TestTenantHandlerUpdateDeniesViewer(t *testing.T) {
 }
 
 func TestTenantHandlerUpdateDeniesCollaborator(t *testing.T) {
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	handler := NewTenantHandler(logger)
+	svc := &mockTenantService{}
+	handler := newTestTenantHandler(svc)
 
 	tenantID := uuid.New()
-	ctx := context.Background()
-	ctx = ctxutil.WithTenantID(ctx, tenantID)
+	ctx := ctxutil.WithTenantID(context.Background(), tenantID)
 	ctx = ctxutil.WithUserRole(ctx, "collaborator")
 
-	reqBody := `{"name": "Updated Tenant Name"}`
-	body := io.NopCloser(bytes.NewBufferString(reqBody))
+	body := io.NopCloser(bytes.NewBufferString(`{"name": "Updated Tenant Name"}`))
 	r := httptest.NewRequest("PUT", "/tenant", body).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -135,12 +157,11 @@ func TestTenantHandlerUpdateDeniesCollaborator(t *testing.T) {
 }
 
 func TestTenantHandlerUpdateInvalidJSON(t *testing.T) {
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	handler := NewTenantHandler(logger)
+	svc := &mockTenantService{}
+	handler := newTestTenantHandler(svc)
 
 	tenantID := uuid.New()
-	ctx := context.Background()
-	ctx = ctxutil.WithTenantID(ctx, tenantID)
+	ctx := ctxutil.WithTenantID(context.Background(), tenantID)
 	ctx = ctxutil.WithUserRole(ctx, "admin")
 
 	body := io.NopCloser(bytes.NewBufferString(`{invalid json}`))

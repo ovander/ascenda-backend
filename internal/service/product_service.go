@@ -5,10 +5,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/compute"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // ProductService orchestrates product CRUD and computation.
@@ -52,7 +54,15 @@ func (s *ProductService) CreateProduct(ctx context.Context, tenantID, scenarioID
 	}
 
 	s.logger.WithField("product_id", product.ID).Info("product created")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "product", EntityID: product.ID, Action: event.ActionCreate})
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "product", EntityID: product.ID, Action: event.ActionCreate,
+		Changes: marshalChanges(map[string]any{
+			"name":        product.Name,
+			"productType": product.ProductType,
+			"driverType":  product.DriverType,
+		}),
+	})
 	return nil
 }
 
@@ -81,6 +91,12 @@ func (s *ProductService) UpdateProduct(ctx context.Context, tenantID, productID 
 	existing.TaxVariability = product.TaxVariability
 	existing.StaffVariability = product.StaffVariability
 	existing.DepreciationVariability = product.DepreciationVariability
+	if product.DriverType != "" {
+		existing.DriverType = product.DriverType
+	}
+	if len(product.DriverParams) > 0 {
+		existing.DriverParams = product.DriverParams
+	}
 
 	if err := s.productRepo.UpdateProduct(existing); err != nil {
 		s.logger.WithError(err).Error("failed to update product")
@@ -88,13 +104,22 @@ func (s *ProductService) UpdateProduct(ctx context.Context, tenantID, productID 
 	}
 
 	s.logger.WithField("product_id", productID).Info("product updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, EntityType: "product", EntityID: productID, Action: event.ActionUpdate})
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: existing.ScenarioID,
+		EntityType: "product", EntityID: productID, Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{
+			"name":        existing.Name,
+			"productType": existing.ProductType,
+			"driverType":  existing.DriverType,
+		}),
+	})
 	return nil
 }
 
 // DeleteProduct removes a product.
 func (s *ProductService) DeleteProduct(ctx context.Context, tenantID, productID uuid.UUID) error {
-	if _, err := s.GetProduct(ctx, tenantID, productID); err != nil {
+	existing, err := s.GetProduct(ctx, tenantID, productID)
+	if err != nil {
 		return err
 	}
 
@@ -104,7 +129,11 @@ func (s *ProductService) DeleteProduct(ctx context.Context, tenantID, productID 
 	}
 
 	s.logger.WithField("product_id", productID).Info("product deleted")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, EntityType: "product", EntityID: productID, Action: event.ActionDelete})
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: existing.ScenarioID,
+		EntityType: "product", EntityID: productID, Action: event.ActionDelete,
+		Changes: marshalChanges(map[string]any{"productId": productID}),
+	})
 	return nil
 }
 
@@ -139,7 +168,11 @@ func (s *ProductService) UpdateAssumptions(ctx context.Context, tenantID, scenar
 	}
 
 	s.logger.WithField("product_id", productID).Info("assumptions updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "product_assumptions", EntityID: productID, Action: event.ActionUpdate})
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "product_assumptions", EntityID: productID, Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(assumptions)}),
+	})
 	return nil
 }
 
@@ -174,7 +207,12 @@ func (s *ProductService) UpdateVolumes(ctx context.Context, tenantID, scenarioID
 	}
 
 	s.logger.WithField("product_id", productID).Info("volumes updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "product_volumes", EntityID: productID, Action: event.ActionUpdate})
+	zones := countUnique(volumes, func(v model.ProductSalesVolume) string { return string(v.Zone) })
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "product_volumes", EntityID: productID, Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(volumes), "zones": zones}),
+	})
 	return nil
 }
 
@@ -209,8 +247,83 @@ func (s *ProductService) UpdateMargins(ctx context.Context, tenantID, scenarioID
 	}
 
 	s.logger.WithField("product_id", productID).Info("margins updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "product_margins", EntityID: productID, Action: event.ActionUpdate})
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "product_margins", EntityID: productID, Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(margins)}),
+	})
 	return nil
+}
+
+// DerivedBundleResult carries the compute-engine outputs for a typed-driver product.
+type DerivedBundleResult struct {
+	// Volumes contains the driver-derived per-year volume records.
+	Volumes []model.ProductSalesVolume `json:"volumes"`
+	// Assumptions contains the full per-year assumption rows after driver override.
+	// Index 0 = Y1, ..., Index 4 = Y5.
+	Assumptions [compute.MaxYears]model.ProductAssumption `json:"assumptions"`
+}
+
+// GetDerivedBundle applies the driver compute for a single product and returns
+// the resulting volumes and assumptions.  For generic products the stored values
+// are returned unchanged.
+func (s *ProductService) GetDerivedBundle(ctx context.Context, tenantID, productID uuid.UUID) (*DerivedBundleResult, error) {
+	product, err := s.GetProduct(ctx, tenantID, productID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build raw bundle from stored rows.
+	bundle := compute.ProductInputBundle{}
+
+	assumptions, _ := s.productRepo.GetAssumptionsByProduct(tenantID, productID)
+	for _, a := range assumptions {
+		idx := a.YearIndex - 1
+		if idx >= 0 && idx < compute.MaxYears {
+			bundle.Assumptions[idx] = *a
+		}
+	}
+
+	volumes, _ := s.productRepo.GetVolumesByProduct(tenantID, productID)
+	for _, v := range volumes {
+		bundle.Volumes = append(bundle.Volumes, *v)
+	}
+
+	margins, _ := s.productRepo.GetMarginsByProduct(tenantID, productID)
+	for _, m := range margins {
+		bundle.Margins = append(bundle.Margins, *m)
+	}
+
+	// Apply driver compute. On error (e.g. params not yet saved, partial JSON)
+	// fall back to the raw stored bundle so the UI still gets a valid response.
+	derived, dErr := compute.ApplyDriverCompute(*product, bundle)
+	if dErr != nil {
+		s.logger.WithError(dErr).Warn("driver compute failed in GetDerivedBundle — returning raw bundle")
+		derived = bundle
+	}
+
+	return &DerivedBundleResult{
+		Volumes:     derived.Volumes,
+		Assumptions: derived.Assumptions,
+	}, nil
+}
+
+// GetRevenueByProduct returns the revenue summary for a single product.
+func (s *ProductService) GetRevenueByProduct(ctx context.Context, tenantID, scenarioID, productID uuid.UUID) (*model.ProductRevenueSummary, error) {
+	fullReport, err := s.reportService.GetFullReport(ctx, tenantID, scenarioID)
+	if err != nil {
+		s.logger.WithError(err).Error("failed to compute revenue by product")
+		return nil, apierror.Internal("failed to compute revenue")
+	}
+
+	for i := range fullReport.Revenue.Products {
+		if fullReport.Revenue.Products[i].ProductID == productID {
+			summary := fullReport.Revenue.Products[i]
+			return &summary, nil
+		}
+	}
+
+	return nil, apierror.NotFound("product", productID.String())
 }
 
 // GetConsolidatedRevenue delegates to ReportService for revenue computation.

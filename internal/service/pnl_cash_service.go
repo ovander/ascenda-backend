@@ -5,23 +5,27 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // PnlCashService orchestrates P&L + Cash CRUD and reporting.
 type PnlCashService struct {
 	pnlCashRepo   repo.PnlCashRepository
 	reportService *ReportService
+	emitter       *event.Emitter
 	logger        *logrus.Entry
 }
 
 // NewPnlCashService creates a new PnlCashService.
-func NewPnlCashService(pnlCashRepo repo.PnlCashRepository, reportService *ReportService, logger *logrus.Entry) *PnlCashService {
+func NewPnlCashService(pnlCashRepo repo.PnlCashRepository, reportService *ReportService, emitter *event.Emitter, logger *logrus.Entry) *PnlCashService {
 	return &PnlCashService{
 		pnlCashRepo:   pnlCashRepo,
 		reportService: reportService,
+		emitter:       emitter,
 		logger:        logger,
 	}
 }
@@ -58,6 +62,11 @@ func (s *PnlCashService) UpdateEntries(ctx context.Context, tenantID, scenarioID
 	}
 
 	s.logger.WithField("scenario_id", scenarioID).Info("pnl cash entries updated")
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "pnl_cash", Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(entries)}),
+	})
 	return nil
 }
 

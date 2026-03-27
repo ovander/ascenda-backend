@@ -154,15 +154,19 @@ type RatiosOperational struct {
 }
 
 type RatiosProfitability struct {
-	AddedValue    [5]decimal.Decimal `json:"addedValue"`
-	AddedValuePct [5]decimal.Decimal `json:"addedValuePct"`
-	EBITDA        [5]decimal.Decimal `json:"ebitda"`
-	EBITDAPct     [5]decimal.Decimal `json:"ebitdaPct"`
-	NetProfit     [5]decimal.Decimal `json:"netProfit"`
-	NetProfitPct  [5]decimal.Decimal `json:"netProfitPct"`
-	CashFlow      [5]decimal.Decimal `json:"cashFlow"`
-	CashFlowPct   [5]decimal.Decimal `json:"cashFlowPct"`
-	CashAtEOY     [5]decimal.Decimal `json:"cashAtEoy"`
+	AddedValue      [5]decimal.Decimal `json:"addedValue"`
+	AddedValuePct   [5]decimal.Decimal `json:"addedValuePct"`
+	EBITDA          [5]decimal.Decimal `json:"ebitda"`
+	EBITDAPct       [5]decimal.Decimal `json:"ebitdaPct"`
+	NetProfit       [5]decimal.Decimal `json:"netProfit"`
+	NetProfitPct    [5]decimal.Decimal `json:"netProfitPct"`
+	// CashFlow = NetProfit + Depreciation  (accounting / operating cash flow)
+	CashFlow        [5]decimal.Decimal `json:"cashFlow"`
+	CashFlowPct     [5]decimal.Decimal `json:"cashFlowPct"`
+	// FreeCashFlow = CashFlow − CapEx − ΔWCR  (investable free cash flow)
+	FreeCashFlow    [5]decimal.Decimal `json:"freeCashFlow"`
+	FreeCashFlowPct [5]decimal.Decimal `json:"freeCashFlowPct"`
+	CashAtEOY       [5]decimal.Decimal `json:"cashAtEoy"`
 }
 
 type RatiosEquityLeverage struct {
@@ -170,22 +174,35 @@ type RatiosEquityLeverage struct {
 	CapitalIncrease   [5]decimal.Decimal `json:"capitalIncrease"`
 	TotalEquityEOY    [5]decimal.Decimal `json:"totalEquityEoy"`
 	NetProfitMinusCap [5]decimal.Decimal `json:"netProfitMinusCap"`
+	// FinancialReturn = NetProfit / TotalEquityEOY
 	FinancialReturn   [5]decimal.Decimal `json:"financialReturn"`
+	// TotalAssets: denominator for EquityToAssets; included for audit traceability
+	TotalAssets       [5]decimal.Decimal `json:"totalAssets"`
+	// EquityToAssets = TotalEquityEOY / TotalAssets
 	EquityToAssets    [5]decimal.Decimal `json:"equityToAssets"`
 	LTLoans           [5]decimal.Decimal `json:"ltLoans"`
 	LTLoansToEquity   [5]decimal.Decimal `json:"ltLoansToEquity"`
 	CashFlowToLoans   [5]decimal.Decimal `json:"cashFlowToLoans"`
 	FinExpToEBITDA    [5]decimal.Decimal `json:"finExpToEbitda"`
+	// WCR: working capital requirement in currency (base for WCRRotationDays)
+	WCR               [5]decimal.Decimal `json:"wcr"`
+	// WCRRotationDays = WCR / Sales × 365
 	WCRRotationDays   [5]decimal.Decimal `json:"wcrRotationDays"`
 }
 
 type RatiosValuation struct {
-	DiscountRate    decimal.Decimal `json:"discountRate"`
+	DiscountRate decimal.Decimal `json:"discountRate"`
+	// NPV = Σ FreeCashFlow[y] / (1+r)^(y+1)  for y = 0..4
 	NPV             decimal.Decimal `json:"npv"`
 	IRR             decimal.Decimal `json:"irr"`
 	IRRValid        bool            `json:"irrValid"`
-	PEMultiple      decimal.Decimal `json:"peMultiple"`
+	// TerminalValue = FreeCashFlow[4] / max(discountRate, 5%)  discounted to today
+	// Represents perpetuity value of steady-state FCF beyond year 5
+	TerminalValue   decimal.Decimal `json:"terminalValue"`
+	// DiscountedValue = NPV + TerminalValue  (enterprise value estimate)
 	DiscountedValue decimal.Decimal `json:"discountedValue"`
+	// PEMultiple = DiscountedValue / NetProfit[4]  (DCF-implied earnings multiple)
+	PEMultiple      decimal.Decimal `json:"peMultiple"`
 }
 
 type RatiosCharts struct {

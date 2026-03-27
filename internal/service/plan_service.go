@@ -5,11 +5,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/pkg/pagination"
-	"kerplan/internal/repo"
+	"gorm.io/gorm"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/pkg/pagination"
+	"ascenda/internal/repo"
 )
 
 // PlanService orchestrates plan and scenario CRUD operations.
@@ -17,25 +19,37 @@ type PlanService struct {
 	planRepo     repo.PlanRepository
 	settingsRepo repo.SettingsRepository
 	auditRepo    repo.AuditRepository
-	repos        *repo.RepoBundle
-	emitter      *event.Emitter
-	logger       *logrus.Entry
+	// deps is the narrow dependency interface; the real app injects *repo.RepoBundle,
+	// tests can inject any struct that implements repo.PlanDeps.
+	deps              repo.PlanDeps
+	countryRateSvc    *CountryRateConfigService // nil-safe: falls back to hard-coded defaults
+	emitter           *event.Emitter
+	logger            *logrus.Entry
 }
 
 // NewPlanService creates a new PlanService.
-func NewPlanService(planRepo repo.PlanRepository, settingsRepo repo.SettingsRepository, auditRepo repo.AuditRepository, repos *repo.RepoBundle, emitter *event.Emitter, logger *logrus.Entry) *PlanService {
+func NewPlanService(planRepo repo.PlanRepository, settingsRepo repo.SettingsRepository, auditRepo repo.AuditRepository, deps repo.PlanDeps, countryRateSvc *CountryRateConfigService, emitter *event.Emitter, logger *logrus.Entry) *PlanService {
 	return &PlanService{
-		planRepo:     planRepo,
-		settingsRepo: settingsRepo,
-		auditRepo:    auditRepo,
-		repos:        repos,
-		emitter:      emitter,
-		logger:       logger,
+		planRepo:          planRepo,
+		settingsRepo:      settingsRepo,
+		auditRepo:         auditRepo,
+		deps:              deps,
+		countryRateSvc:    countryRateSvc,
+		emitter:           emitter,
+		logger:            logger,
 	}
 }
 
 // ListPlans lists all plans for a tenant with pagination.
+// The returned total reflects the full DB count for the tenant, not merely the
+// length of the current page (fixes the pagination total count bug).
 func (s *PlanService) ListPlans(ctx context.Context, tenantID uuid.UUID, params pagination.Params) ([]model.BusinessPlan, int64, error) {
+	total, err := s.planRepo.CountByTenant(tenantID)
+	if err != nil {
+		s.logger.WithError(err).Error("failed to count plans")
+		return nil, 0, apierror.Internal("failed to count plans")
+	}
+
 	ptrPlans, err := s.planRepo.ListByTenant(tenantID, params.Offset, params.PerPage)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to list plans")
@@ -47,11 +61,45 @@ func (s *PlanService) ListPlans(ctx context.Context, tenantID uuid.UUID, params 
 		plans[i] = *p
 	}
 
-	return plans, int64(len(plans)), nil
+	return plans, total, nil
+}
+
+// defaultPlanConfig returns a PlanConfig seeded with country-specific statutory
+// rates. Uses DB-backed rates when available, falls back to hard-coded defaults.
+func (s *PlanService) defaultPlanConfig(tenantID, scenarioID uuid.UUID, country string) *model.PlanConfig {
+	var rates countryRates
+	if s.countryRateSvc != nil {
+		rates = s.countryRateSvc.RatesFor(country)
+	} else {
+		rates = ratesFor(country)
+	}
+	return defaultPlanConfigFromRates(tenantID, scenarioID, country, rates)
+}
+
+// countryForPlan returns the country code from the plan's default scenario config.
+// Falls back to "BE" if nothing can be found.
+func (s *PlanService) countryForPlan(tenantID, planID uuid.UUID) string {
+	scenarios, err := s.deps.GetScenario().ListByPlan(tenantID, planID)
+	if err != nil || len(scenarios) == 0 {
+		return "BE"
+	}
+	// Prefer the scenario flagged as default; otherwise take the first one.
+	ref := scenarios[0]
+	for _, sc := range scenarios {
+		if sc.IsDefault {
+			ref = sc
+			break
+		}
+	}
+	cfg, err := s.settingsRepo.GetConfig(tenantID, ref.ID)
+	if err != nil || cfg == nil || cfg.Country == "" {
+		return "BE"
+	}
+	return cfg.Country
 }
 
 // CreatePlan creates a new business plan with default scenario and configuration.
-func (s *PlanService) CreatePlan(ctx context.Context, tenantID, createdBy uuid.UUID, name, description string) (*model.BusinessPlan, error) {
+func (s *PlanService) CreatePlan(ctx context.Context, tenantID, createdBy uuid.UUID, name, description, country string) (*model.BusinessPlan, error) {
 	plan := &model.BusinessPlan{
 		TenantScoped: model.TenantScoped{ID: uuid.New()},
 		Name:         name,
@@ -75,21 +123,13 @@ func (s *PlanService) CreatePlan(ctx context.Context, tenantID, createdBy uuid.U
 	}
 	scenario.TenantID = tenantID
 
-	if err := s.repos.Scenario.Create(scenario); err != nil {
+	if err := s.deps.GetScenario().Create(scenario); err != nil {
 		s.logger.WithError(err).Error("failed to create default scenario")
 		return nil, apierror.Internal("failed to create default scenario")
 	}
 
 	// Create default PlanConfig
-	config := &model.PlanConfig{
-		TenantScoped:     model.TenantScoped{ID: uuid.New()},
-		ScenarioID:       scenario.ID,
-		FirstFiscalYearMonths: 12,
-		SalaryMonthsPerYear:  12,
-		Country:              "BE",
-	}
-	config.TenantID = tenantID
-
+	config := s.defaultPlanConfig(tenantID, scenario.ID, country)
 	if err := s.settingsRepo.UpsertConfig(config); err != nil {
 		s.logger.WithError(err).Error("failed to create default config")
 		return nil, apierror.Internal("failed to create default config")
@@ -144,6 +184,7 @@ func (s *PlanService) UpdatePlan(ctx context.Context, tenantID, planID uuid.UUID
 	s.emitter.Publish(event.Event{
 		Type:       event.DataChanged,
 		TenantID:   tenantID,
+		UserID:     ctxutil.GetUserID(ctx),
 		EntityType: "plan",
 		EntityID:   planID,
 		Action:     event.ActionUpdate,
@@ -153,8 +194,12 @@ func (s *PlanService) UpdatePlan(ctx context.Context, tenantID, planID uuid.UUID
 
 // DeletePlan removes a plan and all associated data.
 func (s *PlanService) DeletePlan(ctx context.Context, tenantID, planID uuid.UUID) error {
-	if _, err := s.GetPlan(ctx, tenantID, planID); err != nil {
+	plan, err := s.GetPlan(ctx, tenantID, planID)
+	if err != nil {
 		return err
+	}
+	if plan.IsDemo {
+		return apierror.Forbidden("demo plans cannot be deleted")
 	}
 
 	if err := s.planRepo.Delete(tenantID, planID); err != nil {
@@ -166,6 +211,7 @@ func (s *PlanService) DeletePlan(ctx context.Context, tenantID, planID uuid.UUID
 	s.emitter.Publish(event.Event{
 		Type:       event.PlanDeleted,
 		TenantID:   tenantID,
+		UserID:     ctxutil.GetUserID(ctx),
 		EntityType: "plan",
 		EntityID:   planID,
 		Action:     event.ActionDelete,
@@ -173,9 +219,149 @@ func (s *PlanService) DeletePlan(ctx context.Context, tenantID, planID uuid.UUID
 	return nil
 }
 
+// ── Plan Status Machine ────────────────────────────────────────────────────────
+
+// planStatusTransitions defines the allowed state-machine edges.
+// key = current status, value = set of reachable statuses.
+var planStatusTransitions = map[string]map[string]bool{
+	"draft":    {"review": true},
+	"review":   {"draft": true, "approved": true, "archived": true},
+	"approved": {"review": true, "archived": true},
+	"archived": {}, // terminal — cannot transition out
+}
+
+// ownerOnlyTransitions requires the caller to be "owner" (or "admin").
+var ownerOnlyTransitions = map[string]bool{
+	"approved": true, // locking requires owner
+	"archived": true, // archiving requires owner
+}
+
+// TransitionPlanStatus moves a plan between lifecycle states with state-machine guards.
+// callerRole is the tenant role of the caller ("owner", "admin", "user").
+func (s *PlanService) TransitionPlanStatus(ctx context.Context, tenantID, planID uuid.UUID, newStatus, callerRole string) error {
+	plan, err := s.GetPlan(ctx, tenantID, planID)
+	if err != nil {
+		return err
+	}
+
+	allowed, ok := planStatusTransitions[plan.Status]
+	if !ok {
+		return apierror.Conflict("plan is in an unknown status: " + plan.Status)
+	}
+	if !allowed[newStatus] {
+		return apierror.Conflict("cannot transition plan from '" + plan.Status + "' to '" + newStatus + "'")
+	}
+
+	// Owner-only transitions
+	if ownerOnlyTransitions[newStatus] && callerRole != "owner" && callerRole != "admin" {
+		return apierror.Forbidden("only the plan owner can lock or archive a plan")
+	}
+
+	plan.Status = newStatus
+	if err := s.planRepo.Update(plan); err != nil {
+		s.logger.WithError(err).Error("failed to update plan status")
+		return apierror.Internal("failed to update plan status")
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"plan_id": planID, "new_status": newStatus,
+	}).Info("plan status transitioned")
+
+	s.emitter.Publish(event.Event{
+		Type:       event.DataChanged,
+		TenantID:   tenantID,
+		UserID:     ctxutil.GetUserID(ctx),
+		EntityType: "plan",
+		EntityID:   planID,
+		Action:     event.ActionUpdate,
+	})
+	return nil
+}
+
+// PlanImpact holds the dependency counts used by the safe-delete preview.
+type PlanImpact struct {
+	PlanID        string `json:"planId"`
+	PlanName      string `json:"planName"`
+	PlanStatus    string `json:"planStatus"`
+	ScenarioCount int    `json:"scenarioCount"`
+	IsDemo        bool   `json:"isDemo"`
+	CanDelete     bool   `json:"canDelete"`
+	BlockedReason string `json:"blockedReason,omitempty"`
+}
+
+// GetPlanImpact computes the dependency counts for a plan deletion preview.
+func (s *PlanService) GetPlanImpact(ctx context.Context, tenantID, planID uuid.UUID) (*PlanImpact, error) {
+	plan, err := s.GetPlan(ctx, tenantID, planID)
+	if err != nil {
+		return nil, err
+	}
+
+	scenarios, err := s.deps.GetScenario().ListByPlan(tenantID, planID)
+	if err != nil {
+		scenarios = nil
+	}
+
+	impact := &PlanImpact{
+		PlanID:        planID.String(),
+		PlanName:      plan.Name,
+		PlanStatus:    plan.Status,
+		ScenarioCount: len(scenarios),
+		IsDemo:        plan.IsDemo,
+		CanDelete:     true,
+	}
+
+	if plan.IsDemo {
+		impact.CanDelete = false
+		impact.BlockedReason = "Demo plans cannot be deleted."
+	} else if plan.Status == "approved" {
+		impact.CanDelete = false
+		impact.BlockedReason = "Locked plans cannot be deleted. Unlock the plan first."
+	}
+
+	return impact, nil
+}
+
+// ScenarioImpact holds counts for the scenario deletion preview.
+type ScenarioImpact struct {
+	ScenarioID    string `json:"scenarioId"`
+	ScenarioName  string `json:"scenarioName"`
+	IsDefault     bool   `json:"isDefault"`
+	IsLastInPlan  bool   `json:"isLastInPlan"`
+	CanDelete     bool   `json:"canDelete"`
+	BlockedReason string `json:"blockedReason,omitempty"`
+}
+
+// GetScenarioImpact computes deletion dependencies for a scenario.
+func (s *PlanService) GetScenarioImpact(ctx context.Context, tenantID, planID, scenarioID uuid.UUID) (*ScenarioImpact, error) {
+	scenario, err := s.deps.GetScenario().GetByID(tenantID, scenarioID)
+	if err != nil || scenario == nil {
+		return nil, apierror.NotFound("scenario", scenarioID.String())
+	}
+
+	siblings, err := s.deps.GetScenario().ListByPlan(tenantID, planID)
+	if err != nil {
+		siblings = nil
+	}
+
+	impact := &ScenarioImpact{
+		ScenarioID:   scenarioID.String(),
+		ScenarioName: scenario.Name,
+		IsDefault:    scenario.IsDefault,
+		IsLastInPlan: len(siblings) <= 1,
+		CanDelete:    true,
+	}
+
+	if len(siblings) <= 1 {
+		impact.CanDelete = false
+		impact.BlockedReason = "Cannot delete the last scenario in a plan."
+	}
+
+	return impact, nil
+}
+
 // GetScenario retrieves a scenario by ID.
 func (s *PlanService) GetScenario(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.Scenario, error) {
-	scenario, err := s.repos.Scenario.GetByID(tenantID, scenarioID)
+	scenario, err := s.deps.GetScenario().GetByID(tenantID, scenarioID)
 	if err != nil || scenario == nil || scenario.TenantID != tenantID {
 		s.logger.WithError(err).Warn("scenario not found")
 		return nil, apierror.NotFound("scenario", scenarioID.String())
@@ -186,7 +372,7 @@ func (s *PlanService) GetScenario(ctx context.Context, tenantID, scenarioID uuid
 
 // ListScenarios lists all scenarios for a plan.
 func (s *PlanService) ListScenarios(ctx context.Context, tenantID, planID uuid.UUID) ([]model.Scenario, error) {
-	ptrScenarios, err := s.repos.Scenario.ListByPlan(tenantID, planID)
+	ptrScenarios, err := s.deps.GetScenario().ListByPlan(tenantID, planID)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to list scenarios")
 		return nil, apierror.Internal("failed to list scenarios")
@@ -201,7 +387,7 @@ func (s *PlanService) ListScenarios(ctx context.Context, tenantID, planID uuid.U
 }
 
 // CreateScenario creates a new scenario for a plan.
-func (s *PlanService) CreateScenario(ctx context.Context, tenantID, planID uuid.UUID, name string) (*model.Scenario, error) {
+func (s *PlanService) CreateScenario(ctx context.Context, tenantID, planID uuid.UUID, name, description string) (*model.Scenario, error) {
 	// Verify plan exists
 	if _, err := s.GetPlan(ctx, tenantID, planID); err != nil {
 		return nil, err
@@ -211,25 +397,18 @@ func (s *PlanService) CreateScenario(ctx context.Context, tenantID, planID uuid.
 		TenantScoped: model.TenantScoped{ID: uuid.New()},
 		PlanID:       planID,
 		Name:         name,
+		Description:  description,
 		IsDefault:    false,
 	}
 	scenario.TenantID = tenantID
 
-	if err := s.repos.Scenario.Create(scenario); err != nil {
+	if err := s.deps.GetScenario().Create(scenario); err != nil {
 		s.logger.WithError(err).Error("failed to create scenario")
 		return nil, apierror.Internal("failed to create scenario")
 	}
 
-	// Create default PlanConfig for new scenario
-	config := &model.PlanConfig{
-		TenantScoped:     model.TenantScoped{ID: uuid.New()},
-		ScenarioID:       scenario.ID,
-		FirstFiscalYearMonths: 12,
-		SalaryMonthsPerYear:  12,
-		Country:              "BE",
-	}
-	config.TenantID = tenantID
-
+	// Create default PlanConfig for new scenario — inherit country from the plan's existing config.
+	config := s.defaultPlanConfig(tenantID, scenario.ID, s.countryForPlan(tenantID, planID))
 	if err := s.settingsRepo.UpsertConfig(config); err != nil {
 		s.logger.WithError(err).Error("failed to create config for new scenario")
 		return nil, apierror.Internal("failed to create config for new scenario")
@@ -239,6 +418,7 @@ func (s *PlanService) CreateScenario(ctx context.Context, tenantID, planID uuid.
 	s.emitter.Publish(event.Event{
 		Type:       event.DataChanged,
 		TenantID:   tenantID,
+		UserID:     ctxutil.GetUserID(ctx),
 		ScenarioID: scenario.ID,
 		EntityType: "scenario",
 		EntityID:   scenario.ID,
@@ -247,8 +427,8 @@ func (s *PlanService) CreateScenario(ctx context.Context, tenantID, planID uuid.
 	return scenario, nil
 }
 
-// UpdateScenario updates a scenario's name.
-func (s *PlanService) UpdateScenario(ctx context.Context, tenantID, scenarioID uuid.UUID, name string) error {
+// UpdateScenario updates a scenario's name and/or description.
+func (s *PlanService) UpdateScenario(ctx context.Context, tenantID, scenarioID uuid.UUID, name, description string) error {
 	scenario, err := s.GetScenario(ctx, tenantID, scenarioID)
 	if err != nil {
 		return err
@@ -257,8 +437,11 @@ func (s *PlanService) UpdateScenario(ctx context.Context, tenantID, scenarioID u
 	if name != "" {
 		scenario.Name = name
 	}
+	if description != "" {
+		scenario.Description = description
+	}
 
-	if err := s.repos.Scenario.Update(scenario); err != nil {
+	if err := s.deps.GetScenario().Update(scenario); err != nil {
 		s.logger.WithError(err).Error("failed to update scenario")
 		return apierror.Internal("failed to update scenario")
 	}
@@ -267,6 +450,7 @@ func (s *PlanService) UpdateScenario(ctx context.Context, tenantID, scenarioID u
 	s.emitter.Publish(event.Event{
 		Type:       event.DataChanged,
 		TenantID:   tenantID,
+		UserID:     ctxutil.GetUserID(ctx),
 		ScenarioID: scenarioID,
 		EntityType: "scenario",
 		EntityID:   scenarioID,
@@ -276,15 +460,17 @@ func (s *PlanService) UpdateScenario(ctx context.Context, tenantID, scenarioID u
 }
 
 // CloneScenario clones a scenario with all its data to a new scenario.
+// The entire clone — scenario row creation plus all 20+ child table copies —
+// is wrapped in a single database transaction so a mid-copy failure leaves no
+// partial state behind.
 func (s *PlanService) CloneScenario(ctx context.Context, tenantID, sourceScenarioID uuid.UUID, newName string) (*model.Scenario, error) {
-	// Get source scenario
-	sourceScenario, err := s.repos.Scenario.GetByID(tenantID, sourceScenarioID)
+	// Read source outside the transaction (pure SELECT, no atomicity needed).
+	sourceScenario, err := s.deps.GetScenario().GetByID(tenantID, sourceScenarioID)
 	if err != nil || sourceScenario == nil || sourceScenario.TenantID != tenantID {
 		s.logger.WithError(err).Warn("source scenario not found")
 		return nil, apierror.NotFound("scenario", sourceScenarioID.String())
 	}
 
-	// Create new scenario
 	newScenario := &model.Scenario{
 		TenantScoped: model.TenantScoped{ID: uuid.New()},
 		PlanID:       sourceScenario.PlanID,
@@ -293,21 +479,26 @@ func (s *PlanService) CloneScenario(ctx context.Context, tenantID, sourceScenari
 	}
 	newScenario.TenantID = tenantID
 
-	if err := s.repos.Scenario.Create(newScenario); err != nil {
-		s.logger.WithError(err).Error("failed to create cloned scenario")
-		return nil, apierror.Internal("failed to create cloned scenario")
-	}
+	// Wrap all writes in a single atomic transaction.
+	txErr := s.deps.GetDB().Transaction(func(tx *gorm.DB) error {
+		txRepos := repo.NewRepoBundle(tx)
+		txSettings := repo.NewSettingsRepo(tx)
 
-	// Deep copy all scenario data
-	if err := s.deepCopyScenarioData(tenantID, sourceScenarioID, newScenario.ID); err != nil {
-		s.logger.WithError(err).Error("failed to copy scenario data")
-		return nil, apierror.Internal("failed to copy scenario data")
+		if err := txRepos.GetScenario().Create(newScenario); err != nil {
+			return err
+		}
+		return s.deepCopyScenarioData(tenantID, sourceScenarioID, newScenario.ID, txRepos, txSettings)
+	})
+	if txErr != nil {
+		s.logger.WithError(txErr).Error("failed to clone scenario (transaction rolled back)")
+		return nil, apierror.Internal("failed to clone scenario")
 	}
 
 	s.logger.WithField("source_scenario_id", sourceScenarioID).WithField("new_scenario_id", newScenario.ID).Info("scenario cloned")
 	s.emitter.Publish(event.Event{
 		Type:       event.DataChanged,
 		TenantID:   tenantID,
+		UserID:     ctxutil.GetUserID(ctx),
 		ScenarioID: newScenario.ID,
 		EntityType: "scenario",
 		EntityID:   newScenario.ID,
@@ -318,13 +509,13 @@ func (s *PlanService) CloneScenario(ctx context.Context, tenantID, sourceScenari
 
 // DeleteScenario removes a scenario and all associated data.
 func (s *PlanService) DeleteScenario(ctx context.Context, tenantID, scenarioID uuid.UUID) error {
-	scenario, err := s.repos.Scenario.GetByID(tenantID, scenarioID)
+	scenario, err := s.deps.GetScenario().GetByID(tenantID, scenarioID)
 	if err != nil || scenario == nil || scenario.TenantID != tenantID {
 		s.logger.WithError(err).Warn("scenario not found")
 		return apierror.NotFound("scenario", scenarioID.String())
 	}
 
-	if err := s.repos.Scenario.Delete(tenantID, scenarioID); err != nil {
+	if err := s.deps.GetScenario().Delete(tenantID, scenarioID); err != nil {
 		s.logger.WithError(err).Error("failed to delete scenario")
 		return apierror.Internal("failed to delete scenario")
 	}
@@ -333,6 +524,7 @@ func (s *PlanService) DeleteScenario(ctx context.Context, tenantID, scenarioID u
 	s.emitter.Publish(event.Event{
 		Type:       event.DataChanged,
 		TenantID:   tenantID,
+		UserID:     ctxutil.GetUserID(ctx),
 		ScenarioID: scenarioID,
 		EntityType: "scenario",
 		EntityID:   scenarioID,
@@ -342,39 +534,41 @@ func (s *PlanService) DeleteScenario(ctx context.Context, tenantID, scenarioID u
 }
 
 // deepCopyScenarioData performs a deep copy of all data from source to destination scenario.
-func (s *PlanService) deepCopyScenarioData(tenantID, sourceScenarioID, destScenarioID uuid.UUID) error {
+// deps and settingsRepo are the transactional repos provided by CloneScenario; reads
+// of source data use s.deps / s.settingsRepo (no write-lock needed for SELECTs).
+func (s *PlanService) deepCopyScenarioData(tenantID, sourceScenarioID, destScenarioID uuid.UUID, deps repo.PlanDeps, settingsRepo repo.SettingsRepository) error {
 	// Copy Settings
 	if config, err := s.settingsRepo.GetConfig(tenantID, sourceScenarioID); err == nil && config != nil {
 		newConfig := *config
 		newConfig.ID = uuid.New()
 		newConfig.ScenarioID = destScenarioID
-		_ = s.settingsRepo.UpsertConfig(&newConfig)
+		_ = settingsRepo.UpsertConfig(&newConfig)
 	}
 
 	if balance, err := s.settingsRepo.GetOpeningBalance(tenantID, sourceScenarioID); err == nil && balance != nil {
 		newBalance := *balance
 		newBalance.ID = uuid.New()
 		newBalance.ScenarioID = destScenarioID
-		_ = s.settingsRepo.UpsertOpeningBalance(&newBalance)
+		_ = settingsRepo.UpsertOpeningBalance(&newBalance)
 	}
 
 	if wcConfig, err := s.settingsRepo.GetWCConfig(tenantID, sourceScenarioID); err == nil && wcConfig != nil {
 		newWCConfig := *wcConfig
 		newWCConfig.ID = uuid.New()
 		newWCConfig.ScenarioID = destScenarioID
-		_ = s.settingsRepo.UpsertWCConfig(&newWCConfig)
+		_ = settingsRepo.UpsertWCConfig(&newWCConfig)
 	}
 
 	// Copy Products with mapping
-	if ptrProducts, err := s.repos.Product.ListProductsByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptrProducts, err := s.deps.GetProduct().ListProductsByScenario(tenantID, sourceScenarioID); err == nil {
 		for _, p := range ptrProducts {
 			newProduct := *p
 			newProduct.ID = uuid.New()
 			newProduct.ScenarioID = destScenarioID
-			_ = s.repos.Product.CreateProduct(&newProduct)
+			_ = deps.GetProduct().CreateProduct(&newProduct)
 
 			// Copy assumptions
-			if ptrAssumptions, err := s.repos.Product.GetAssumptionsByProduct(tenantID, p.ID); err == nil {
+			if ptrAssumptions, err := s.deps.GetProduct().GetAssumptionsByProduct(tenantID, p.ID); err == nil {
 				vals := make([]model.ProductAssumption, len(ptrAssumptions))
 				for i, a := range ptrAssumptions {
 					v := *a
@@ -382,11 +576,11 @@ func (s *PlanService) deepCopyScenarioData(tenantID, sourceScenarioID, destScena
 					v.ProductID = newProduct.ID
 					vals[i] = v
 				}
-				_ = s.repos.Product.BatchUpsertAssumptions(tenantID, destScenarioID, vals)
+				_ = deps.GetProduct().BatchUpsertAssumptions(tenantID, destScenarioID, vals)
 			}
 
 			// Copy volumes
-			if ptrVolumes, err := s.repos.Product.GetVolumesByProduct(tenantID, p.ID); err == nil {
+			if ptrVolumes, err := s.deps.GetProduct().GetVolumesByProduct(tenantID, p.ID); err == nil {
 				vals := make([]model.ProductSalesVolume, len(ptrVolumes))
 				for i, v := range ptrVolumes {
 					nv := *v
@@ -394,11 +588,11 @@ func (s *PlanService) deepCopyScenarioData(tenantID, sourceScenarioID, destScena
 					nv.ProductID = newProduct.ID
 					vals[i] = nv
 				}
-				_ = s.repos.Product.BatchUpsertVolumes(tenantID, destScenarioID, vals)
+				_ = deps.GetProduct().BatchUpsertVolumes(tenantID, destScenarioID, vals)
 			}
 
 			// Copy margins
-			if ptrMargins, err := s.repos.Product.GetMarginsByProduct(tenantID, p.ID); err == nil {
+			if ptrMargins, err := s.deps.GetProduct().GetMarginsByProduct(tenantID, p.ID); err == nil {
 				vals := make([]model.ProductDistributorMargin, len(ptrMargins))
 				for i, m := range ptrMargins {
 					nm := *m
@@ -406,13 +600,13 @@ func (s *PlanService) deepCopyScenarioData(tenantID, sourceScenarioID, destScena
 					nm.ProductID = newProduct.ID
 					vals[i] = nm
 				}
-				_ = s.repos.Product.BatchUpsertMargins(tenantID, destScenarioID, vals)
+				_ = deps.GetProduct().BatchUpsertMargins(tenantID, destScenarioID, vals)
 			}
 		}
 	}
 
 	// Copy Staff
-	if ptrHC, err := s.repos.Staff.ListHeadcountsByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptrHC, err := s.deps.GetStaff().ListHeadcountsByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.StaffHeadcount, len(ptrHC))
 		for i, h := range ptrHC {
 			v := *h
@@ -420,21 +614,21 @@ func (s *PlanService) deepCopyScenarioData(tenantID, sourceScenarioID, destScena
 			v.ScenarioID = destScenarioID
 			vals[i] = v
 		}
-		_ = s.repos.Staff.BatchUpsertHeadcounts(tenantID, destScenarioID, vals)
+		_ = deps.GetStaff().BatchUpsertHeadcounts(tenantID, destScenarioID, vals)
 	}
 
-	if ptrSal, err := s.repos.Staff.ListSalariesByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptrSal, err := s.deps.GetStaff().ListSalariesByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.StaffSalary, len(ptrSal))
-		for i, s := range ptrSal {
-			v := *s
+		for i, sal := range ptrSal {
+			v := *sal
 			v.ID = uuid.New()
 			v.ScenarioID = destScenarioID
 			vals[i] = v
 		}
-		_ = s.repos.Staff.BatchUpsertSalaries(tenantID, destScenarioID, vals)
+		_ = deps.GetStaff().BatchUpsertSalaries(tenantID, destScenarioID, vals)
 	}
 
-	if ptrInc, err := s.repos.Staff.ListIncentivesByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptrInc, err := s.deps.GetStaff().ListIncentivesByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.StaffIncentive, len(ptrInc))
 		for i, inc := range ptrInc {
 			v := *inc
@@ -442,74 +636,74 @@ func (s *PlanService) deepCopyScenarioData(tenantID, sourceScenarioID, destScena
 			v.ScenarioID = destScenarioID
 			vals[i] = v
 		}
-		_ = s.repos.Staff.BatchUpsertIncentives(tenantID, destScenarioID, vals)
+		_ = deps.GetStaff().BatchUpsertIncentives(tenantID, destScenarioID, vals)
 	}
 
 	// Copy Capex, Opex, PnL, FiPlan, PnlCash, WCR, Cash, Budget
-	if ptr, err := s.repos.Capex.ListByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptr, err := s.deps.GetCapex().ListByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.CapexEntry, len(ptr))
 		for i, e := range ptr {
 			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
 		}
-		_ = s.repos.Capex.BatchUpsert(tenantID, destScenarioID, vals)
+		_ = deps.GetCapex().BatchUpsert(tenantID, destScenarioID, vals)
 	}
 
-	if ptr, err := s.repos.Opex.ListByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptr, err := s.deps.GetOpex().ListByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.OpexManualEntry, len(ptr))
 		for i, e := range ptr {
 			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
 		}
-		_ = s.repos.Opex.BatchUpsert(tenantID, destScenarioID, vals)
+		_ = deps.GetOpex().BatchUpsert(tenantID, destScenarioID, vals)
 	}
 
-	if ptr, err := s.repos.PnL.ListByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptr, err := s.deps.GetPnL().ListByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.PnlManualEntry, len(ptr))
 		for i, e := range ptr {
 			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
 		}
-		_ = s.repos.PnL.BatchUpsert(tenantID, destScenarioID, vals)
+		_ = deps.GetPnL().BatchUpsert(tenantID, destScenarioID, vals)
 	}
 
-	if ptr, err := s.repos.FiPlan.ListByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptr, err := s.deps.GetFiPlan().ListByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.FiplanEntry, len(ptr))
 		for i, e := range ptr {
 			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
 		}
-		_ = s.repos.FiPlan.BatchUpsert(tenantID, destScenarioID, vals)
+		_ = deps.GetFiPlan().BatchUpsert(tenantID, destScenarioID, vals)
 	}
 
-	if ptr, err := s.repos.PnlCash.ListByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptr, err := s.deps.GetPnlCash().ListByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.PnlCashEntry, len(ptr))
 		for i, e := range ptr {
 			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
 		}
-		_ = s.repos.PnlCash.BatchUpsert(tenantID, destScenarioID, vals)
+		_ = deps.GetPnlCash().BatchUpsert(tenantID, destScenarioID, vals)
 	}
 
-	if ptr, err := s.repos.WCR.ListByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptr, err := s.deps.GetWCR().ListByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.WCREntry, len(ptr))
 		for i, e := range ptr {
 			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
 		}
-		_ = s.repos.WCR.BatchUpsert(tenantID, destScenarioID, vals)
+		_ = deps.GetWCR().BatchUpsert(tenantID, destScenarioID, vals)
 	}
 
-	if ptr, err := s.repos.Cash.ListByScenario(tenantID, sourceScenarioID); err == nil {
+	if ptr, err := s.deps.GetCash().ListByScenario(tenantID, sourceScenarioID); err == nil {
 		vals := make([]model.CashMonthlyOverride, len(ptr))
 		for i, e := range ptr {
 			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
 		}
-		_ = s.repos.Cash.BatchUpsert(tenantID, destScenarioID, vals)
+		_ = deps.GetCash().BatchUpsert(tenantID, destScenarioID, vals)
 	}
 
 	// Copy budget for all years
 	for year := 1; year <= 5; year++ {
-		if ptr, err := s.repos.Budget.ListByScenario(tenantID, sourceScenarioID, year); err == nil {
+		if ptr, err := s.deps.GetBudget().ListByScenario(tenantID, sourceScenarioID, year); err == nil {
 			vals := make([]model.BudgetMonthlyOverride, len(ptr))
 			for i, e := range ptr {
 				v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
 			}
-			_ = s.repos.Budget.BatchUpsert(tenantID, destScenarioID, vals)
+			_ = deps.GetBudget().BatchUpsert(tenantID, destScenarioID, vals)
 		}
 	}
 

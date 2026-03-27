@@ -70,27 +70,32 @@ type CashReport struct {
 }
 
 type CashYear struct {
-	Year      int            `json:"year"`
-	Revenue   CashSection    `json:"revenue"`
-	Operating CashSection    `json:"operating"`
-	Capex     CashSection    `json:"capex"`
-	WCR       CashSection    `json:"wcr"`
-	Tax       CashSection    `json:"tax"`
-	Economic  CashSection    `json:"economic"`
-	Financing CashSection    `json:"financing"`
-	Cash      CashSection    `json:"cash"`
+	YearIndex      int                 `json:"yearIndex"`
+	Revenue        CashSection         `json:"revenue"`
+	Operating      CashSection         `json:"operating"`
+	Capex          CashSection         `json:"capex"`
+	WCR            CashSection         `json:"wcr"`
+	Tax            CashSection         `json:"tax"`
+	Economic       CashSection         `json:"economic"`
+	Financing      CashSection         `json:"financing"`
+	Cash           CashSection         `json:"cash"`
+	// Convenience arrays consumed by the frontend cash view
+	NetCashFlow    [12]decimal.Decimal `json:"netCashFlow"`
+	OpeningBalance [12]decimal.Decimal `json:"openingBalance"`
+	ClosingBalance [12]decimal.Decimal `json:"closingBalance"`
 }
 
 type CashSection struct {
-	Lines []CashLine `json:"lines"`
+	Lines []CashLine          `json:"lines"`
 	Total [12]decimal.Decimal `json:"total"`
 }
 
 type CashLine struct {
-	LineID  CashLineID          `json:"lineId"`
-	Label   string              `json:"label"`
-	Monthly [12]decimal.Decimal `json:"monthly"`
-	Annual  decimal.Decimal     `json:"annual"`
+	LineID           CashLineID          `json:"lineId"`
+	Label            string              `json:"label"`
+	Monthly          [12]decimal.Decimal `json:"months"`
+	Annual           decimal.Decimal     `json:"annualTotal"`
+	DistributionRule DistributionRule    `json:"distributionRule"`
 }
 
 type CashSchedules struct {

@@ -2,15 +2,38 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/pkg/apierror"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
 )
+
+// testRequest returns a minimal *http.Request with a no-op logrus logger in context,
+// satisfying the handleError signature without requiring a real HTTP server.
+func testRequest() *http.Request {
+	logger := logrus.NewEntry(logrus.New())
+	ctx := ctxutil.WithLogger(context.Background(), logger)
+	r, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+	return r
+}
+
+// withChiParams adds URL parameters from chi router context to an *http.Request.
+// This helper is used across multiple handler test files to inject route parameters.
+func withChiParams(r *http.Request, params map[string]string) *http.Request {
+	chiCtx := chi.NewRouteContext()
+	for k, v := range params {
+		chiCtx.URLParams.Add(k, v)
+	}
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, chiCtx))
+}
 
 func TestRespondJSON(t *testing.T) {
 	w := httptest.NewRecorder()
@@ -40,7 +63,7 @@ func TestHandleErrorWithAppError(t *testing.T) {
 	w := httptest.NewRecorder()
 	appErr := apierror.NotFound("Plan", "123")
 
-	handleError(w, appErr)
+	handleError(w, testRequest(), appErr)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
@@ -56,7 +79,7 @@ func TestHandleErrorWithGenericError(t *testing.T) {
 	genericErr := bytes.NewBufferString("some error").String()
 	err := io.EOF
 
-	handleError(w, err)
+	handleError(w, testRequest(), err)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))

@@ -5,10 +5,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // OpexService orchestrates operating expenses CRUD and computation.
@@ -60,8 +61,13 @@ func (s *OpexService) UpdateEntries(ctx context.Context, tenantID, scenarioID uu
 		return apierror.Internal("failed to update opex entries")
 	}
 
+	lines := countUnique(entries, func(e model.OpexManualEntry) string { return string(e.LineID) })
 	s.logger.WithField("scenario_id", scenarioID).Info("opex entries updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "opex", Action: event.ActionUpdate})
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "opex", Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(entries), "lines": lines}),
+	})
 	return nil
 }
 

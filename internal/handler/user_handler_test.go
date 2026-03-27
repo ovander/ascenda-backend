@@ -13,12 +13,35 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
 )
 
-// newTestUserHandler creates a handler with nil service (ok for methods that don't use it)
+// mockUserService is a test double for UserServiceIface.
+type mockUserService struct{}
+
+func (m *mockUserService) ListUsers(_ context.Context, _ uuid.UUID, _, _ int) ([]*model.User, int64, error) {
+	return []*model.User{}, 0, nil
+}
+func (m *mockUserService) InviteUser(_ context.Context, _ uuid.UUID, _ uuid.UUID, email, _ string, role string) (*model.User, error) {
+	return &model.User{ID: uuid.New(), Email: email, Role: role, IsActive: true}, nil
+}
+func (m *mockUserService) UpdateRole(_ context.Context, _ uuid.UUID, _ uuid.UUID, _, _ string) error {
+	return nil
+}
+func (m *mockUserService) DeactivateUser(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+	return nil
+}
+func (m *mockUserService) ReactivateUser(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+	return nil
+}
+func (m *mockUserService) DeleteUser(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+	return nil
+}
+
+// newTestUserHandler creates a handler with a mock service.
 func newTestUserHandler() *UserHandler {
-	return NewUserHandler(nil, logrus.NewEntry(logrus.New()))
+	return NewUserHandler(&mockUserService{}, logrus.NewEntry(logrus.New()))
 }
 
 func TestUserHandlerGetMe(t *testing.T) {
@@ -55,7 +78,7 @@ func TestUserHandlerGetMeWithEmailAndName(t *testing.T) {
 	userID := uuid.New()
 	ctx := context.Background()
 	ctx = ctxutil.WithUserID(ctx, userID)
-	ctx = ctxutil.WithUserEmail(ctx, "test@kerplan.io")
+	ctx = ctxutil.WithUserEmail(ctx, "test@ascenda.io")
 	ctx = ctxutil.WithUserName(ctx, "Test User")
 	ctx = ctxutil.WithUserRole(ctx, "owner")
 
@@ -68,7 +91,7 @@ func TestUserHandlerGetMeWithEmailAndName(t *testing.T) {
 
 	var user UserDTO
 	json.Unmarshal(w.Body.Bytes(), &user)
-	assert.Equal(t, "test@kerplan.io", user.Email)
+	assert.Equal(t, "test@ascenda.io", user.Email)
 	assert.Equal(t, "Test User", user.Name)
 	assert.Equal(t, "owner", user.Role)
 }

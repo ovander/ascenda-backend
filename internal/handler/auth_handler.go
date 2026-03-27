@@ -7,23 +7,26 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/config"
-	"kerplan/internal/pkg/apierror"
+	"ascenda/internal/config"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/service"
 )
 
-// AuthHandler manages OAuth2 authentication flows.
+// AuthHandler manages OAuth2 authentication flows and self-service registration.
 type AuthHandler struct {
-	config     *config.Config
-	httpClient *http.Client
-	logger     *logrus.Entry
+	config       *config.Config
+	httpClient   *http.Client
+	registration *service.RegistrationService
+	logger       *logrus.Entry
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(cfg *config.Config, logger *logrus.Entry) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, registration *service.RegistrationService, logger *logrus.Entry) *AuthHandler {
 	return &AuthHandler{
-		config:     cfg,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		logger:     logger,
+		config:       cfg,
+		httpClient:   &http.Client{Timeout: 10 * time.Second},
+		registration: registration,
+		logger:       logger,
 	}
 }
 
@@ -41,13 +44,13 @@ type LoginResponse struct {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	u, err := url.Parse(h.config.Socrate.BaseURL + "/oauth/authorize")
 	if err != nil {
-		handleError(w, apierror.Internal("invalid OAuth2 base URL"))
+		handleError(w, r, apierror.Internal("invalid OAuth2 base URL"))
 		return
 	}
 	q := u.Query()
@@ -86,7 +89,7 @@ type TokenResponse struct {
 func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	var req CallbackRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -107,20 +110,17 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.httpClient.PostForm(h.config.Socrate.BaseURL+"/oauth/token", data)
 	if err != nil {
-		h.logger.WithError(err).Error("failed to exchange authorization code")
-		handleError(w, apierror.Internal("failed to exchange authorization code"))
+		handleError(w, r, apierror.Internal("failed to exchange authorization code"))
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		h.logger.WithField("status", resp.StatusCode).Error("token exchange failed")
-		handleError(w, apierror.Unauthorized("token exchange failed"))
+		handleError(w, r, apierror.Unauthorized("token exchange failed"))
 		return
 	}
 	var socrateTokens socrateTokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&socrateTokens); err != nil {
-		h.logger.WithError(err).Error("failed to decode token response")
-		handleError(w, apierror.Internal("failed to decode token response"))
+		handleError(w, r, apierror.Internal("failed to decode token response"))
 		return
 	}
 	respondJSON(w, http.StatusOK, TokenResponse{
@@ -139,7 +139,7 @@ type RefreshRequest struct {
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -151,20 +151,17 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.httpClient.PostForm(h.config.Socrate.BaseURL+"/oauth/token", data)
 	if err != nil {
-		h.logger.WithError(err).Error("failed to refresh token")
-		handleError(w, apierror.Internal("failed to refresh token"))
+		handleError(w, r, apierror.Internal("failed to refresh token"))
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		h.logger.WithField("status", resp.StatusCode).Error("token refresh failed")
-		handleError(w, apierror.Unauthorized("token refresh failed"))
+		handleError(w, r, apierror.Unauthorized("token refresh failed"))
 		return
 	}
 	var socrateTokens socrateTokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&socrateTokens); err != nil {
-		h.logger.WithError(err).Error("failed to decode token response")
-		handleError(w, apierror.Internal("failed to decode token response"))
+		handleError(w, r, apierror.Internal("failed to decode token response"))
 		return
 	}
 	respondJSON(w, http.StatusOK, TokenResponse{
@@ -172,6 +169,41 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: socrateTokens.RefreshToken,
 		ExpiresIn:    socrateTokens.ExpiresIn,
 	})
+}
+
+// RegisterRequest is the payload from the public registration form.
+// It mirrors service.RegisterRequest but lives in the handler layer for
+// decoding and validation before being forwarded to the service.
+type RegisterRequest struct {
+	FirstName   string `json:"firstName"   validate:"required"`
+	LastName    string `json:"lastName"    validate:"required"`
+	CompanyName string `json:"companyName" validate:"required"`
+	Email       string `json:"email"       validate:"required,email"`
+	Country     string `json:"country"     validate:"required"`
+}
+
+// Register handles POST /auth/register.
+// It is unauthenticated and rate-limited at the router level.
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	var req RegisterRequest
+	if err := decodeAndValidate(r, &req); err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	result, err := h.registration.Register(r.Context(), service.RegisterRequest{
+		FirstName:   req.FirstName,
+		LastName:    req.LastName,
+		CompanyName: req.CompanyName,
+		Email:       req.Email,
+		Country:     req.Country,
+	})
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	respondJSON(w, http.StatusAccepted, result)
 }
 
 // LogoutRequest represents a logout request.
@@ -183,7 +215,7 @@ type LogoutRequest struct {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req LogoutRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -194,14 +226,12 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.httpClient.PostForm(h.config.Socrate.BaseURL+"/oauth/revoke", data)
 	if err != nil {
-		h.logger.WithError(err).Error("failed to revoke token")
-		handleError(w, apierror.Internal("failed to revoke token"))
+		handleError(w, r, apierror.Internal("failed to revoke token"))
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		h.logger.WithField("status", resp.StatusCode).Error("token revocation failed")
-		handleError(w, apierror.Internal("token revocation failed"))
+		handleError(w, r, apierror.Internal("token revocation failed"))
 		return
 	}
 	respondNoContent(w)

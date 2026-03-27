@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
+	"github.com/stretchr/testify/require"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 )
 
 // ExtendedMockSettingsRepo adds OpexPerHire and CapexPerHire support
@@ -123,8 +125,10 @@ func TestGetWCConfigReturnsExistingWhenFound(t *testing.T) {
 	scenarioID := uuid.New()
 
 	existing := &model.WorkingCapitalConfig{
-		TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
-		ScenarioID:   scenarioID,
+		TenantScoped:      model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+		ScenarioID:        scenarioID,
+		CustomerPct30Days: decimal.NewFromFloat(0.5), // non-zero → not treated as unconfigured
+		CustomerPct60Days: decimal.NewFromFloat(0.5),
 	}
 	repo.UpsertWCConfig(existing)
 
@@ -160,6 +164,62 @@ func TestGetCapexPerHireReturnsDefaultsWhenNotFound(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, scenarioID, result.ScenarioID)
+}
+
+func TestGetOpexPerHireReturnsDefaultsWhenAllZero(t *testing.T) {
+	// Regression test: DB rows created before the defaults feature was introduced
+	// contain all-zero values. GetOpexPerHire must detect this and return defaults
+	// rather than the zero row, so that ComputeOpexSummary produces non-zero results.
+	repo := NewExtendedMockSettingsRepo()
+	svc := newTestSettingsService(repo)
+
+	tenantID := uuid.New()
+	scenarioID := uuid.New()
+
+	// Simulate a legacy DB row: exists, but every field is zero.
+	zeroRow := &model.OpexPerHire{
+		TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+		ScenarioID:   scenarioID,
+		// all decimal fields default to zero
+	}
+	require.NoError(t, repo.UpsertOpexPerHire(zeroRow))
+
+	result, err := svc.GetOpexPerHire(context.Background(), tenantID, scenarioID)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	// Must return defaults, not zeros
+	assert.False(t, result.PropertyRentals.IsZero(), "PropertyRentals should be non-zero default")
+	assert.False(t, result.PostageTelecom.IsZero(), "PostageTelecom should be non-zero default")
+	assert.False(t, result.TravelTransportation.IsZero(), "TravelTransportation should be non-zero default")
+	assert.False(t, result.RecruitTrainingPctPayroll.IsZero(), "RecruitTrainingPctPayroll should be non-zero default")
+}
+
+func TestGetOpexPerHirePreservesNonZeroRow(t *testing.T) {
+	// When a row has at least one non-zero field it must be returned as-is,
+	// not overwritten by defaults.
+	repo := NewExtendedMockSettingsRepo()
+	svc := newTestSettingsService(repo)
+
+	tenantID := uuid.New()
+	scenarioID := uuid.New()
+
+	customRow := &model.OpexPerHire{
+		TenantScoped:     model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+		ScenarioID:       scenarioID,
+		PropertyRentals:  decimal.NewFromInt(99), // custom non-zero value
+		// all others remain zero
+	}
+	require.NoError(t, repo.UpsertOpexPerHire(customRow))
+
+	result, err := svc.GetOpexPerHire(context.Background(), tenantID, scenarioID)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, decimal.NewFromInt(99).Equal(result.PropertyRentals),
+		"Non-zero custom row should be returned unchanged")
+	assert.True(t, result.PostageTelecom.IsZero(),
+		"Other fields should stay zero as stored")
 }
 
 func TestGetConfigReturnsErrorWhenNotFound(t *testing.T) {

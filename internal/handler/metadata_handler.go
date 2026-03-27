@@ -5,7 +5,7 @@ import (
 	"runtime"
 
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // MetadataHandler serves enum lists and application info so the frontend

@@ -8,11 +8,14 @@ import "github.com/shopspring/decimal"
 
 // GraphsReport is the computed annual chart data (not stored in DB).
 type GraphsReport struct {
-	Years          [5]int              `json:"years"`
-	SalesAnalysis  GraphSalesAnalysis  `json:"salesAnalysis"`
-	CostStructure  GraphCostStructure  `json:"costStructure"`
-	RevProfitCash  GraphRevProfitCash  `json:"revProfitCash"`
+	Years           [5]int               `json:"years"`
+	SalesAnalysis   GraphSalesAnalysis   `json:"salesAnalysis"`
+	CostStructure   GraphCostStructure   `json:"costStructure"`
+	RevProfitCash   GraphRevProfitCash   `json:"revProfitCash"`
 	FinRequirements GraphFinRequirements `json:"finRequirements"`
+	BalanceSheet    GraphBalanceSheet    `json:"balanceSheet"`
+	HeadcountAnnual GraphHeadcountAnnual `json:"headcountAnnual"`
+	PnLCascade      GraphPnLCascade      `json:"pnlCascade"`
 }
 
 type GraphSalesAnalysis struct {
@@ -41,6 +44,31 @@ type GraphFinRequirements struct {
 	Requirements   [5]decimal.Decimal `json:"requirements"`
 	Resources      [5]decimal.Decimal `json:"resources"`
 	CumulativeCash [5]decimal.Decimal `json:"cumulativeCash"`
+}
+
+// GraphBalanceSheet holds year-end balance sheet structure (Equity / LT Debt / ST Debt).
+type GraphBalanceSheet struct {
+	Equity        [5]decimal.Decimal `json:"equity"`
+	LongTermDebt  [5]decimal.Decimal `json:"longTermDebt"`
+	ShortTermDebt [5]decimal.Decimal `json:"shortTermDebt"`
+}
+
+// GraphHeadcountAnnual holds annual FTE counts by function.
+type GraphHeadcountAnnual struct {
+	RnD        [5]decimal.Decimal `json:"rnd"`
+	Production [5]decimal.Decimal `json:"production"`
+	Sales      [5]decimal.Decimal `json:"sales"`
+	GnA        [5]decimal.Decimal `json:"gna"`
+	Total      [5]decimal.Decimal `json:"total"`
+}
+
+// GraphPnLCascade holds key P&L milestones for the cascade (waterfall-style) chart.
+type GraphPnLCascade struct {
+	Revenue     [5]decimal.Decimal `json:"revenue"`
+	GrossMargin [5]decimal.Decimal `json:"grossMargin"`
+	EBITDA      [5]decimal.Decimal `json:"ebitda"`
+	EBIT        [5]decimal.Decimal `json:"ebit"`
+	NetProfit   [5]decimal.Decimal `json:"netProfit"`
 }
 
 // ──────────────────────────────────────────────────────────────────────────

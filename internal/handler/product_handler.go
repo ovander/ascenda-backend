@@ -1,25 +1,48 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/dto"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/service"
+	"ascenda/internal/dto"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/service"
 )
+
+// ProductServicer is the narrow interface the ProductHandler depends on.
+// Using an interface instead of the concrete *service.ProductService makes the
+// handler independently unit-testable without standing up a full service graph.
+type ProductServicer interface {
+	ListProducts(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]*model.Product, error)
+	CreateProduct(ctx context.Context, tenantID, scenarioID uuid.UUID, product *model.Product) error
+	GetProduct(ctx context.Context, tenantID, productID uuid.UUID) (*model.Product, error)
+	UpdateProduct(ctx context.Context, tenantID, productID uuid.UUID, product *model.Product) error
+	DeleteProduct(ctx context.Context, tenantID, productID uuid.UUID) error
+	GetAssumptions(ctx context.Context, tenantID, productID uuid.UUID) ([]model.ProductAssumption, error)
+	UpdateAssumptions(ctx context.Context, tenantID, scenarioID, productID uuid.UUID, assumptions []model.ProductAssumption) error
+	GetVolumes(ctx context.Context, tenantID, productID uuid.UUID) ([]model.ProductSalesVolume, error)
+	UpdateVolumes(ctx context.Context, tenantID, scenarioID, productID uuid.UUID, volumes []model.ProductSalesVolume) error
+	GetMargins(ctx context.Context, tenantID, productID uuid.UUID) ([]model.ProductDistributorMargin, error)
+	UpdateMargins(ctx context.Context, tenantID, scenarioID, productID uuid.UUID, margins []model.ProductDistributorMargin) error
+	GetDerivedBundle(ctx context.Context, tenantID, productID uuid.UUID) (*service.DerivedBundleResult, error)
+	GetRevenueByProduct(ctx context.Context, tenantID, scenarioID, productID uuid.UUID) (*model.ProductRevenueSummary, error)
+	GetConsolidatedRevenue(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.ConsolidatedRevenue, error)
+}
 
 // ProductHandler handles product operations.
 type ProductHandler struct {
-	svc    *service.ProductService
+	svc    ProductServicer
 	logger *logrus.Entry
 }
 
 // NewProductHandler creates a new ProductHandler.
-func NewProductHandler(svc *service.ProductService, logger *logrus.Entry) *ProductHandler {
+func NewProductHandler(svc ProductServicer, logger *logrus.Entry) *ProductHandler {
 	return &ProductHandler{
 		svc:    svc,
 		logger: logger,
@@ -30,14 +53,14 @@ func NewProductHandler(svc *service.ProductService, logger *logrus.Entry) *Produ
 func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	products, err := h.svc.ListProducts(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -46,30 +69,46 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // CreateProductRequest represents a product creation request.
 type CreateProductRequest struct {
-	Name string `json:"name" validate:"required"`
+	Name         string          `json:"name"         validate:"required"`
+	ProductType  string          `json:"productType"`
+	DriverType   string          `json:"driverType"`
+	DriverParams json.RawMessage `json:"driverParams"`
 }
 
 // Create creates a new product.
 func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateProductRequest
 	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
+	}
+
+	pType := model.ProductTypeProduct
+	if req.ProductType == string(model.ProductTypeService) {
+		pType = model.ProductTypeService
+	}
+
+	dType := model.DriverGeneric
+	if req.DriverType != "" {
+		dType = model.DriverType(req.DriverType)
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	product := &model.Product{
-		Name: req.Name,
+		Name:         req.Name,
+		ProductType:  pType,
+		DriverType:   dType,
+		DriverParams: req.DriverParams,
 	}
 
 	if err := h.svc.CreateProduct(r.Context(), tenantID, scenarioID, product); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -80,14 +119,14 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) Get(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	product, err := h.svc.GetProduct(r.Context(), tenantID, productID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -102,21 +141,27 @@ type UpdateProductRequest struct {
 	TaxVariability            decimal.Decimal `json:"taxVariability"`
 	StaffVariability          decimal.Decimal `json:"staffVariability"`
 	DepreciationVariability   decimal.Decimal `json:"depreciationVariability"`
+	DriverType                string          `json:"driverType"`
+	DriverParams              json.RawMessage `json:"driverParams"`
 }
 
 // Update updates a product.
 func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req UpdateProductRequest
-	if err := decodeJSON(r, &req); err != nil {
-		handleError(w, err)
+	if err := decodeAndValidate(r, &req); err != nil {
+		handleError(w, r, err)
 		return
 	}
 
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
+
+	// Pass the driver type as-is; an empty string means "don't change the
+	// existing value" — the service layer guards against overwriting with empty.
+	dType := model.DriverType(req.DriverType)
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	product := &model.Product{
@@ -126,10 +171,12 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 		TaxVariability:            req.TaxVariability,
 		StaffVariability:          req.StaffVariability,
 		DepreciationVariability:   req.DepreciationVariability,
+		DriverType:                dType,
+		DriverParams:              req.DriverParams,
 	}
 
 	if err := h.svc.UpdateProduct(r.Context(), tenantID, productID, product); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -140,13 +187,13 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.DeleteProduct(r.Context(), tenantID, productID); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -157,14 +204,14 @@ func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) GetAssumptions(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	assumptions, err := h.svc.GetAssumptions(r.Context(), tenantID, productID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -175,25 +222,25 @@ func (h *ProductHandler) GetAssumptions(w http.ResponseWriter, r *http.Request) 
 func (h *ProductHandler) UpdateAssumptions(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	var assumptions []model.ProductAssumption
 	if err := decodeAndValidate(r, &assumptions); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.UpdateAssumptions(r.Context(), tenantID, scenarioID, productID, assumptions); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -204,14 +251,14 @@ func (h *ProductHandler) UpdateAssumptions(w http.ResponseWriter, r *http.Reques
 func (h *ProductHandler) GetVolumes(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	volumes, err := h.svc.GetVolumes(r.Context(), tenantID, productID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -222,25 +269,25 @@ func (h *ProductHandler) GetVolumes(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) UpdateVolumes(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	var volumes []model.ProductSalesVolume
 	if err := decodeAndValidate(r, &volumes); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.UpdateVolumes(r.Context(), tenantID, scenarioID, productID, volumes); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -251,14 +298,14 @@ func (h *ProductHandler) UpdateVolumes(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) GetMargins(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	margins, err := h.svc.GetMargins(r.Context(), tenantID, productID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -269,43 +316,87 @@ func (h *ProductHandler) GetMargins(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) UpdateMargins(w http.ResponseWriter, r *http.Request) {
 	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	var margins []model.ProductDistributorMargin
 	if err := decodeAndValidate(r, &margins); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.UpdateMargins(r.Context(), tenantID, scenarioID, productID, margins); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	respondNoContent(w)
 }
 
+// GetDerivedBundle returns the driver-computed volumes and assumptions for a
+// typed-driver product.  For generic products the stored rows are returned
+// unchanged so the frontend can always use this endpoint uniformly.
+func (h *ProductHandler) GetDerivedBundle(w http.ResponseWriter, r *http.Request) {
+	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	tenantID := ctxutil.GetTenantID(r.Context())
+	result, err := h.svc.GetDerivedBundle(r.Context(), tenantID, productID)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// GetRevenueByProduct returns the revenue summary for a single product.
+func (h *ProductHandler) GetRevenueByProduct(w http.ResponseWriter, r *http.Request) {
+	productID, err := parseUUIDParam(chi.URLParam(r, "productId"))
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	tenantID := ctxutil.GetTenantID(r.Context())
+	summary, err := h.svc.GetRevenueByProduct(r.Context(), tenantID, scenarioID, productID)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, summary)
+}
+
 // GetConsolidatedRevenue returns consolidated revenue metrics.
 func (h *ProductHandler) GetConsolidatedRevenue(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	revenue, err := h.svc.GetConsolidatedRevenue(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 

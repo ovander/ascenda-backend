@@ -5,10 +5,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // StaffService orchestrates staff CRUD and computation.
@@ -81,7 +82,12 @@ func (s *StaffService) UpdateHeadcounts(ctx context.Context, tenantID, scenarioI
 	}
 
 	s.logger.WithField("scenario_id", scenarioID).Info("headcounts updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "staff_headcounts", Action: event.ActionUpdate})
+	categories := countUnique(headcounts, func(h model.StaffHeadcount) string { return string(h.Category) })
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "staff_headcounts", Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(headcounts), "categories": categories}),
+	})
 	return nil
 }
 
@@ -101,7 +107,12 @@ func (s *StaffService) UpdateSalaries(ctx context.Context, tenantID, scenarioID 
 	}
 
 	s.logger.WithField("scenario_id", scenarioID).Info("salaries updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "staff_salaries", Action: event.ActionUpdate})
+	salaryCategories := countUnique(salaries, func(s model.StaffSalary) string { return string(s.Category) })
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "staff_salaries", Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(salaries), "categories": salaryCategories}),
+	})
 	return nil
 }
 
@@ -121,7 +132,11 @@ func (s *StaffService) UpdateIncentives(ctx context.Context, tenantID, scenarioI
 	}
 
 	s.logger.WithField("scenario_id", scenarioID).Info("incentives updated")
-	s.emitter.Publish(event.Event{Type: event.DataChanged, TenantID: tenantID, ScenarioID: scenarioID, EntityType: "staff_incentives", Action: event.ActionUpdate})
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "staff_incentives", Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(incentives)}),
+	})
 	return nil
 }
 

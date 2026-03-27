@@ -9,7 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/config"
+	"ascenda/internal/config"
 )
 
 func newTestAuthHandler() *AuthHandler {
@@ -22,7 +22,7 @@ func newTestAuthHandler() *AuthHandler {
 		},
 	}
 	logger := logrus.NewEntry(logrus.New())
-	return NewAuthHandler(cfg, logger)
+	return NewAuthHandler(cfg, nil, logger)
 }
 
 func TestAuthHandlerLogin(t *testing.T) {

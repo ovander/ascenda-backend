@@ -1,24 +1,33 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/dto"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/service"
+	"ascenda/internal/dto"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
 )
+
+// PnlCashServicer interface for dependency injection.
+type PnlCashServicer interface {
+	ListEntries(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.PnlCashEntry, error)
+	UpdateEntries(ctx context.Context, tenantID, scenarioID uuid.UUID, entries []model.PnlCashEntry) error
+	GetReport(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.PnlCashReport, error)
+	GetChartData(ctx context.Context, tenantID, scenarioID uuid.UUID) (map[string]interface{}, error)
+}
 
 // PnlCashHandler handles P&L + Cash operations.
 type PnlCashHandler struct {
-	svc    *service.PnlCashService
+	svc    PnlCashServicer
 	logger *logrus.Entry
 }
 
 // NewPnlCashHandler creates a new PnlCashHandler.
-func NewPnlCashHandler(svc *service.PnlCashService, logger *logrus.Entry) *PnlCashHandler {
+func NewPnlCashHandler(svc PnlCashServicer, logger *logrus.Entry) *PnlCashHandler {
 	return &PnlCashHandler{
 		svc:    svc,
 		logger: logger,
@@ -29,14 +38,14 @@ func NewPnlCashHandler(svc *service.PnlCashService, logger *logrus.Entry) *PnlCa
 func (h *PnlCashHandler) ListEntries(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	entries, err := h.svc.ListEntries(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -47,19 +56,19 @@ func (h *PnlCashHandler) ListEntries(w http.ResponseWriter, r *http.Request) {
 func (h *PnlCashHandler) UpdateEntries(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	var entries []model.PnlCashEntry
 	if err := decodeAndValidate(r, &entries); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	if err := h.svc.UpdateEntries(r.Context(), tenantID, scenarioID, entries); err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -70,14 +79,14 @@ func (h *PnlCashHandler) UpdateEntries(w http.ResponseWriter, r *http.Request) {
 func (h *PnlCashHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	report, err := h.svc.GetReport(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -88,14 +97,14 @@ func (h *PnlCashHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 func (h *PnlCashHandler) GetChartData(w http.ResponseWriter, r *http.Request) {
 	scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	chartData, err := h.svc.GetChartData(r.Context(), tenantID, scenarioID)
 	if err != nil {
-		handleError(w, err)
+		handleError(w, r, err)
 		return
 	}
 

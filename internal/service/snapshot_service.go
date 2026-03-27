@@ -6,12 +6,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/pkg/pagination"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/pkg/pagination"
+	"ascenda/internal/repo"
 )
 
 // SnapshotService orchestrates plan versioning and snapshots.
@@ -104,6 +104,7 @@ func (s *SnapshotService) Restore(ctx context.Context, tenantID, snapshotID uuid
 	s.emitter.Publish(event.Event{
 		Type:       event.SnapshotRestored,
 		TenantID:   tenantID,
+		UserID:     ctxutil.GetUserID(ctx),
 		ScenarioID: snapshot.ScenarioID,
 		EntityType: "snapshot",
 		EntityID:   snapshotID,
@@ -239,6 +240,15 @@ func (s *SnapshotService) Delete(ctx context.Context, tenantID, snapshotID uuid.
 // -----------------------------------------------------------------------
 // Internal helpers
 // -----------------------------------------------------------------------
+
+// CaptureScenarioData is the public variant of captureScenarioData.
+// It serialises the current state of every entity section (settings, products,
+// staff, capex, opex, pnl, fiplan, pnlCash, wcr, cash, budget) into a single
+// JSON object.  Used by the audit detail endpoint to embed a full scenario
+// snapshot alongside a single audit entry download.
+func (s *SnapshotService) CaptureScenarioData(tenantID, scenarioID uuid.UUID) (json.RawMessage, error) {
+	return s.captureScenarioData(tenantID, scenarioID)
+}
 
 // captureScenarioData iterates over registered sections to serialize all
 // scenario entities into a single JSON map. The output is backward-compatible

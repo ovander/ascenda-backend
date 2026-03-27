@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
-	"kerplan/internal/compute"
-	"kerplan/internal/model"
-	"kerplan/internal/repo"
+	"ascenda/internal/compute"
+	"ascenda/internal/model"
+	"ascenda/internal/repo"
 )
 
 // SnapshotSection handles capture and restore for one logical data group.

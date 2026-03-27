@@ -50,12 +50,12 @@ var DefaultDepreciationYears = map[AssetCategory]int{
 // CapexEntry represents a capital expenditure entry per category per year.
 type CapexEntry struct {
 	TenantScoped
-	ScenarioID       uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	Category         AssetCategory   `gorm:"type:varchar(50);not null" json:"category"`
-	YearIndex        int             `gorm:"not null" json:"yearIndex"`
-	Amount           decimal.Decimal `gorm:"type:numeric(15,2)" json:"amount"`
-	DepreciationYears int            `gorm:"not null" json:"depreciationYears"`
-	IsManualOverride bool            `gorm:"not null;default:false" json:"isManualOverride"`
+	ScenarioID        uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:uix_capex_entries" json:"scenarioId"`
+	Category          AssetCategory   `gorm:"type:varchar(50);not null;uniqueIndex:uix_capex_entries" json:"category"`
+	YearIndex         int             `gorm:"not null;uniqueIndex:uix_capex_entries" json:"yearIndex"`
+	Amount            decimal.Decimal `gorm:"type:numeric(15,2)" json:"amount"`
+	DepreciationYears int             `gorm:"not null" json:"depreciationYears"`
+	IsManualOverride  bool            `gorm:"not null;default:false" json:"isManualOverride"`
 }
 
 func (CapexEntry) TableName() string {

@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 func TestSettingsRepoGetConfig(t *testing.T) {
@@ -44,7 +44,8 @@ func TestSettingsRepoGetConfigNotFound(t *testing.T) {
 	scenarioID := uuid.New()
 
 	retrieved, err := mockRepo.GetConfig(tenantID, scenarioID)
-	assert.NoError(t, err)
+	// Real GORM repo returns ErrRecordNotFound when no row exists; mock mirrors this.
+	assert.Error(t, err)
 	assert.Nil(t, retrieved)
 }
 

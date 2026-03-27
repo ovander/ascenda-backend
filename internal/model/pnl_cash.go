@@ -15,9 +15,9 @@ const (
 // PnlCashEntry stores the single user-input line for the Anglo-Saxon P&L.
 type PnlCashEntry struct {
 	TenantScoped
-	ScenarioID uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	LineID     PnlCashLineID   `gorm:"type:varchar(100);not null" json:"lineId"`
-	YearIndex  int             `gorm:"not null" json:"yearIndex"`
+	ScenarioID uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:uix_pnl_cash_entries" json:"scenarioId"`
+	LineID     PnlCashLineID   `gorm:"type:varchar(100);not null;uniqueIndex:uix_pnl_cash_entries" json:"lineId"`
+	YearIndex  int             `gorm:"column:year;not null;uniqueIndex:uix_pnl_cash_entries" json:"yearIndex"` // DB column: year
 	Amount     decimal.Decimal `gorm:"type:numeric(15,2)" json:"amount"`
 }
 

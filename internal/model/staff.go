@@ -19,49 +19,68 @@ const (
 	FunctionGnA        StaffFunction = "gna" // General & Administrative
 )
 
-// StaffCategory maps to the 8 staff rows in the Staff sheet.
+// StaffCategory maps to the staff rows in the Staff sheet.
 type StaffCategory string
 
 const (
-	// R&D (1 row)
+	// R&D (2 rows)
 	CategoryRnDEngineers StaffCategory = "rnd_engineers"
+	CategoryRnDProduct   StaffCategory = "rnd_product" // Product Management
 
 	// Production (2 rows)
 	CategoryProdEngineers   StaffCategory = "prod_engineers"
 	CategoryProdTechnicians StaffCategory = "prod_technicians"
 
-	// Sales & Marketing (2 rows)
-	CategorySalesTeam     StaffCategory = "sales_team"
-	CategoryMarketingTeam StaffCategory = "marketing_team"
+	// Sales & Marketing (3 rows)
+	CategorySalesTeam           StaffCategory = "sales_team"
+	CategoryMarketingTeam       StaffCategory = "marketing_team"
+	CategoryCustomerSuccess     StaffCategory = "sales_customer_success" // Customer Success / Account Management
 
-	// G&A (3 rows)
+	// G&A (6 rows)
 	CategoryAdminManagers   StaffCategory = "admin_managers"
 	CategoryAdminAssistants StaffCategory = "admin_assistants"
 	CategoryExecutiveTeam   StaffCategory = "executive_team"
+	CategoryFinance         StaffCategory = "gna_finance"  // Finance & Accounting
+	CategoryHR              StaffCategory = "gna_hr"       // HR & People Ops
+	CategoryIT              StaffCategory = "gna_it"       // IT & Infrastructure
 )
 
 // CategoryFunction maps each category to its parent function.
 var CategoryFunction = map[StaffCategory]StaffFunction{
 	CategoryRnDEngineers:    FunctionRnD,
+	CategoryRnDProduct:      FunctionRnD,
 	CategoryProdEngineers:   FunctionProduction,
 	CategoryProdTechnicians: FunctionProduction,
 	CategorySalesTeam:       FunctionSales,
 	CategoryMarketingTeam:   FunctionSales,
+	CategoryCustomerSuccess: FunctionSales,
 	CategoryAdminManagers:   FunctionGnA,
 	CategoryAdminAssistants: FunctionGnA,
 	CategoryExecutiveTeam:   FunctionGnA,
+	CategoryFinance:         FunctionGnA,
+	CategoryHR:              FunctionGnA,
+	CategoryIT:              FunctionGnA,
 }
 
 // AllCategories in display order (matches spreadsheet row order).
 var AllCategories = []StaffCategory{
+	// R&D
 	CategoryRnDEngineers,
+	CategoryRnDProduct,
+	// Production
 	CategoryProdEngineers,
 	CategoryProdTechnicians,
+	// Sales & Marketing
 	CategorySalesTeam,
 	CategoryMarketingTeam,
+	CategoryCustomerSuccess,
+	// G&A
 	CategoryAdminManagers,
 	CategoryAdminAssistants,
 	CategoryExecutiveTeam,
+	CategoryFinance,
+	CategoryHR,
+	CategoryIT,
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -73,9 +92,9 @@ var AllCategories = []StaffCategory{
 // 8 categories × 5 years = 40 rows per scenario.
 type StaffHeadcount struct {
 	TenantScoped
-	ScenarioID   uuid.UUID     `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	Category     StaffCategory `gorm:"type:varchar(50);not null" json:"category"`
-	YearIndex    int           `gorm:"not null" json:"yearIndex"` // 1–5
+	ScenarioID   uuid.UUID     `gorm:"type:uuid;not null;uniqueIndex:uix_staff_headcounts" json:"scenarioId"`
+	Category     StaffCategory `gorm:"type:varchar(50);not null;uniqueIndex:uix_staff_headcounts" json:"category"`
+	YearIndex    int           `gorm:"column:year;not null;uniqueIndex:uix_staff_headcounts" json:"yearIndex"` // 1–5, DB column: year
 	FTE          decimal.Decimal `gorm:"type:numeric(8,2)" json:"fte"`
 	IsOverridden bool          `gorm:"not null;default:false" json:"isOverridden"`
 }
@@ -90,9 +109,9 @@ func (StaffHeadcount) TableName() string {
 // 8 categories × 5 years = 40 rows per scenario.
 type StaffSalary struct {
 	TenantScoped
-	ScenarioID         uuid.UUID     `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	Category           StaffCategory `gorm:"type:varchar(50);not null" json:"category"`
-	YearIndex          int           `gorm:"not null" json:"yearIndex"` // 1–5
+	ScenarioID         uuid.UUID     `gorm:"type:uuid;not null;uniqueIndex:uix_staff_salaries" json:"scenarioId"`
+	Category           StaffCategory `gorm:"type:varchar(50);not null;uniqueIndex:uix_staff_salaries" json:"category"`
+	YearIndex          int           `gorm:"column:year;not null;uniqueIndex:uix_staff_salaries" json:"yearIndex"` // 1–5, DB column: year
 	MonthlyGrossSalary decimal.Decimal `gorm:"type:numeric(12,4)" json:"monthlyGrossSalary"`
 	AnnualIncreasePct  decimal.Decimal `gorm:"type:numeric(8,4)" json:"annualIncreasePct"`
 	IsOverridden       bool          `gorm:"not null;default:false" json:"isOverridden"`
@@ -108,8 +127,8 @@ func (StaffSalary) TableName() string {
 // 5 years = 5 rows per scenario.
 type StaffIncentive struct {
 	TenantScoped
-	ScenarioID         uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	YearIndex          int             `gorm:"not null" json:"yearIndex"` // 1–5
+	ScenarioID         uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:uix_staff_incentives" json:"scenarioId"`
+	YearIndex          int             `gorm:"column:year;not null;uniqueIndex:uix_staff_incentives" json:"yearIndex"` // 1–5, DB column: year
 	IncentivePct       decimal.Decimal `gorm:"type:numeric(8,4)" json:"incentivePct"`
 	SpecificIncentives decimal.Decimal `gorm:"type:numeric(12,4)" json:"specificIncentives"`
 	IsOverridden       bool            `gorm:"not null;default:false" json:"isOverridden"`
@@ -181,7 +200,7 @@ type StaffPayrollYear struct {
 	// Row 38: Incentive % (from StaffIncentive input)
 	IncentivePct decimal.Decimal `json:"incentivePct"`
 
-	// Row 39: Incentive amount = SubtotalPayroll × IncentivePct / 100
+	// Row 39: Incentive amount = SubtotalPayroll × IncentivePct  (IncentivePct is a fraction, e.g. 0.10 = 10%)
 	IncentiveAmount decimal.Decimal `json:"incentiveAmount"`
 
 	// Row 40: Specific incentives (from StaffIncentive input)

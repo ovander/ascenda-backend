@@ -6,23 +6,27 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // PnLService orchestrates P&L CRUD and computation.
 type PnLService struct {
 	pnlRepo       repo.PnLRepository
 	reportService *ReportService
+	emitter       *event.Emitter
 	logger        *logrus.Entry
 }
 
 // NewPnLService creates a new PnLService.
-func NewPnLService(pnlRepo repo.PnLRepository, reportService *ReportService, logger *logrus.Entry) *PnLService {
+func NewPnLService(pnlRepo repo.PnLRepository, reportService *ReportService, emitter *event.Emitter, logger *logrus.Entry) *PnLService {
 	return &PnLService{
 		pnlRepo:       pnlRepo,
 		reportService: reportService,
+		emitter:       emitter,
 		logger:        logger,
 	}
 }
@@ -58,7 +62,13 @@ func (s *PnLService) UpdateManualEntries(ctx context.Context, tenantID, scenario
 		return apierror.Internal("failed to save pnl entries")
 	}
 
+	lines := countUnique(entries, func(e model.PnlManualEntry) string { return string(e.LineID) })
 	s.logger.WithField("scenario_id", scenarioID).Info("pnl entries updated")
+	s.emitter.Publish(event.Event{
+		Type: event.DataChanged, TenantID: tenantID, UserID: ctxutil.GetUserID(ctx), ScenarioID: scenarioID,
+		EntityType: "pnl", Action: event.ActionUpdate,
+		Changes: marshalChanges(map[string]any{"rows": len(entries), "lines": lines}),
+	})
 	return nil
 }
 

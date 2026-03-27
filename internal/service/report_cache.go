@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 )
 
 // ReportCache is a simple in-memory LRU cache for computed full plan reports.

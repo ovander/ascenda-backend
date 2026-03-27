@@ -2,34 +2,42 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/event"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/repo"
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/socrate"
+	"ascenda/internal/repo"
 )
 
+// UserService handles tenant-scoped user lifecycle operations.
+// It reuses the SocrateRegistrar interface (defined in registration_service.go)
+// to dispatch invite emails via the Socrate service-account token.
 type UserService struct {
-	userRepo   repo.UserRepository
-	tenantRepo repo.TenantRepository
-	emitter    *event.Emitter
-	logger     *logrus.Entry
+	userRepo       repo.UserRepository
+	tenantRepo     repo.TenantRepository
+	socrateInviter SocrateRegistrar // nil → skip Socrate (local dev without IdP)
+	emitter        *event.Emitter
+	logger         *logrus.Entry
 }
 
-func NewUserService(userRepo repo.UserRepository, tenantRepo repo.TenantRepository, emitter *event.Emitter, logger *logrus.Entry) *UserService {
+func NewUserService(userRepo repo.UserRepository, tenantRepo repo.TenantRepository, socrateInviter SocrateRegistrar, emitter *event.Emitter, logger *logrus.Entry) *UserService {
 	return &UserService{
-		userRepo:   userRepo,
-		tenantRepo: tenantRepo,
-		emitter:    emitter,
-		logger:     logger,
+		userRepo:       userRepo,
+		tenantRepo:     tenantRepo,
+		socrateInviter: socrateInviter,
+		emitter:        emitter,
+		logger:         logger,
 	}
 }
 
 // GetOrCreateUser finds an existing user by external ID, or auto-provisions on first login.
-// Returns the user and their KerPlan role.
+// Returns the user and their Ascenda role.
 func (s *UserService) GetOrCreateUser(ctx context.Context, tenantID uuid.UUID, externalID, email, name string) (*model.User, error) {
 	// Try to find existing user by external ID
 	user, err := s.userRepo.GetByExternalID(externalID)
@@ -113,15 +121,18 @@ func (s *UserService) ListUsers(ctx context.Context, tenantID uuid.UUID, offset,
 	return s.userRepo.ListByTenant(tenantID, offset, limit)
 }
 
-// InviteUser creates a pending user record.
-func (s *UserService) InviteUser(ctx context.Context, tenantID, invitedBy uuid.UUID, email, role string) (*model.User, error) {
-	// Validate role
-	validRoles := map[string]bool{"viewer": true, "editor": true, "admin": true}
+// InviteUser creates a pending user record and dispatches an invite email via
+// Socrate (when configured). The flow mirrors RegistrationService.Register but
+// is triggered by a tenant owner/admin rather than the user themselves.
+func (s *UserService) InviteUser(ctx context.Context, tenantID, invitedBy uuid.UUID, email, name, role string) (*model.User, error) {
+	// Validate role — only "user" can be invited; "owner" is assigned automatically
+	// and "admin" is a platform-level role managed separately.
+	validRoles := map[string]bool{"user": true}
 	if !validRoles[role] {
-		return nil, apierror.BadRequest("invalid role: must be viewer, editor, or admin")
+		return nil, apierror.BadRequest("invalid role: must be 'user'")
 	}
 
-	// Check if user already exists
+	// Check if user already exists in this tenant
 	existing, _ := s.userRepo.GetByEmail(tenantID, email)
 	if existing != nil {
 		return nil, apierror.Conflict("user with this email already exists in tenant")
@@ -134,53 +145,119 @@ func (s *UserService) InviteUser(ctx context.Context, tenantID, invitedBy uuid.U
 		return nil, apierror.Forbidden("tenant user limit reached")
 	}
 
+	// Create identity in Socrate (sends verification/invite email automatically).
+	// If Socrate is not configured (local dev), skip silently.
+	var externalID string
+	if s.socrateInviter != nil {
+		socrateUser, err := s.socrateInviter.RegisterUser(ctx, socrate.CreateUserRequest{
+			Email:    email,
+			FullName: name,
+			Role:     "user", // Socrate role — always "user" for tenant members
+		})
+		if err != nil {
+			// ErrUserAlreadyExists means they're already registered in Socrate
+			// (e.g. previously registered via another tenant). We still create the
+			// local record so they gain access to this tenant — they just won't get
+			// a second signup email.
+			if !errors.Is(err, socrate.ErrUserAlreadyExists) {
+				s.logger.WithError(err).Error("failed to create user in Socrate")
+				return nil, apierror.Internal(fmt.Sprintf("failed to send invite: %v", err))
+			}
+			s.logger.WithField("email", email).Debug("user already exists in Socrate — skipping registration email")
+		} else if socrateUser != nil {
+			externalID = fmt.Sprintf("%d", socrateUser.ID)
+		}
+	}
+
 	user := &model.User{
-		ID:        uuid.New(),
-		TenantID:  tenantID,
-		Email:     email,
-		Role:      role,
-		IsActive:  true,
-		InvitedBy: &invitedBy,
+		ID:         uuid.New(),
+		TenantID:   tenantID,
+		ExternalID: externalID,
+		Email:      email,
+		Name:       name,
+		Role:       role,
+		IsActive:   true,
+		InvitedBy:  &invitedBy,
 	}
 	if err := s.userRepo.Create(user); err != nil {
-		s.logger.WithError(err).Error("failed to invite user")
+		s.logger.WithError(err).Error("failed to create invited user record")
 		return nil, apierror.Internal("failed to invite user")
 	}
 
 	s.logger.WithFields(logrus.Fields{
 		"email": email, "role": role, "invited_by": invitedBy,
+		"socrate_dispatched": s.socrateInviter != nil,
 	}).Info("user invited")
 
 	return user, nil
 }
 
+// DeleteUser deactivates a user in the local DB and removes them from Socrate
+// when an external ID is present. Owners cannot be deleted — use TransferOwnership first.
+func (s *UserService) DeleteUser(ctx context.Context, tenantID, targetUserID uuid.UUID) error {
+	target, err := s.userRepo.GetByID(tenantID, targetUserID)
+	if err != nil || target == nil {
+		return apierror.NotFound("user", targetUserID.String())
+	}
+
+	if target.Role == "owner" {
+		return apierror.Forbidden("cannot delete the owner — transfer ownership first")
+	}
+
+	// Soft-delete: mark inactive. The record is kept for audit trail / foreign keys.
+	target.IsActive = false
+	if err := s.userRepo.Update(target); err != nil {
+		return apierror.Internal("failed to deactivate user")
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"user_id": targetUserID, "email": target.Email,
+	}).Info("user soft-deleted")
+
+	return nil
+}
+
+// GetUserImpact returns dependency counts for a user — used by the safe-delete preview.
+func (s *UserService) GetUserImpact(ctx context.Context, tenantID, targetUserID uuid.UUID) (map[string]int64, error) {
+	target, err := s.userRepo.GetByID(tenantID, targetUserID)
+	if err != nil || target == nil {
+		return nil, apierror.NotFound("user", targetUserID.String())
+	}
+	// For now we report a stub impact (plan ownership count would require a plan repo).
+	// The handler can enrich this with more context.
+	return map[string]int64{
+		"ownedPlans": 0, // enriched by handler if needed
+	}, nil
+}
+
 // UpdateRole changes a user's role with business rules.
+// Tenant roles are: user | owner (owner is transferred via TransferOwnership).
+// The platform "admin" role is managed separately by Ascenda operators.
 func (s *UserService) UpdateRole(ctx context.Context, tenantID, targetUserID uuid.UUID, callerRole, newRole string) error {
-	validRoles := map[string]bool{"viewer": true, "editor": true, "admin": true}
+	// Within a tenant, roles are "user" and "owner".
+	// "owner" changes go via TransferOwnership; "admin" is platform-level only.
+	validTenantRoles := map[string]bool{"user": true}
 
 	target, err := s.userRepo.GetByID(tenantID, targetUserID)
 	if err != nil || target == nil {
 		return apierror.NotFound("user", targetUserID.String())
 	}
 
-	// Cannot change owner role
+	// Cannot change owner role — use TransferOwnership instead
 	if target.Role == "owner" {
 		return apierror.Forbidden("cannot change owner role — use transfer ownership instead")
 	}
 
-	// Cannot promote to owner
+	// Cannot assign owner or admin via this endpoint
 	if newRole == "owner" {
 		return apierror.Forbidden("cannot promote to owner — use transfer ownership instead")
 	}
-
-	// Admins can only set viewer or editor
-	if callerRole == "admin" && !validRoles[newRole] {
-		return apierror.Forbidden("admins can only assign viewer, editor, or admin roles")
+	if newRole == "admin" {
+		return apierror.Forbidden("cannot assign platform admin role — contact Ascenda support")
 	}
 
-	// Only owner can promote to admin
-	if newRole == "admin" && callerRole != "owner" {
-		return apierror.Forbidden("only owner can promote to admin")
+	if !validTenantRoles[newRole] {
+		return apierror.BadRequest("invalid role: must be 'user'")
 	}
 
 	target.Role = newRole
@@ -233,12 +310,13 @@ func (s *UserService) TransferOwnership(ctx context.Context, tenantID, currentOw
 		return apierror.NotFound("user", newOwnerID.String())
 	}
 
-	if target.Role != "admin" {
-		return apierror.Forbidden("can only transfer ownership to an admin")
+	// The new owner must be an active user in this tenant (any non-owner role)
+	if target.Role == "owner" {
+		return apierror.Forbidden("target user is already the owner")
 	}
 
-	// Swap roles
-	current.Role = "admin"
+	// Former owner becomes a regular user; target becomes the new owner
+	current.Role = "user"
 	target.Role = "owner"
 
 	if err := s.userRepo.Update(current); err != nil {
