@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
 )
 
 // ── Mock PlanMemberRepo ───────────────────────────────────────────

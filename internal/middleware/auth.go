@@ -14,8 +14,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/pkg/apierror"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/pkg/apierror"
+	"ascenda/internal/pkg/ctxutil"
 )
 
 // SocrateClaims represents JWT claims from Socrate authentication.

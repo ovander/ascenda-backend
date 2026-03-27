@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/pkg/ctxutil"
 )
 
 func TestRBACMiddlewarePermissions(t *testing.T) {
@@ -26,9 +26,10 @@ func TestRBACMiddlewarePermissions(t *testing.T) {
 		{name: "user cannot edit plans (global)", role: "user", requiredPerm: PermEditPlan, expectedStatus: http.StatusForbidden},
 		{name: "user cannot manage users", role: "user", requiredPerm: PermManageUsers, expectedStatus: http.StatusForbidden},
 
-		// admin: manage users + self service, NO business data
-		{name: "admin can manage users", role: "admin", requiredPerm: PermManageUsers, expectedStatus: http.StatusOK},
+		// admin: platform:admin + self:service only — NO tenant or business data access
+		{name: "admin has platform:admin", role: "admin", requiredPerm: PermPlatformAdmin, expectedStatus: http.StatusOK},
 		{name: "admin can self-service", role: "admin", requiredPerm: PermSelfService, expectedStatus: http.StatusOK},
+		{name: "admin CANNOT manage users (tenant-scoped)", role: "admin", requiredPerm: PermManageUsers, expectedStatus: http.StatusForbidden},
 		{name: "admin CANNOT view plans", role: "admin", requiredPerm: PermViewPlan, expectedStatus: http.StatusForbidden},
 		{name: "admin CANNOT edit plans", role: "admin", requiredPerm: PermEditPlan, expectedStatus: http.StatusForbidden},
 		{name: "admin CANNOT manage plans", role: "admin", requiredPerm: PermManagePlan, expectedStatus: http.StatusForbidden},
@@ -101,7 +102,8 @@ func TestRBACHasPermission(t *testing.T) {
 	}{
 		{name: "user has self-service", role: "user", permission: PermSelfService, expectedResult: true},
 		{name: "user no view plan", role: "user", permission: PermViewPlan, expectedResult: false},
-		{name: "admin has manage users", role: "admin", permission: PermManageUsers, expectedResult: true},
+		{name: "admin has platform:admin", role: "admin", permission: PermPlatformAdmin, expectedResult: true},
+		{name: "admin no manage users (tenant-scoped)", role: "admin", permission: PermManageUsers, expectedResult: false},
 		{name: "admin no view plan", role: "admin", permission: PermViewPlan, expectedResult: false},
 		{name: "owner has manage tenant", role: "owner", permission: PermManageTenant, expectedResult: true},
 		{name: "owner has self-service", role: "owner", permission: PermSelfService, expectedResult: true},
@@ -137,10 +139,23 @@ func TestRBACRolePermissionMapping(t *testing.T) {
 	assert.False(t, editorExists, "editor should not be a global role")
 	assert.False(t, viewerExists, "viewer should not be a global role")
 
-	// admin has NO plan access
+	// admin (platform-level) has NO tenant or plan permissions — only platform:admin + self:service
 	for _, perm := range RolePermissions["admin"] {
 		assert.NotEqual(t, PermViewPlan, perm, "admin should not have view:plan")
 		assert.NotEqual(t, PermEditPlan, perm, "admin should not have edit:plan")
 		assert.NotEqual(t, PermManagePlan, perm, "admin should not have manage:plan")
+		assert.NotEqual(t, PermManageUsers, perm, "admin should not have manage:users (tenant-scoped)")
+		assert.NotEqual(t, PermManageTenant, perm, "admin should not have manage:tenant")
 	}
+
+	// admin must have platform:admin permission
+	adminPerms := RolePermissions["admin"]
+	hasPlatformAdmin := false
+	for _, p := range adminPerms {
+		if p == PermPlatformAdmin {
+			hasPlatformAdmin = true
+			break
+		}
+	}
+	assert.True(t, hasPlatformAdmin, "admin must have platform:admin permission")
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/repo"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // PlanAccessMiddleware checks plan-level permissions via plan_members table.

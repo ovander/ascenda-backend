@@ -4,29 +4,32 @@ import (
 	"net/http"
 
 	"github.com/sirupsen/logrus"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/pkg/ctxutil"
 )
 
 // Permission represents an action permission.
 type Permission string
 
 const (
-	PermViewPlan     Permission = "view:plan"
-	PermEditPlan     Permission = "edit:plan"
-	PermManagePlan   Permission = "manage:plan"
-	PermManageUsers  Permission = "manage:users"
-	PermManageTenant Permission = "manage:tenant"
-	PermSelfService  Permission = "self:service" // all authenticated users can access /users/me
+	PermViewPlan      Permission = "view:plan"
+	PermEditPlan      Permission = "edit:plan"
+	PermManagePlan    Permission = "manage:plan"
+	PermManageUsers   Permission = "manage:users"   // tenant-scoped user management (owner)
+	PermManageTenant  Permission = "manage:tenant"
+	PermPlatformAdmin Permission = "platform:admin" // platform-wide admin (not tenant-scoped)
+	PermSelfService   Permission = "self:service"   // all authenticated users can access /users/me
 )
 
-// RolePermissions maps tenant-level roles to their permissions.
+// RolePermissions maps roles to their permissions.
+//
+// Roles:
+//   - user   — regular business user; accesses plans via plan memberships
+//   - owner  — tenant owner; manages their workspace (users, tenant settings) + creates plans
+//   - admin  — platform-wide Ascenda operator; sees all tenants; not tied to any tenant
+//
 // Plan-level roles (editor|viewer) are handled via the plan_members table.
 var RolePermissions = map[string][]Permission{
 	"user": {
-		PermSelfService,
-	},
-	"admin": {
-		PermManageUsers,
 		PermSelfService,
 	},
 	"owner": {
@@ -35,6 +38,10 @@ var RolePermissions = map[string][]Permission{
 		PermManagePlan,
 		PermManageUsers,
 		PermManageTenant,
+		PermSelfService,
+	},
+	"admin": {
+		PermPlatformAdmin,
 		PermSelfService,
 	},
 }

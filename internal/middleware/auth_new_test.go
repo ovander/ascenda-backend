@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/pkg/ctxutil"
 )
 
 // Tests for the modified auth middleware:

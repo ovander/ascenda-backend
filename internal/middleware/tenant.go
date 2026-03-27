@@ -8,16 +8,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/repo"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 type contextKey string
 
 const dbContextKey contextKey = "db"
 
-// TenantMiddleware injects tenant context, sets up RLS, and resolves KerPlan user role.
+// TenantMiddleware injects tenant context, sets up RLS, and resolves Ascenda user role.
 type TenantMiddleware struct {
 	db       *gorm.DB
 	userRepo repo.UserRepository
@@ -58,7 +58,7 @@ func (m *TenantMiddleware) Handler(next http.Handler) http.Handler {
 			return
 		}
 
-		// Resolve KerPlan user role from users table (auto-provision on first login)
+		// Resolve Ascenda user role from users table (auto-provision on first login)
 		userRole := ""
 		if m.userRepo != nil && sub != "" {
 			user, err := m.userRepo.GetByExternalID(sub)

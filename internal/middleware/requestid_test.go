@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/pkg/ctxutil"
+	"ascenda/internal/pkg/ctxutil"
 )
 
 func TestRequestIDMiddlewareGeneratesID(t *testing.T) {
