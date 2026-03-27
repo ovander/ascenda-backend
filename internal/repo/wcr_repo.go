@@ -4,7 +4,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // WCRRepo handles working capital requirement data operations

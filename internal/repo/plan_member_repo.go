@@ -3,7 +3,7 @@ package repo
 import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 type PlanMemberRepo struct {
@@ -44,5 +44,13 @@ func (r *PlanMemberRepo) Update(member *model.PlanMember) error {
 }
 
 func (r *PlanMemberRepo) Delete(tenantID, planID, userID uuid.UUID) error {
-	return r.db.Where("tenant_id = ? AND plan_id = ? AND user_id = ?", tenantID, planID, userID).Delete(&model.PlanMember{}).Error
+	result := r.db.Where("tenant_id = ? AND plan_id = ? AND user_id = ?", tenantID, planID, userID).
+		Delete(&model.PlanMember{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

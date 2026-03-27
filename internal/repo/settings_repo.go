@@ -3,7 +3,7 @@ package repo
 import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // SettingsRepo handles plan configuration and settings

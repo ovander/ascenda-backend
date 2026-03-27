@@ -3,7 +3,7 @@ package repo
 import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // TenantRepo handles tenant data operations
@@ -49,6 +49,23 @@ func (r *TenantRepo) ListActive(offset, limit int) ([]*model.Tenant, error) {
 		Limit(limit).
 		Find(&tenants).Error
 	return tenants, err
+}
+
+// ListAll retrieves all tenants (including inactive) with pagination, ordered by creation date.
+func (r *TenantRepo) ListAll(offset, limit int) ([]*model.Tenant, error) {
+	var tenants []*model.Tenant
+	err := r.db.Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&tenants).Error
+	return tenants, err
+}
+
+// CountAll returns the total number of tenants.
+func (r *TenantRepo) CountAll() (int64, error) {
+	var count int64
+	err := r.db.Model(&model.Tenant{}).Count(&count).Error
+	return count, err
 }
 
 // Update updates a tenant

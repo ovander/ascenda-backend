@@ -3,7 +3,7 @@ package repo
 import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // SnapshotRepo handles plan snapshot data operations
@@ -53,7 +53,16 @@ func (r *SnapshotRepo) ListByPlan(tenantID, planID uuid.UUID, offset, limit int)
 	return snapshots, err
 }
 
-// Delete deletes a snapshot
+// Delete deletes a snapshot.
+// Returns gorm.ErrRecordNotFound when no row matching both tenant_id and id is
+// found so the handler can return HTTP 404.
 func (r *SnapshotRepo) Delete(tenantID, snapshotID uuid.UUID) error {
-	return r.db.Where("tenant_id = ? AND id = ?", tenantID, snapshotID).Delete(&model.PlanSnapshot{}).Error
+	result := r.db.Where("tenant_id = ? AND id = ?", tenantID, snapshotID).Delete(&model.PlanSnapshot{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

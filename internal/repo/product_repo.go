@@ -3,8 +3,7 @@ package repo
 import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // ProductRepo handles product and product-related data operations
@@ -46,19 +45,41 @@ func (r *ProductRepo) UpdateProduct(product *model.Product) error {
 	return r.db.Save(product).Error
 }
 
-// DeleteProduct deletes a product
+// DeleteProduct deletes a product and all its child rows (assumptions, volumes, margins)
+// in a single transaction so the compute engine never sees orphaned data.
 func (r *ProductRepo) DeleteProduct(tenantID, productID uuid.UUID) error {
-	return r.db.Where("tenant_id = ? AND id = ?", tenantID, productID).Delete(&model.Product{}).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ? AND product_id = ?", tenantID, productID).
+			Delete(&model.ProductAssumption{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id = ? AND product_id = ?", tenantID, productID).
+			Delete(&model.ProductSalesVolume{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id = ? AND product_id = ?", tenantID, productID).
+			Delete(&model.ProductDistributorMargin{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("tenant_id = ? AND id = ?", tenantID, productID).
+			Delete(&model.Product{}).Error
+	})
 }
 
-// BatchUpsertAssumptions creates or updates product assumptions
+// BatchUpsertAssumptions replaces all assumptions for the product in a single transaction.
+// The frontend always sends the full set, so delete-then-insert is correct and idempotent.
 func (r *ProductRepo) BatchUpsertAssumptions(tenantID, scenarioID uuid.UUID, assumptions []model.ProductAssumption) error {
-	for i := range assumptions {
-		assumptions[i].TenantID = tenantID
+	if len(assumptions) == 0 {
+		return nil
 	}
-	return r.db.Clauses(clause.OnConflict{
-		UpdateAll: true,
-	}).Create(&assumptions).Error
+	productID := assumptions[0].ProductID
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ? AND product_id = ?", tenantID, productID).
+			Delete(&model.ProductAssumption{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&assumptions).Error
+	})
 }
 
 // GetAssumptionsByProduct retrieves all assumptions for a product
@@ -70,33 +91,43 @@ func (r *ProductRepo) GetAssumptionsByProduct(tenantID, productID uuid.UUID) ([]
 	return assumptions, err
 }
 
-// BatchUpsertVolumes creates or updates sales volumes
+// BatchUpsertVolumes replaces all volumes for the product in a single transaction.
 func (r *ProductRepo) BatchUpsertVolumes(tenantID, scenarioID uuid.UUID, volumes []model.ProductSalesVolume) error {
-	for i := range volumes {
-		volumes[i].TenantID = tenantID
+	if len(volumes) == 0 {
+		return nil
 	}
-	return r.db.Clauses(clause.OnConflict{
-		UpdateAll: true,
-	}).Create(&volumes).Error
+	productID := volumes[0].ProductID
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ? AND product_id = ?", tenantID, productID).
+			Delete(&model.ProductSalesVolume{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&volumes).Error
+	})
 }
 
 // GetVolumesByProduct retrieves all volumes for a product
 func (r *ProductRepo) GetVolumesByProduct(tenantID, productID uuid.UUID) ([]*model.ProductSalesVolume, error) {
 	var volumes []*model.ProductSalesVolume
 	err := r.db.Where("tenant_id = ? AND product_id = ?", tenantID, productID).
-		Order("year, zone_index").
+		Order("year, zone, channel").
 		Find(&volumes).Error
 	return volumes, err
 }
 
-// BatchUpsertMargins creates or updates distributor margins
+// BatchUpsertMargins replaces all margins for the product in a single transaction.
 func (r *ProductRepo) BatchUpsertMargins(tenantID, scenarioID uuid.UUID, margins []model.ProductDistributorMargin) error {
-	for i := range margins {
-		margins[i].TenantID = tenantID
+	if len(margins) == 0 {
+		return nil
 	}
-	return r.db.Clauses(clause.OnConflict{
-		UpdateAll: true,
-	}).Create(&margins).Error
+	productID := margins[0].ProductID
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ? AND product_id = ?", tenantID, productID).
+			Delete(&model.ProductDistributorMargin{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&margins).Error
+	})
 }
 
 // GetMarginsByProduct retrieves all margins for a product
@@ -121,7 +152,7 @@ func (r *ProductRepo) GetAssumptionsByScenario(tenantID, scenarioID uuid.UUID) (
 func (r *ProductRepo) GetVolumesByScenario(tenantID, scenarioID uuid.UUID) ([]*model.ProductSalesVolume, error) {
 	var volumes []*model.ProductSalesVolume
 	err := r.db.Where("tenant_id = ? AND product_id IN (SELECT id FROM products WHERE scenario_id = ?)", tenantID, scenarioID).
-		Order("product_id, year, zone_index").
+		Order("product_id, year, zone, channel").
 		Find(&volumes).Error
 	return volumes, err
 }

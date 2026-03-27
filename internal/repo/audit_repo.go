@@ -3,7 +3,7 @@ package repo
 import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // AuditRepo handles audit log data operations
@@ -37,6 +37,35 @@ func (r *AuditRepo) ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*mode
 		Offset(offset).
 		Limit(limit).
 		Order("created_at DESC").
+		Find(&logs).Error
+	return logs, err
+}
+
+// CountByTenant returns the total number of audit log entries for a tenant.
+func (r *AuditRepo) CountByTenant(tenantID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.Model(&model.AuditLog{}).
+		Where("tenant_id = ?", tenantID).
+		Count(&count).Error
+	return count, err
+}
+
+// GetByID retrieves a single audit log entry by its primary key within a tenant.
+func (r *AuditRepo) GetByID(tenantID, entryID uuid.UUID) (*model.AuditLog, error) {
+	var log model.AuditLog
+	err := r.db.Where("id = ? AND tenant_id = ?", entryID, tenantID).First(&log).Error
+	if err != nil {
+		return nil, err
+	}
+	return &log, nil
+}
+
+// ListByEntityID retrieves all audit logs for a given entity_id regardless of entity_type.
+// Used to build the full audit trail for a scenario (where entity_id = scenario UUID).
+func (r *AuditRepo) ListByEntityID(tenantID, entityID uuid.UUID) ([]*model.AuditLog, error) {
+	var logs []*model.AuditLog
+	err := r.db.Where("tenant_id = ? AND entity_id = ?", tenantID, entityID).
+		Order("created_at ASC").
 		Find(&logs).Error
 	return logs, err
 }

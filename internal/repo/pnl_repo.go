@@ -4,7 +4,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 // PnLRepo handles profit and loss data operations
@@ -21,7 +21,7 @@ func NewPnLRepo(db *gorm.DB) *PnLRepo {
 func (r *PnLRepo) ListByScenario(tenantID, scenarioID uuid.UUID) ([]*model.PnlManualEntry, error) {
 	var entries []*model.PnlManualEntry
 	err := r.db.Where("tenant_id = ? AND scenario_id = ?", tenantID, scenarioID).
-		Order("line_id, year").
+		Order("line_id, year_index").
 		Find(&entries).Error
 	return entries, err
 }

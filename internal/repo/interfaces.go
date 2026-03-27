@@ -2,7 +2,9 @@ package repo
 
 import (
 	"github.com/google/uuid"
-	"kerplan/internal/model"
+	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
+	"ascenda/internal/model"
 )
 
 // PlanRepository defines the interface for business plan data operations
@@ -10,8 +12,10 @@ type PlanRepository interface {
 	Create(plan *model.BusinessPlan) error
 	GetByID(tenantID, planID uuid.UUID) (*model.BusinessPlan, error)
 	ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*model.BusinessPlan, error)
+	CountByTenant(tenantID uuid.UUID) (int64, error)
 	Update(plan *model.BusinessPlan) error
 	Delete(tenantID, planID uuid.UUID) error
+	PurgeDemoPlans(tenantID uuid.UUID) error
 }
 
 // ScenarioRepository defines the interface for scenario data operations
@@ -31,6 +35,14 @@ type TenantRepository interface {
 	ListActive(offset, limit int) ([]*model.Tenant, error)
 	Update(tenant *model.Tenant) error
 	Delete(id uuid.UUID) error
+}
+
+// AdminTenantRepository extends TenantRepository with platform-admin operations
+// (all tenants, not just active ones).
+type AdminTenantRepository interface {
+	TenantRepository
+	ListAll(offset, limit int) ([]*model.Tenant, error)
+	CountAll() (int64, error)
 }
 
 // UserRepository defines the interface for user data operations
@@ -111,6 +123,9 @@ type PnLRepository interface {
 type FiplanRepository interface {
 	ListByScenario(tenantID, scenarioID uuid.UUID) ([]*model.FiplanEntry, error)
 	BatchUpsert(tenantID, scenarioID uuid.UUID, entries []model.FiplanEntry) error
+	// Cap-table sync helpers — operate on capital_increase line only.
+	UpsertCapitalIncreaseEntry(tenantID, scenarioID uuid.UUID, yearIndex int, amount decimal.Decimal, roundID uuid.UUID, roundLabel string) error
+	ClearCapTableLink(tenantID, scenarioID uuid.UUID, yearIndex int) error
 }
 
 // PnlCashRepository defines the interface for P&L cash data operations
@@ -150,8 +165,11 @@ type SnapshotRepository interface {
 // AuditRepository defines the interface for audit log operations
 type AuditRepository interface {
 	Create(auditLog *model.AuditLog) error
+	GetByID(tenantID, entryID uuid.UUID) (*model.AuditLog, error)
 	ListByEntity(tenantID uuid.UUID, entityType string, entityID uuid.UUID) ([]*model.AuditLog, error)
 	ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*model.AuditLog, error)
+	CountByTenant(tenantID uuid.UUID) (int64, error)
+	ListByEntityID(tenantID, entityID uuid.UUID) ([]*model.AuditLog, error)
 	ListByUser(tenantID, userID uuid.UUID, offset, limit int) ([]*model.AuditLog, error)
 }
 
@@ -165,9 +183,132 @@ type PlanMemberRepository interface {
 	Delete(tenantID, planID, userID uuid.UUID) error
 }
 
+// CapTableRepository defines the interface for all cap table data operations.
+type CapTableRepository interface {
+	// CapTableCompany
+	GetCompany(tenantID, scenarioID uuid.UUID) (*model.CapTableCompany, error)
+	UpsertCompany(company *model.CapTableCompany) error
+
+	// CapTableShareClass
+	ListShareClasses(tenantID, scenarioID uuid.UUID) ([]*model.CapTableShareClass, error)
+	UpsertShareClass(sc *model.CapTableShareClass) error
+	DeleteShareClass(tenantID, id uuid.UUID) error
+
+	// CapTableShareholder
+	ListShareholders(tenantID, scenarioID uuid.UUID) ([]*model.CapTableShareholder, error)
+	CreateShareholder(sh *model.CapTableShareholder) error
+	UpdateShareholder(sh *model.CapTableShareholder) error
+	DeleteShareholder(tenantID, id uuid.UUID) error
+
+	// CapTableRound
+	ListRounds(tenantID, scenarioID uuid.UUID) ([]*model.CapTableRound, error)
+	GetRound(tenantID, id uuid.UUID) (*model.CapTableRound, error)
+	CreateRound(rnd *model.CapTableRound) error
+	UpdateRound(rnd *model.CapTableRound) error
+	DeleteRound(tenantID, id uuid.UUID) error
+
+	// CapTablePosition
+	ListPositionsByRound(tenantID, roundID uuid.UUID) ([]*model.CapTablePosition, error)
+	ListPositionsByScenario(tenantID, scenarioID uuid.UUID) ([]*model.CapTablePosition, error)
+	BatchUpsertPositions(tenantID, roundID uuid.UUID, positions []model.CapTablePosition) error
+
+	// StockOptionPlan
+	ListPlans(tenantID, scenarioID uuid.UUID) ([]*model.StockOptionPlan, error)
+	GetPlan(tenantID, id uuid.UUID) (*model.StockOptionPlan, error)
+	CreatePlan(plan *model.StockOptionPlan) error
+	UpdatePlan(plan *model.StockOptionPlan) error
+	DeletePlan(tenantID, id uuid.UUID) error
+
+	// OptionGrant
+	ListGrantsByPlan(tenantID, planID uuid.UUID) ([]*model.OptionGrant, error)
+	ListGrantsByScenario(tenantID, scenarioID uuid.UUID) ([]*model.OptionGrant, error)
+	CreateGrant(grant *model.OptionGrant) error
+	UpdateGrant(grant *model.OptionGrant) error
+	DeleteGrant(tenantID, id uuid.UUID) error
+
+	// ValuationScenario
+	ListValuationScenarios(tenantID, scenarioID uuid.UUID) ([]*model.ValuationScenario, error)
+	GetValuationScenario(tenantID, id uuid.UUID) (*model.ValuationScenario, error)
+	CreateValuationScenario(vs *model.ValuationScenario) error
+	UpdateValuationScenario(vs *model.ValuationScenario) error
+	DeleteValuationScenario(tenantID, id uuid.UUID) error
+
+	// CapTableScenarioBranch
+	ListBranches(tenantID, scenarioID uuid.UUID) ([]*model.CapTableScenarioBranch, error)
+	CreateBranch(branch *model.CapTableScenarioBranch) error
+	UpdateBranch(branch *model.CapTableScenarioBranch) error
+	DeleteBranch(tenantID, id uuid.UUID) error
+}
+
+// BEPRepository defines the interface for all break-even point data operations.
+type BEPRepository interface {
+	// BEPSnapshot
+	CreateSnapshot(s *model.BEPSnapshot) error
+	GetSnapshot(tenantID, id uuid.UUID) (*model.BEPSnapshot, error)
+	ListSnapshots(tenantID, scenarioID uuid.UUID) ([]*model.BEPSnapshot, error)
+	UpdateSnapshot(s *model.BEPSnapshot) error
+	DeleteSnapshot(tenantID, id uuid.UUID) error
+
+	// FixedCostLine
+	ListFixedCostLines(tenantID, snapshotID uuid.UUID) ([]*model.FixedCostLine, error)
+	BatchUpsertFixedCostLines(tenantID, snapshotID uuid.UUID, lines []model.FixedCostLine) error
+
+	// VariableCostLine
+	ListVariableCostLines(tenantID, snapshotID uuid.UUID) ([]*model.VariableCostLine, error)
+	BatchUpsertVariableCostLines(tenantID, snapshotID uuid.UUID, lines []model.VariableCostLine) error
+
+	// SensitivityConfig
+	ListSensitivityConfigs(tenantID, snapshotID uuid.UUID) ([]*model.SensitivityConfig, error)
+	UpsertSensitivityConfig(cfg *model.SensitivityConfig) error
+
+	// OptimisationPlan
+	CreateOptimisationPlan(p *model.OptimisationPlan) error
+	GetOptimisationPlan(tenantID, id uuid.UUID) (*model.OptimisationPlan, error)
+	ListOptimisationPlans(tenantID, snapshotID uuid.UUID) ([]*model.OptimisationPlan, error)
+	UpdateOptimisationPlan(p *model.OptimisationPlan) error
+	DeleteOptimisationPlan(tenantID, id uuid.UUID) error
+
+	// FixedCostSaving
+	ListFixedCostSavings(tenantID, planID uuid.UUID) ([]*model.FixedCostSaving, error)
+	BatchUpsertFixedCostSavings(tenantID, planID uuid.UUID, savings []model.FixedCostSaving) error
+
+	// VariableCostSaving
+	ListVariableCostSavings(tenantID, planID uuid.UUID) ([]*model.VariableCostSaving, error)
+	BatchUpsertVariableCostSavings(tenantID, planID uuid.UUID, savings []model.VariableCostSaving) error
+
+	// PCGReviewItem
+	ListPCGReviewItems(tenantID, planID uuid.UUID) ([]*model.PCGReviewItem, error)
+	BatchUpsertPCGReviewItems(tenantID, planID uuid.UUID, items []model.PCGReviewItem) error
+}
+
+// PlanDeps is the narrow dependency surface that PlanService needs from the
+// repository layer. Any test double that implements these methods can stand in
+// for *RepoBundle without importing the whole bundle or a real *gorm.DB.
+//
+// *RepoBundle satisfies this interface via the getter methods below.
+type PlanDeps interface {
+	// GetDB returns the underlying *gorm.DB so callers can open ad-hoc
+	// transactions (e.g. the CloneScenario atomic copy).
+	GetDB() *gorm.DB
+
+	GetScenario() ScenarioRepository
+	GetProduct() ProductRepository
+	GetStaff() StaffRepository
+	GetCapex() CapexRepository
+	GetOpex() OpexRepository
+	GetPnL() PnLRepository
+	GetFiPlan() FiplanRepository
+	GetPnlCash() PnlCashRepository
+	GetWCR() WCRRepository
+	GetCash() CashRepository
+	GetBudget() BudgetRepository
+}
+
 // Compile-time interface compliance checks
 var (
 	_ PlanRepository        = (*PlanRepo)(nil)
+	_ PlanDeps = (*RepoBundle)(nil)
+
 	_ ScenarioRepository    = (*ScenarioRepo)(nil)
 	_ TenantRepository      = (*TenantRepo)(nil)
 	_ UserRepository        = (*UserRepo)(nil)
@@ -185,4 +326,6 @@ var (
 	_ SnapshotRepository    = (*SnapshotRepo)(nil)
 	_ AuditRepository       = (*AuditRepo)(nil)
 	_ PlanMemberRepository  = (*PlanMemberRepo)(nil)
+	_ CapTableRepository    = (*CapTableRepo)(nil)
+	_ BEPRepository         = (*BEPRepo)(nil)
 )
