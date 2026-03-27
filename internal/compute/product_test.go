@@ -2,10 +2,12 @@ package compute
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"kerplan/internal/model"
+	"github.com/stretchr/testify/assert"
+	"ascenda/internal/model"
 )
 
 func TestComputeProductRevenue(t *testing.T) {
@@ -123,20 +125,20 @@ func TestComputeProductRevenue(t *testing.T) {
 				cogs       [5]decimal.Decimal
 				grossMargin [5]decimal.Decimal
 			}{
-				// 3000 units * 100 / 1000 = 300k turnover per year
-				// 3000 units * 50 / 1000 = 150k COGS per year
-				// grossMargin = 150k
+				// 3000 units * 100 = 300 000 € turnover per year
+				// 3000 units * 50  = 150 000 € COGS per year
+				// grossMargin      = 150 000 €
 				turnover: [5]decimal.Decimal{
-					decimal.NewFromInt(300), decimal.NewFromInt(300), decimal.NewFromInt(300),
-					decimal.NewFromInt(300), decimal.NewFromInt(300),
+					decimal.NewFromInt(300000), decimal.NewFromInt(300000), decimal.NewFromInt(300000),
+					decimal.NewFromInt(300000), decimal.NewFromInt(300000),
 				},
 				cogs: [5]decimal.Decimal{
-					decimal.NewFromInt(150), decimal.NewFromInt(150), decimal.NewFromInt(150),
-					decimal.NewFromInt(150), decimal.NewFromInt(150),
+					decimal.NewFromInt(150000), decimal.NewFromInt(150000), decimal.NewFromInt(150000),
+					decimal.NewFromInt(150000), decimal.NewFromInt(150000),
 				},
 				grossMargin: [5]decimal.Decimal{
-					decimal.NewFromInt(150), decimal.NewFromInt(150), decimal.NewFromInt(150),
-					decimal.NewFromInt(150), decimal.NewFromInt(150),
+					decimal.NewFromInt(150000), decimal.NewFromInt(150000), decimal.NewFromInt(150000),
+					decimal.NewFromInt(150000), decimal.NewFromInt(150000),
 				},
 			},
 		},
@@ -310,22 +312,22 @@ func TestComputeProductRevenue(t *testing.T) {
 				cogs       [5]decimal.Decimal
 				grossMargin [5]decimal.Decimal
 			}{
-				// Year 1: 100 units * 100 / 1000 = 10k, 100 * 50 / 1000 = 5k, margin = 5k
-				// Year 2: 130 units * 100 / 1000 = 13k, 130 * 50 / 1000 = 6.5k, margin = 6.5k
-				// Year 3: 160 units * 100 / 1000 = 16k, 160 * 50 / 1000 = 8k, margin = 8k
-				// Year 4: 190 units * 100 / 1000 = 19k, 190 * 50 / 1000 = 9.5k, margin = 9.5k
-				// Year 5: 220 units * 100 / 1000 = 22k, 220 * 50 / 1000 = 11k, margin = 11k
+				// Year 1: 100 units * 100 = 10000, 100 * 50 = 5000, margin = 5000
+				// Year 2: 130 units * 100 = 13000, 130 * 50 = 6500, margin = 6500
+				// Year 3: 160 units * 100 = 16000, 160 * 50 = 8000, margin = 8000
+				// Year 4: 190 units * 100 = 19000, 190 * 50 = 9500, margin = 9500
+				// Year 5: 220 units * 100 = 22000, 220 * 50 = 11000, margin = 11000
 				turnover: [5]decimal.Decimal{
-					decimal.NewFromInt(10), decimal.NewFromInt(13),
-					decimal.NewFromInt(16), decimal.NewFromInt(19), decimal.NewFromInt(22),
+					decimal.NewFromInt(10000), decimal.NewFromInt(13000),
+					decimal.NewFromInt(16000), decimal.NewFromInt(19000), decimal.NewFromInt(22000),
 				},
 				cogs: [5]decimal.Decimal{
-					decimal.NewFromFloat(5), decimal.NewFromFloat(6.5),
-					decimal.NewFromInt(8), decimal.NewFromFloat(9.5), decimal.NewFromInt(11),
+					decimal.NewFromInt(5000), decimal.NewFromFloat(6500),
+					decimal.NewFromInt(8000), decimal.NewFromFloat(9500), decimal.NewFromInt(11000),
 				},
 				grossMargin: [5]decimal.Decimal{
-					decimal.NewFromInt(5), decimal.NewFromFloat(6.5),
-					decimal.NewFromInt(8), decimal.NewFromFloat(9.5), decimal.NewFromInt(11),
+					decimal.NewFromInt(5000), decimal.NewFromFloat(6500),
+					decimal.NewFromInt(8000), decimal.NewFromFloat(9500), decimal.NewFromInt(11000),
 				},
 			},
 		},
@@ -502,18 +504,18 @@ func TestComputeConsolidatedRevenue(t *testing.T) {
 				},
 			},
 			expectedTotalTurnover: [5]decimal.Decimal{
-				// Product 1: 100 * 100 / 1000 = 10k per year
-				// Product 2: 50 * 200 / 1000 = 10k per year
-				// Total: 20k
-				decimal.NewFromInt(20), decimal.NewFromInt(20), decimal.NewFromInt(20),
-				decimal.NewFromInt(20), decimal.NewFromInt(20),
+				// Product 1: 100 * 100 = 10000 per year
+				// Product 2: 50 * 200 = 10000 per year
+				// Total: 20000
+				decimal.NewFromInt(20000), decimal.NewFromInt(20000), decimal.NewFromInt(20000),
+				decimal.NewFromInt(20000), decimal.NewFromInt(20000),
 			},
 			expectedTotalCOGS: [5]decimal.Decimal{
-				// Product 1: 100 * 50 / 1000 = 5k per year
-				// Product 2: 50 * 100 / 1000 = 5k per year
-				// Total: 10k
-				decimal.NewFromInt(10), decimal.NewFromInt(10), decimal.NewFromInt(10),
-				decimal.NewFromInt(10), decimal.NewFromInt(10),
+				// Product 1: 100 * 50 = 5000 per year
+				// Product 2: 50 * 100 = 5000 per year
+				// Total: 10000
+				decimal.NewFromInt(10000), decimal.NewFromInt(10000), decimal.NewFromInt(10000),
+				decimal.NewFromInt(10000), decimal.NewFromInt(10000),
 			},
 		},
 	}
@@ -529,5 +531,51 @@ func TestComputeConsolidatedRevenue(t *testing.T) {
 					"Total COGS mismatch in year %d", year+1)
 			}
 		})
+	}
+}
+
+// TestProductRevenueCalendarYear is a regression test for the bug where
+// ProductRevenueYear.Year and ConsolidatedRevenueYear.Year were always 0
+// instead of being populated with the actual calendar year derived from
+// config.ForecastStart.
+func TestProductRevenueCalendarYear(t *testing.T) {
+	forecastStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	cfg := model.PlanConfig{
+		ForecastStart:         forecastStart,
+		SalaryMonthsPerYear:   12,
+		FirstFiscalYearMonths: 12,
+	}
+
+	product := model.Product{
+		Name:       "Test Product",
+		ScenarioID: uuid.New(),
+	}
+
+	// Minimal bundle — no volumes means zero revenue, but Year fields are set regardless.
+	bundle := ProductInputBundle{
+		Assumptions: [MaxYears]model.ProductAssumption{
+			{YearIndex: 1, BaseUnitPrice: decimal.NewFromInt(100), CostCoefficient: decimal.NewFromInt(1), PriceCoefficient: decimal.NewFromInt(1)},
+			{YearIndex: 2, BaseUnitPrice: decimal.NewFromInt(100), CostCoefficient: decimal.NewFromInt(1), PriceCoefficient: decimal.NewFromInt(1)},
+			{YearIndex: 3, BaseUnitPrice: decimal.NewFromInt(100), CostCoefficient: decimal.NewFromInt(1), PriceCoefficient: decimal.NewFromInt(1)},
+			{YearIndex: 4, BaseUnitPrice: decimal.NewFromInt(100), CostCoefficient: decimal.NewFromInt(1), PriceCoefficient: decimal.NewFromInt(1)},
+			{YearIndex: 5, BaseUnitPrice: decimal.NewFromInt(100), CostCoefficient: decimal.NewFromInt(1), PriceCoefficient: decimal.NewFromInt(1)},
+		},
+	}
+
+	// Per-product Year field
+	result := ComputeProductRevenue(product, bundle, cfg)
+	expectedYears := [MaxYears]int{2025, 2026, 2027, 2028, 2029}
+	for i := 0; i < MaxYears; i++ {
+		assert.Equal(t, expectedYears[i], result.Years[i].Year,
+			"ProductRevenueYear[%d].Year should be calendar year %d", i, expectedYears[i])
+		assert.Equal(t, i+1, result.Years[i].YearIndex,
+			"ProductRevenueYear[%d].YearIndex should be 1-based index %d", i, i+1)
+	}
+
+	// Consolidated Year field
+	consolidated := ComputeConsolidatedRevenue([]model.Product{product}, []ProductInputBundle{bundle}, cfg)
+	for i := 0; i < MaxYears; i++ {
+		assert.Equal(t, expectedYears[i], consolidated.Totals[i].Year,
+			"ConsolidatedRevenueYear[%d].Year should be calendar year %d", i, expectedYears[i])
 	}
 }

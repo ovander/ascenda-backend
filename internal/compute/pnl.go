@@ -1,12 +1,14 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
 
-// ComputePnl computes the full P&L statement according to the new model types
+// ComputePnl computes the full P&L statement according to the new model types.
+// wcr and fiplan are optional (pass zero values for the first-pass in the engine);
+// after Layer 3 the engine calls this a second time with the real WCR and FiPlan.
 func ComputePnl(
 	pnlEntries []model.PnlManualEntry,
 	revenue model.ConsolidatedRevenue,
@@ -14,6 +16,7 @@ func ComputePnl(
 	capex model.CapexSummary,
 	opex model.OpexSummary,
 	fiplan model.FiplanReport,
+	wcr model.WCRReport,
 	config model.PlanConfig,
 ) model.PnlReport {
 	result := model.PnlReport{}
@@ -52,10 +55,20 @@ func ComputePnl(
 	chartOtherOpex := [5]decimal.Decimal{}
 	chartPayroll := [5]decimal.Decimal{}
 
+	startYear := config.ForecastStart.Year()
+	if startYear < 2000 {
+		startYear = 2024 // safe fallback if forecastStart not set
+	}
+
+	// yearIndex is 0-based (0..4) throughout the loop — used as array index
+	// and as the key into the PnlManualEntry map (same 0-based convention as
+	// opex and capex manual entries).
+	// PnlYear.YearIndex in the output is stored as 1-based (1..5), consistent
+	// with the staffPayroll output and the revenue yearIndex field.
 	for yearIndex := 0; yearIndex < 5; yearIndex++ {
 		year := &model.PnlYear{
-			Year:      2024 + yearIndex,
-			YearIndex: yearIndex,
+			Year:      startYear + yearIndex,
+			YearIndex: yearIndex + 1, // 1-based in output, matching revenue/staff convention
 		}
 
 		// 1. Sales
@@ -67,8 +80,15 @@ func ComputePnl(
 		// 3. Capitalized Production (manual entry)
 		year.CapitalizedProduction = getAmount(model.PnlCapitalizedProd, yearIndex)
 
-		// 4. Stored Production (from WCR, for now 0)
-		year.StoredProduction = decimal.Zero
+		// 4. Stored Production — inventory change (WCR inventory at end of year
+		//    minus inventory at end of previous year / opening balance for year 0).
+		//    A positive change (inventory grew) is operating revenue; negative means
+		//    inventory drawdown and reduces operating revenue.
+		if yearIndex == 0 {
+			year.StoredProduction = wcr.Inventory.InventoryValue[0].Sub(wcr.Inventory.InitialInventory)
+		} else {
+			year.StoredProduction = wcr.Inventory.InventoryValue[yearIndex].Sub(wcr.Inventory.InventoryValue[yearIndex-1])
+		}
 
 		// 5. Total Operating Revenue
 		year.TotalOperatingRevenue = year.Sales.
@@ -109,8 +129,12 @@ func ComputePnl(
 		// 15. Impairment (manual entry)
 		year.Impairment = getAmount(model.PnlImpairment, yearIndex)
 
-		// 16. Grants and Other Revenue (from fiplan, for now 0)
-		year.GrantsOtherRevenue = decimal.Zero
+		// 16. Grants and Other Revenue — non-repayable subsidies and other grants
+		//    recognised as operating income in the year they are received.
+		//    Subsidies + OtherGrants from FiPlan resources (RepayableGrants are
+		//    treated as debt and excluded from P&L revenue).
+		year.GrantsOtherRevenue = fiplan.Plan.Resources.Subsidies[yearIndex].
+			Add(fiplan.Plan.Resources.OtherGrants[yearIndex])
 
 		// 17. Other Operating Expenses (manual entry)
 		year.OtherOperatingExp = getAmount(model.PnlOtherOperatingExp, yearIndex)
@@ -122,11 +146,11 @@ func ComputePnl(
 			Add(year.GrantsOtherRevenue).
 			Sub(year.OtherOperatingExp)
 
-		// 19. Financial Revenues (from fiplan, for now 0)
-		year.FinancialRevenues = decimal.Zero
+		// 19. Financial Revenues — interest earned on positive cash balances.
+		year.FinancialRevenues = decimal.Zero // reserved for future: cash × InterestOnPositiveCash
 
-		// 20. Financial Expenses (from fiplan, for now 0)
-		year.FinancialExpenses = decimal.Zero
+		// 20. Financial Expenses — interest on outstanding MLT debt (from FiPlan).
+		year.FinancialExpenses = fiplan.LoanInterest[yearIndex]
 
 		// 21. Pre-tax Earnings
 		year.PreTaxEarnings = year.EBIT.

@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -24,10 +24,13 @@ func ComputeCash(
 	// Build override map: lineID + yearIndex + month -> amount
 	overrideMap := buildOverrideMap(overrides)
 
+	// prevYearClosing carries the last month's closing balance forward into the next year.
+	prevYearClosing := decimal.Zero
+
 	// Process 3 years
 	for yearIdx := 0; yearIdx < 3; yearIdx++ {
 		year := &result.Years[yearIdx]
-		year.Year = yearIdx + 1
+		year.YearIndex = yearIdx + 1
 
 		// Initialize sections
 		revenueSection := &year.Revenue
@@ -61,7 +64,24 @@ func ComputeCash(
 		computeFinancingSection(financingSection, fiplan, yearIdx, overrideMap)
 
 		// ─── CASH SECTION ───
-		computeCashSection(cashSection, economicSection, financingSection)
+		computeCashSection(cashSection, economicSection, financingSection, prevYearClosing)
+
+		// ─── BALANCE CONVENIENCE ARRAYS ───
+		// ClosingBalance is the cumulative running cash balance after each month.
+		// NetCashFlow is the period change (Economic + Financing) for each month.
+		// OpeningBalance is the balance before each month's flows.
+		// prevYearClosing carries year N closing into year N+1 opening month 1.
+		year.ClosingBalance = cashSection.Total
+		for m := 0; m < 12; m++ {
+			if m == 0 {
+				year.OpeningBalance[m] = prevYearClosing
+			} else {
+				year.OpeningBalance[m] = cashSection.Total[m-1]
+			}
+			year.NetCashFlow[m] = year.ClosingBalance[m].Sub(year.OpeningBalance[m])
+		}
+		// Carry closing balance of this year forward to next year's opening month.
+		prevYearClosing = cashSection.Total[11]
 	}
 
 	// Schedules (can remain nil for now)
@@ -154,10 +174,11 @@ func computeRevenueSection(section *model.CashSection, revenue model.Consolidate
 		monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, model.CashOtherRevenues, yearIdx)
 
 		lines = append(lines, model.CashLine{
-			LineID:  model.CashOtherRevenues,
-			Label:   "Sales Revenue",
-			Monthly: monthly,
-			Annual:  annual,
+			LineID:           model.CashOtherRevenues,
+			Label:            "Sales Revenue",
+			Monthly:          monthly,
+			Annual:           annual,
+			DistributionRule: model.DistEvenSpread,
 		})
 	}
 
@@ -189,10 +210,11 @@ func computeOperatingSection(section *model.CashSection, opex model.OpexSummary,
 			monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, lineID, yearIdx)
 
 			lines = append(lines, model.CashLine{
-				LineID:  lineID,
-				Label:   string(sub.Subcategory),
-				Monthly: monthly,
-				Annual:  annual,
+				LineID:           lineID,
+				Label:            string(sub.Subcategory),
+				Monthly:          monthly,
+				Annual:           annual,
+				DistributionRule: model.DistEvenSpread,
 			})
 		}
 	}
@@ -201,13 +223,14 @@ func computeOperatingSection(section *model.CashSection, opex model.OpexSummary,
 	if yearIdx < len(staff.Payroll) {
 		totalPayroll := staff.Payroll[yearIdx].TotalPayroll
 		monthly := distributeAnnual(totalPayroll, model.DistEvenSpread)
-		monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, model.CashOpexRentTelecom, yearIdx)
+		monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, model.CashHeadcountSub, yearIdx)
 
 		lines = append(lines, model.CashLine{
-			LineID:  model.CashOpexRentTelecom,
-			Label:   "Payroll",
-			Monthly: monthly,
-			Annual:  annual,
+			LineID:           model.CashHeadcountSub,
+			Label:            "Payroll",
+			Monthly:          monthly,
+			Annual:           annual,
+			DistributionRule: model.DistEvenSpread,
 		})
 	}
 
@@ -219,15 +242,27 @@ func computeOperatingSection(section *model.CashSection, opex model.OpexSummary,
 func computeCapexSection(section *model.CashSection, capex model.CapexSummary, yearIdx int, overrideMap map[model.CashLineID]map[int]map[int]decimal.Decimal) {
 	var lines []model.CashLine
 
-	// Map asset categories to CashLineIDs
+	// Map asset categories to CashLineIDs (all 14 categories covered)
 	capexLineMap := map[model.AssetCategory]model.CashLineID{
-		model.AssetLand:           model.CashCapexLandBuilding,
-		model.AssetBuildings:      model.CashCapexLandBuilding,
-		model.AssetPatentsTrademarks: model.CashCapexPatentsRD,
-		model.AssetRnDExpenses:    model.CashCapexPatentsRD,
-		model.AssetPrototypes:     model.CashCapexPrototypes,
-		model.AssetComputerHWSW:   model.CashCapexITVehicles,
-		model.AssetVehicles:       model.CashCapexITVehicles,
+		// Tangible – land & buildings
+		model.AssetLand:              model.CashCapexLandBuilding,
+		model.AssetBuildings:         model.CashCapexLandBuilding,
+		// Intangible – patents, R&D, setup
+		model.AssetIntangibleBusiness: model.CashCapexPatentsRD,
+		model.AssetSetupExpenses:      model.CashCapexPatentsRD,
+		model.AssetPatentsTrademarks:  model.CashCapexPatentsRD,
+		model.AssetRnDExpenses:        model.CashCapexPatentsRD,
+		model.AssetOtherIntangible:    model.CashCapexPatentsRD,
+		// Physical prototypes & equipment
+		model.AssetPrototypes:         model.CashCapexPrototypes,
+		model.AssetEquipmentTools:     model.CashCapexPrototypes,
+		// IT, furniture, vehicles & other tangibles
+		model.AssetOfficeFurniture:    model.CashCapexITVehicles,
+		model.AssetComputerHWSW:       model.CashCapexITVehicles,
+		model.AssetVehicles:           model.CashCapexITVehicles,
+		model.AssetOtherTangible:      model.CashCapexITVehicles,
+		// Financial investments → land/building bucket (closest capital allocation)
+		model.AssetFinancial:          model.CashCapexLandBuilding,
 	}
 
 	// Add capex categories (lump_m1 by default)
@@ -239,10 +274,11 @@ func computeCapexSection(section *model.CashSection, capex model.CapexSummary, y
 			monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, lineID, yearIdx)
 
 			lines = append(lines, model.CashLine{
-				LineID:  lineID,
-				Label:   string(inv.Category),
-				Monthly: monthly,
-				Annual:  annual,
+				LineID:           lineID,
+				Label:            string(inv.Category),
+				Monthly:          monthly,
+				Annual:           annual,
+				DistributionRule: model.DistLumpM1,
 			})
 		}
 	}
@@ -274,10 +310,11 @@ func computeTaxSection(section *model.CashSection, pnl model.PnlReport, wcr mode
 		monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, model.CashCorporateTax, yearIdx)
 
 		lines = append(lines, model.CashLine{
-			LineID:  model.CashCorporateTax,
-			Label:   "Corporate Tax",
-			Monthly: monthly,
-			Annual:  annual,
+			LineID:           model.CashCorporateTax,
+			Label:            "Corporate Tax",
+			Monthly:          monthly,
+			Annual:           annual,
+			DistributionRule: model.DistLumpM1,
 		})
 	}
 
@@ -327,10 +364,11 @@ func computeEconomicSection(economic *model.CashSection, revenue *model.CashSect
 
 	economic.Lines = []model.CashLine{
 		{
-			LineID:  model.CashOtherRevenues, // placeholder
-			Label:   "Economic Subtotal",
-			Monthly: economic12,
-			Annual:  annual,
+			LineID:           model.CashCurrentAccount, // economic subtotal; no dedicated cash constant exists
+			Label:            "Economic Subtotal",
+			Monthly:          economic12,
+			Annual:           annual,
+			DistributionRule: model.DistFromSchedule,
 		},
 	}
 	economic.Total = economic12
@@ -347,10 +385,11 @@ func computeFinancingSection(section *model.CashSection, fiplan model.FiplanRepo
 		monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, model.CashCapitalIncrease, yearIdx)
 
 		lines = append(lines, model.CashLine{
-			LineID:  model.CashCapitalIncrease,
-			Label:   "Capital Increase",
-			Monthly: monthly,
-			Annual:  annual,
+			LineID:           model.CashCapitalIncrease,
+			Label:            "Capital Increase",
+			Monthly:          monthly,
+			Annual:           annual,
+			DistributionRule: model.DistLumpM1,
 		})
 	}
 
@@ -361,10 +400,11 @@ func computeFinancingSection(section *model.CashSection, fiplan model.FiplanRepo
 		monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, model.CashLTLoans, yearIdx)
 
 		lines = append(lines, model.CashLine{
-			LineID:  model.CashLTLoans,
-			Label:   "LT Loans",
-			Monthly: monthly,
-			Annual:  annual,
+			LineID:           model.CashLTLoans,
+			Label:            "LT Loans",
+			Monthly:          monthly,
+			Annual:           annual,
+			DistributionRule: model.DistLumpM1,
 		})
 	}
 
@@ -375,10 +415,11 @@ func computeFinancingSection(section *model.CashSection, fiplan model.FiplanRepo
 		monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, model.CashLoanRepayment, yearIdx)
 
 		lines = append(lines, model.CashLine{
-			LineID:  model.CashLoanRepayment,
-			Label:   "Loan Repayment",
-			Monthly: monthly,
-			Annual:  annual,
+			LineID:           model.CashLoanRepayment,
+			Label:            "Loan Repayment",
+			Monthly:          monthly,
+			Annual:           annual,
+			DistributionRule: model.DistLumpM1,
 		})
 	}
 
@@ -389,10 +430,11 @@ func computeFinancingSection(section *model.CashSection, fiplan model.FiplanRepo
 		monthly, annual := applyOverridesAndComputeTotal(monthly, overrideMap, model.CashDividends, yearIdx)
 
 		lines = append(lines, model.CashLine{
-			LineID:  model.CashDividends,
-			Label:   "Dividends",
-			Monthly: monthly,
-			Annual:  annual,
+			LineID:           model.CashDividends,
+			Label:            "Dividends",
+			Monthly:          monthly,
+			Annual:           annual,
+			DistributionRule: model.DistLumpM1,
 		})
 	}
 
@@ -400,10 +442,11 @@ func computeFinancingSection(section *model.CashSection, fiplan model.FiplanRepo
 	computeSectionTotal(section)
 }
 
-// computeCashSection builds the Cash section as cumulative balance from Economic + Financing
-func computeCashSection(section *model.CashSection, economic *model.CashSection, financing *model.CashSection) {
+// computeCashSection builds the Cash section as cumulative balance from Economic + Financing.
+// openingBalance is the closing cash from the previous year (0 for year 1).
+func computeCashSection(section *model.CashSection, economic *model.CashSection, financing *model.CashSection, openingBalance decimal.Decimal) {
 	var cashMonthly [12]decimal.Decimal
-	runningBalance := decimal.Zero
+	runningBalance := openingBalance
 
 	for m := 0; m < 12; m++ {
 		// Monthly change: Economic + Financing
@@ -424,10 +467,11 @@ func computeCashSection(section *model.CashSection, economic *model.CashSection,
 
 	section.Lines = []model.CashLine{
 		{
-			LineID:  model.CashCurrentAccount,
-			Label:   "Cash Balance",
-			Monthly: cashMonthly,
-			Annual:  cashMonthly[11],
+			LineID:           model.CashCurrentAccount,
+			Label:            "Cash Balance",
+			Monthly:          cashMonthly,
+			Annual:           cashMonthly[11],
+			DistributionRule: model.DistFromSchedule,
 		},
 	}
 	section.Total = cashMonthly

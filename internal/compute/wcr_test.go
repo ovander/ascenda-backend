@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 func TestComputeWCR(t *testing.T) {
@@ -307,4 +307,239 @@ func TestComputeWCR(t *testing.T) {
 			tt.checkWCR(t, result)
 		})
 	}
+}
+
+// TestWCRInvariants enforces all structural identity relationships for every year.
+// These cover the anomaly report items 5.2 (no invariant enforcement).
+func TestWCRInvariants(t *testing.T) {
+	tenantID := uuid.New()
+	scenarioID := uuid.New()
+
+	tol := decimal.NewFromFloat(0.01) // 1-cent tolerance for rounding
+
+	config := model.PlanConfig{
+		TenantScoped:     model.TenantScoped{TenantID: tenantID},
+		ScenarioID:       scenarioID,
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		EmployerTaxRate:  decimal.NewFromFloat(0.42),
+		VATRate:          decimal.NewFromFloat(0.2),
+	}
+
+	// Non-zero opening balance to exercise year-0 WCRChange formula
+	openBal := model.OpeningBalance{
+		TenantScoped:        model.TenantScoped{TenantID: tenantID},
+		ScenarioID:          scenarioID,
+		CustomerReceivables: decimal.NewFromFloat(5000),
+		Inventories:         decimal.NewFromFloat(1000),
+		SupplierPayables:    decimal.NewFromFloat(2000),
+	}
+
+	wcCfg := model.WorkingCapitalConfig{
+		TenantScoped:      model.TenantScoped{TenantID: tenantID},
+		ScenarioID:        scenarioID,
+		CustomerPct0Days:  decimal.NewFromFloat(0.1),
+		CustomerPct30Days: decimal.NewFromFloat(0.4),
+		CustomerPct60Days: decimal.NewFromFloat(0.3),
+		CustomerPct90Days: decimal.NewFromFloat(0.1),
+		// CustomerPct120Days = 1 - 0.1 - 0.4 - 0.3 - 0.1 = 0.1
+		SupplierPct0Days:  decimal.NewFromFloat(0.2),
+		SupplierPct30Days: decimal.NewFromFloat(0.5),
+		SupplierPct60Days: decimal.NewFromFloat(0.2),
+		SupplierPct90Days: decimal.NewFromFloat(0.1),
+		// SupplierPct120Days = 0
+		InventoryPctYear1: decimal.NewFromFloat(0.15),
+		InventoryPctYear2: decimal.NewFromFloat(0.15),
+		InventoryPctYear3: decimal.NewFromFloat(0.15),
+		InventoryPctYear4: decimal.NewFromFloat(0.15),
+		InventoryPctYear5: decimal.NewFromFloat(0.15),
+	}
+
+	rev := model.ConsolidatedRevenue{
+		ScenarioID: scenarioID,
+		Totals: [5]model.ConsolidatedRevenueYear{
+			{TotalTurnover: decimal.NewFromInt(400_000), TotalCOGS: decimal.NewFromInt(120_000)},
+			{TotalTurnover: decimal.NewFromInt(480_000), TotalCOGS: decimal.NewFromInt(144_000)},
+			{TotalTurnover: decimal.NewFromInt(576_000), TotalCOGS: decimal.NewFromInt(172_800)},
+			{TotalTurnover: decimal.NewFromInt(691_200), TotalCOGS: decimal.NewFromInt(207_360)},
+			{TotalTurnover: decimal.NewFromInt(829_440), TotalCOGS: decimal.NewFromInt(248_832)},
+		},
+	}
+
+	opex := model.OpexSummary{
+		GrandTotal: [5]decimal.Decimal{
+			decimal.NewFromInt(80_000),
+			decimal.NewFromInt(96_000),
+			decimal.NewFromInt(115_200),
+			decimal.NewFromInt(138_240),
+			decimal.NewFromInt(165_888),
+		},
+	}
+
+	staff := model.StaffPayrollSummary{
+		ScenarioID: scenarioID,
+		Payroll: [5]model.StaffPayrollYear{
+			{SubtotalPayroll: decimal.NewFromInt(200_000)},
+			{SubtotalPayroll: decimal.NewFromInt(240_000)},
+			{SubtotalPayroll: decimal.NewFromInt(288_000)},
+			{SubtotalPayroll: decimal.NewFromInt(345_600)},
+			{SubtotalPayroll: decimal.NewFromInt(414_720)},
+		},
+	}
+
+	pnl := model.PnlReport{
+		Years: [5]model.PnlYear{
+			{PreTaxEarnings: decimal.NewFromInt(50_000)},
+			{PreTaxEarnings: decimal.NewFromInt(70_000)},
+			{PreTaxEarnings: decimal.NewFromInt(95_000)},
+			{PreTaxEarnings: decimal.NewFromInt(130_000)},
+			{PreTaxEarnings: decimal.NewFromInt(180_000)},
+		},
+	}
+
+	capex := model.CapexSummary{
+		Totals: model.CapexTotals{
+			TotalCapex: [5]decimal.Decimal{
+				decimal.NewFromInt(30_000),
+				decimal.NewFromInt(25_000),
+				decimal.NewFromInt(20_000),
+				decimal.NewFromInt(15_000),
+				decimal.NewFromInt(10_000),
+			},
+		},
+	}
+
+	r := ComputeWCR([]model.WCREntry{}, rev, opex, staff, wcCfg, openBal, capex, pnl, config)
+
+	// Precompute expected initialWCR
+	initialWCR := openBal.CustomerReceivables.Add(openBal.Inventories).Sub(openBal.SupplierPayables)
+
+	for y := 0; y < MaxYears; y++ {
+		// ── Identity 1: BasicWCR = CustomerWCR + InventoryWCR − SupplierWCR ──────
+		expectedBasic := r.Summary.CustomerWCR[y].
+			Add(r.Summary.InventoryWCR[y]).
+			Sub(r.Summary.SupplierWCR[y])
+		assertDecEqApprox(t, expectedBasic, r.Summary.BasicWCR[y], tol,
+			"year %d: basicWcr = customerWcr + inventoryWcr − supplierWcr", y+1)
+
+		// ── Identity 2: AdjustedWCR = BasicWCR + TotalFiscalSocial + NetAdjustment ──
+		expectedAdj := r.Summary.BasicWCR[y].
+			Add(r.FiscalSocial.TotalFiscalSocial[y]).
+			Add(r.Adjustments.NetAdjustment[y])
+		assertDecEqApprox(t, expectedAdj, r.Adjusted.AdjustedWCR[y], tol,
+			"year %d: adjustedWcr = basicWcr + totalFiscalSocial + netAdjustment", y+1)
+
+		// ── Identity 3: NetVATPayable = VATCollected − VATDeductible ─────────────
+		expectedNet := r.FiscalSocial.VATCollected[y].Sub(r.FiscalSocial.VATDeductible[y])
+		assertDecEqApprox(t, expectedNet, r.FiscalSocial.NetVATPayable[y], tol,
+			"year %d: netVatPayable = vatCollected − vatDeductible", y+1)
+
+		// ── Identity 4: TotalSocialCharges = EmployerCharges + EmployeeCharges ───
+		expectedSocial := r.FiscalSocial.EmployerCharges[y].Add(r.FiscalSocial.EmployeeCharges[y])
+		assertDecEqApprox(t, expectedSocial, r.FiscalSocial.TotalSocialCharges[y], tol,
+			"year %d: totalSocialCharges = employerCharges + employeeCharges", y+1)
+
+		// ── Identity 5: TotalFiscalSocial = VATLiability + SocialLiability + CorpTax ──
+		expectedFiscal := r.FiscalSocial.VATLiability[y].
+			Add(r.FiscalSocial.SocialLiability[y]).
+			Add(r.FiscalSocial.CorporateTaxLiab[y])
+		assertDecEqApprox(t, expectedFiscal, r.FiscalSocial.TotalFiscalSocial[y], tol,
+			"year %d: totalFiscalSocial = vatLiability + socialLiability + corporateTaxLiab", y+1)
+
+		// ── Identity 6: Sum of customer tranches = TotalCustomers ────────────────
+		trancheSum := decimal.Zero
+		for k := 0; k < 5; k++ {
+			trancheSum = trancheSum.Add(r.Customers.Tranches[y][k])
+		}
+		assertDecEqApprox(t, trancheSum, r.Customers.TotalCustomers[y], tol,
+			"year %d: sum(customerTranches) = totalCustomers", y+1)
+
+		// ── Identity 7: Sum of supplier tranches = TotalSuppliers ────────────────
+		supplierSum := decimal.Zero
+		for k := 0; k < 5; k++ {
+			supplierSum = supplierSum.Add(r.Suppliers.Tranches[y][k])
+		}
+		assertDecEqApprox(t, supplierSum, r.Suppliers.TotalSuppliers[y], tol,
+			"year %d: sum(supplierTranches) = totalSuppliers", y+1)
+
+		// ── Identity 8: WCRChange temporal continuity ────────────────────────────
+		if y == 0 {
+			// WCRChange[0] = BasicWCR[0] − initialWCR (opening balance)
+			expectedChange0 := r.Summary.BasicWCR[0].Sub(initialWCR)
+			assertDecEqApprox(t, expectedChange0, r.Summary.WCRChange[0], tol,
+				"year 1: wcrChange[0] = basicWcr[0] − initialWcr")
+		} else {
+			// WCRChange[y] = BasicWCR[y] − BasicWCR[y-1]
+			expectedChangeY := r.Summary.BasicWCR[y].Sub(r.Summary.BasicWCR[y-1])
+			assertDecEqApprox(t, expectedChangeY, r.Summary.WCRChange[y], tol,
+				"year %d: wcrChange[y] = basicWcr[y] − basicWcr[y-1]", y+1)
+		}
+
+		// ── Identity 9: InventoryValue = COGSBase × InventoryPct ─────────────────
+		expectedInv := r.Inventory.COGSBase[y].Mul(r.Inventory.InventoryPct[y])
+		assertDecEqApprox(t, expectedInv, r.Inventory.InventoryValue[y], tol,
+			"year %d: inventoryValue = cogsBase × inventoryPct", y+1)
+	}
+
+	// ── Identity 10: InitialWCR = CustomerReceivables + Inventories − SupplierPayables ──
+	assertDecEqApprox(t, initialWCR, r.Summary.InitialWCR, tol,
+		"initialWcr = customerReceivables + inventories − supplierPayables")
+	assertDecEqApprox(t, initialWCR, r.Adjusted.InitialAdjWCR, tol,
+		"initialAdjWcr = initialWcr (no opening fiscal-social)")
+}
+
+// ── Fix-3: WCR uses surplus inventory for manufacturing scenarios ─────────────
+
+// TestWCRSurplusInventoryOverridesCOGSPct verifies that when ConsolidatedRevenue
+// carries TotalSurplusInventory (from DriverIndustry products with UnitsProduced),
+// ComputeWCR uses that value for Inventory.InventoryValue instead of TotalCOGS×invPct.
+func TestWCRSurplusInventoryOverridesCOGSPct(t *testing.T) {
+	_ = uuid.New() // keep uuid import used
+
+	wcConfig := model.WorkingCapitalConfig{
+		InventoryPctYear1: decimal.NewFromFloat(0.20), // 20% of COGS — ignored when surplus set
+		InventoryPctYear2: decimal.NewFromFloat(0.20),
+		InventoryPctYear3: decimal.NewFromFloat(0.20),
+		InventoryPctYear4: decimal.NewFromFloat(0.20),
+		InventoryPctYear5: decimal.NewFromFloat(0.20),
+		CustomerPct0Days:  decimal.NewFromInt(1),
+		SupplierPct0Days:  decimal.NewFromInt(1),
+	}
+
+	// Scenario: year-0 COGS = 100k, invPct = 20% → default inventory = 20k.
+	// But the manufacturing surplus is 35k (more finished-goods stock than the % would give).
+	revenue := model.ConsolidatedRevenue{
+		Totals: [5]model.ConsolidatedRevenueYear{
+			{TotalTurnover: decimal.NewFromInt(200_000), TotalCOGS: decimal.NewFromInt(100_000),
+				TotalSurplusInventory: decimal.NewFromInt(35_000)},
+			{TotalTurnover: decimal.NewFromInt(200_000), TotalCOGS: decimal.NewFromInt(100_000),
+				TotalSurplusInventory: decimal.NewFromInt(35_000)},
+			{TotalTurnover: decimal.NewFromInt(200_000), TotalCOGS: decimal.NewFromInt(100_000),
+				TotalSurplusInventory: decimal.Zero}, // draw-down cleared inventory
+			{TotalTurnover: decimal.NewFromInt(200_000), TotalCOGS: decimal.NewFromInt(100_000)},
+			{TotalTurnover: decimal.NewFromInt(200_000), TotalCOGS: decimal.NewFromInt(100_000)},
+		},
+	}
+
+	config := model.PlanConfig{
+		VATRate: decimal.NewFromFloat(0.20),
+	}
+
+	result := ComputeWCR(nil, revenue, model.OpexSummary{}, model.StaffPayrollSummary{},
+		wcConfig, model.OpeningBalance{}, model.CapexSummary{}, model.PnlReport{}, config)
+
+	// Years 0 and 1: surplus inventory overrides COGS×% (35k vs 20k)
+	assert.True(t, decimal.NewFromInt(35_000).Equal(result.Inventory.InventoryValue[0]),
+		"Year 0: should use TotalSurplusInventory (35k), not COGS×20%% (20k)")
+	assert.True(t, decimal.NewFromInt(35_000).Equal(result.Inventory.InventoryValue[1]),
+		"Year 1: should use TotalSurplusInventory (35k), not COGS×20%% (20k)")
+
+	// Year 2: surplus is zero → fall back to COGS×invPct = 100k × 20% = 20k
+	assert.True(t, decimal.NewFromInt(20_000).Equal(result.Inventory.InventoryValue[2]),
+		"Year 2: TotalSurplusInventory=0, should fall back to COGS×invPct (20k)")
+
+	// Years 3 and 4: no surplus set → standard COGS×invPct
+	assert.True(t, decimal.NewFromInt(20_000).Equal(result.Inventory.InventoryValue[3]),
+		"Year 3: COGS×invPct = 20k")
+	assert.True(t, decimal.NewFromInt(20_000).Equal(result.Inventory.InventoryValue[4]),
+		"Year 4: COGS×invPct = 20k")
 }

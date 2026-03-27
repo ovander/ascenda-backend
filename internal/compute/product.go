@@ -1,7 +1,8 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"fmt"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -11,6 +12,11 @@ type ProductInputBundle struct {
 	Assumptions [MaxYears]model.ProductAssumption  // indexed by yearIndex-1
 	Volumes     []model.ProductSalesVolume        // all zone×channel combinations
 	Margins     []model.ProductDistributorMargin  // per zone per year
+	// SurplusInventoryValue[y] is populated by applyIndustryDriver when the
+	// product is DriverIndustry and UnitsProduced[y] > 0.  It represents the
+	// cumulative finished-goods inventory value (at effective unit cost) at the
+	// end of year y.  Zero for all other driver types.
+	SurplusInventoryValue [MaxYears]decimal.Decimal
 }
 
 // ComputeProductRevenue computes revenue summary for a single product
@@ -46,7 +52,7 @@ func ComputeProductRevenue(product model.Product, bundle ProductInputBundle, con
 	for yearIndex := 0; yearIndex < MaxYears; yearIndex++ {
 		year := yearIndex + 1
 		yearRevenue := model.ProductRevenueYear{
-			Year:      0, // Will be set by caller if needed
+			Year:      config.ForecastStart.Year() + yearIndex, // calendar year (ForecastStart + 0..4)
 			YearIndex: year,
 		}
 
@@ -77,8 +83,7 @@ func ComputeProductRevenue(product model.Product, bundle ProductInputBundle, con
 			zoneRevenue.DirectUnitsSold = directVolume
 			zoneRevenue.DirectUnitPrice = finalUnitPrice
 			zoneRevenue.DirectRevenue = decimal.NewFromInt(directVolume).
-				Mul(finalUnitPrice).
-				Div(decimal.NewFromInt(1000))
+				Mul(finalUnitPrice)
 
 			directUnitSalesTotal += directVolume
 			directRevenueTotal = directRevenueTotal.Add(zoneRevenue.DirectRevenue)
@@ -100,10 +105,9 @@ func ComputeProductRevenue(product model.Product, bundle ProductInputBundle, con
 			// CustDistributorCoeff = 1 / (1 - margin%)
 			zoneRevenue.CustDistributorCoeff = SafeDiv(decimal.NewFromInt(1), marginComplement)
 
-			// IndirectRevenue = IndirectUnitsSold * DistributorPrice / 1000
+			// IndirectRevenue = IndirectUnitsSold * DistributorPrice
 			zoneRevenue.IndirectRevenue = decimal.NewFromInt(indirectVolume).
-				Mul(zoneRevenue.DistributorPrice).
-				Div(decimal.NewFromInt(1000))
+				Mul(zoneRevenue.DistributorPrice)
 
 			// CompanyGrossMarginPct = (DistributorPrice - TotalUnitCost) / DistributorPrice
 			grossMarginAmount := zoneRevenue.DistributorPrice.Sub(totalUnitCost)
@@ -141,10 +145,9 @@ func ComputeProductRevenue(product model.Product, bundle ProductInputBundle, con
 			Add(yearRevenue.Zones[1].DirectRevenue).
 			Add(yearRevenue.Zones[2].DirectRevenue)
 
-		// COGS = TotalUnitSales * TotalUnitCost / 1000
+		// COGS = TotalUnitSales * TotalUnitCost (base €)
 		yearRevenue.COGS = decimal.NewFromInt(totalUnitSales).
-			Mul(totalUnitCost).
-			Div(decimal.NewFromInt(1000))
+			Mul(totalUnitCost)
 
 		// GrossMargin = Turnover - COGS
 		yearRevenue.GrossMargin = yearRevenue.Turnover.Sub(yearRevenue.COGS)
@@ -153,6 +156,8 @@ func ComputeProductRevenue(product model.Product, bundle ProductInputBundle, con
 		yearRevenue.GrossMarginPct = SafeDiv(yearRevenue.GrossMargin, yearRevenue.Turnover)
 
 		summary.Years[yearIndex] = yearRevenue
+		// Carry the industry surplus inventory value (zero for non-industry products).
+		summary.SurplusInventoryValue[yearIndex] = bundle.SurplusInventoryValue[yearIndex]
 	}
 
 	return summary
@@ -182,13 +187,16 @@ func ComputeConsolidatedRevenue(products []model.Product, bundles []ProductInput
 		for yearIdx := 0; yearIdx < MaxYears; yearIdx++ {
 			productYear := productSummary.Years[yearIdx]
 
-			totalByYear[yearIdx].Year = yearIdx + 1
+			totalByYear[yearIdx].Year = config.ForecastStart.Year() + yearIdx
 			totalByYear[yearIdx].TotalTurnover = totalByYear[yearIdx].TotalTurnover.Add(productYear.Turnover)
 			totalByYear[yearIdx].TotalDirectSales = totalByYear[yearIdx].TotalDirectSales.Add(productYear.DirectSalesTotal)
 			totalByYear[yearIdx].TotalIndirectSales = totalByYear[yearIdx].TotalIndirectSales.Add(productYear.Turnover.Sub(productYear.DirectSalesTotal))
 			totalByYear[yearIdx].EuropeExportSales = totalByYear[yearIdx].EuropeExportSales.Add(productYear.EuropeExportSales)
 			totalByYear[yearIdx].TotalCOGS = totalByYear[yearIdx].TotalCOGS.Add(productYear.COGS)
 			totalByYear[yearIdx].TotalUnitSales += productYear.TotalUnitSales
+			// Aggregate finished-goods surplus inventory (non-zero for industry products only).
+			totalByYear[yearIdx].TotalSurplusInventory = totalByYear[yearIdx].TotalSurplusInventory.
+				Add(productSummary.SurplusInventoryValue[yearIdx])
 		}
 	}
 
@@ -206,9 +214,9 @@ func ComputeConsolidatedRevenue(products []model.Product, bundles []ProductInput
 
 // Helper functions for volume and margin key generation
 func makeVolumeKey(yearIndex int, zone model.GeoZone, channel model.SalesChannel) string {
-	return string(zone) + "_" + string(channel) + "_" + string(rune(yearIndex))
+	return fmt.Sprintf("%s_%s_%d", zone, channel, yearIndex)
 }
 
 func makeMarginKey(yearIndex int, zone model.GeoZone) string {
-	return string(zone) + "_" + string(rune(yearIndex))
+	return fmt.Sprintf("%s_%d", zone, yearIndex)
 }

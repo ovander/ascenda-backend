@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -14,13 +14,18 @@ func ComputeOpexSummary(
 	staff model.StaffPayrollSummary,
 	config model.PlanConfig,
 ) model.OpexSummary {
-	// Build lookup map: lineID/year -> amount
+	// Build lookup map: lineID/year -> amount.
+	// YearIndex is 1-based (1–5); normalize to 0-based for array indexing.
+	// Amounts are already in k€ (the displayed unit), matching all other opex lines.
 	entryMap := make(map[model.OpexLineID]map[int]decimal.Decimal)
 	for _, entry := range entries {
+		if entry.YearIndex < 1 || entry.YearIndex > 5 {
+			continue
+		}
 		if _, ok := entryMap[entry.LineID]; !ok {
 			entryMap[entry.LineID] = make(map[int]decimal.Decimal)
 		}
-		entryMap[entry.LineID][entry.YearIndex] = entry.Amount
+		entryMap[entry.LineID][entry.YearIndex-1] = entry.Amount
 	}
 
 	// Process each line and compute amounts

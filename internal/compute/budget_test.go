@@ -5,7 +5,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 func TestComputeBudget1(t *testing.T) {

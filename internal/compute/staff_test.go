@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 func TestComputeStaffPayroll(t *testing.T) {
@@ -59,22 +59,23 @@ func TestComputeStaffPayroll(t *testing.T) {
 				{TenantScoped: model.TenantScoped{TenantID: tenantID}, ScenarioID: scenarioID, YearIndex: 5, IncentivePct: decimal.NewFromFloat(0.15)},
 			},
 			config: config,
-			// Year 1: FTE=1, MonthlyGrossSalary=3000, SubtotalPayroll=1*3000*1.42=4260, IncentiveAmount=4260*0.10=426, TotalPayroll=4686
-			// Year 2: FTE=2, SubtotalPayroll=2*3000*1.42=8520, IncentiveAmount=8520*0.10=852, TotalPayroll=9372
-			// Year 3: FTE=2, SubtotalPayroll=2*3500*1.42=9940, IncentiveAmount=9940*0.10=994, TotalPayroll=10934
-			// Year 4: FTE=3, SubtotalPayroll=3*3500*1.42=14910, IncentiveAmount=14910*0.12=1789.2, TotalPayroll=16699.2
-			// Year 5: FTE=3, SubtotalPayroll=3*4000*1.42=17040, IncentiveAmount=17040*0.15=2556, TotalPayroll=19596
+			// Formula: SubtotalPayroll (€) = FTE × MonthlyGrossSalary(€) × (1 + EmployerTaxRate) × Months
+			// Year 1: 1 × 3000 × 1.42 × 12 = 51120   IncentiveAmount = 51120 × 0.10 = 5112   Total = 56232
+			// Year 2: 2 × 3000 × 1.42 × 12 = 102240  IncentiveAmount = 102240 × 0.10 = 10224 Total = 112464
+			// Year 3: 2 × 3500 × 1.42 × 12 = 119280  IncentiveAmount = 119280 × 0.10 = 11928 Total = 131208
+			// Year 4: 3 × 3500 × 1.42 × 12 = 178920  IncentiveAmount = 178920 × 0.12 = 21470.4 Total = 200390.4
+			// Year 5: 3 × 4000 × 1.42 × 12 = 204480  IncentiveAmount = 204480 × 0.15 = 30672 Total = 235152
 			expectedSal: [5]decimal.Decimal{
-				decimal.NewFromFloat(4260), decimal.NewFromFloat(8520), decimal.NewFromFloat(9940),
-				decimal.NewFromFloat(14910), decimal.NewFromFloat(17040),
+				decimal.NewFromFloat(51120), decimal.NewFromFloat(102240), decimal.NewFromFloat(119280),
+				decimal.NewFromFloat(178920), decimal.NewFromFloat(204480),
 			},
 			expectedInc: [5]decimal.Decimal{
-				decimal.NewFromFloat(426), decimal.NewFromFloat(852), decimal.NewFromFloat(994),
-				decimal.NewFromFloat(1789.2), decimal.NewFromFloat(2556),
+				decimal.NewFromFloat(5112), decimal.NewFromFloat(10224), decimal.NewFromFloat(11928),
+				decimal.NewFromFloat(21470.4), decimal.NewFromFloat(30672),
 			},
 			expectedPay: [5]decimal.Decimal{
-				decimal.NewFromFloat(4686), decimal.NewFromFloat(9372), decimal.NewFromFloat(10934),
-				decimal.NewFromFloat(16699.2), decimal.NewFromFloat(19596),
+				decimal.NewFromFloat(56232), decimal.NewFromFloat(112464), decimal.NewFromFloat(131208),
+				decimal.NewFromFloat(200390.4), decimal.NewFromFloat(235152),
 			},
 		},
 		{
@@ -150,21 +151,23 @@ func TestComputeStaffPayroll(t *testing.T) {
 				{TenantScoped: model.TenantScoped{TenantID: tenantID}, ScenarioID: scenarioID, YearIndex: 5, IncentivePct: decimal.NewFromFloat(0.10)},
 			},
 			config: config,
-			// Year 1: Total FTE=3
-			// Category 1 (RnD): SubtotalPayroll=1*5000*1.42=7100
-			// Category 2 (Prod): SubtotalPayroll=2*3000*1.42=8520
-			// Total SubtotalPayroll=15620, IncentiveAmount=15620*0.10=1562, TotalPayroll=17182
+			// Formula: SubtotalPayroll (k€) = FTE × MonthlyGrossSalary(€) × (1 + EmployerTaxRate) × Months ÷ 1000
+			// RnD:  1 × 5000 × 1.42 × 12 = 85200
+			// Prod: 2 × 3000 × 1.42 × 12 = 102240
+			// SubtotalPayroll = 187440 (constant across all years)
+			// IncentiveAmount = 187440 × 0.10 = 18744
+			// TotalPayroll = 206184
 			expectedSal: [5]decimal.Decimal{
-				decimal.NewFromFloat(15620), decimal.NewFromFloat(15620), decimal.NewFromFloat(15620),
-				decimal.NewFromFloat(15620), decimal.NewFromFloat(15620),
+				decimal.NewFromFloat(187440), decimal.NewFromFloat(187440), decimal.NewFromFloat(187440),
+				decimal.NewFromFloat(187440), decimal.NewFromFloat(187440),
 			},
 			expectedInc: [5]decimal.Decimal{
-				decimal.NewFromFloat(1562), decimal.NewFromFloat(1562), decimal.NewFromFloat(1562),
-				decimal.NewFromFloat(1562), decimal.NewFromFloat(1562),
+				decimal.NewFromFloat(18744), decimal.NewFromFloat(18744), decimal.NewFromFloat(18744),
+				decimal.NewFromFloat(18744), decimal.NewFromFloat(18744),
 			},
 			expectedPay: [5]decimal.Decimal{
-				decimal.NewFromFloat(17182), decimal.NewFromFloat(17182), decimal.NewFromFloat(17182),
-				decimal.NewFromFloat(17182), decimal.NewFromFloat(17182),
+				decimal.NewFromFloat(206184), decimal.NewFromFloat(206184), decimal.NewFromFloat(206184),
+				decimal.NewFromFloat(206184), decimal.NewFromFloat(206184),
 			},
 		},
 		{
@@ -192,18 +195,21 @@ func TestComputeStaffPayroll(t *testing.T) {
 				{TenantScoped: model.TenantScoped{TenantID: tenantID}, ScenarioID: scenarioID, YearIndex: 5, IncentivePct: decimal.NewFromFloat(0.25)},
 			},
 			config: config,
-			// Year 1: FTE=1, MonthlyGrossSalary=10000, SubtotalPayroll=1*10000*1.42=14200, IncentiveAmount=14200*0.15=2130 (capped from 0.25), TotalPayroll=16330
+			// Formula: SubtotalPayroll (k€) = FTE × MonthlyGrossSalary(€) × (1 + EmployerTaxRate) × Months ÷ 1000
+			// SubtotalPayroll = 1 × 10000 × 1.42 × 12 = 170400 (constant)
+			// IncentiveAmount = 170400 × 0.15 = 25560 (capped from 0.25)
+			// TotalPayroll = 195960
 			expectedSal: [5]decimal.Decimal{
-				decimal.NewFromFloat(14200), decimal.NewFromFloat(14200), decimal.NewFromFloat(14200),
-				decimal.NewFromFloat(14200), decimal.NewFromFloat(14200),
+				decimal.NewFromFloat(170400), decimal.NewFromFloat(170400), decimal.NewFromFloat(170400),
+				decimal.NewFromFloat(170400), decimal.NewFromFloat(170400),
 			},
 			expectedInc: [5]decimal.Decimal{
-				decimal.NewFromFloat(2130), decimal.NewFromFloat(2130), decimal.NewFromFloat(2130),
-				decimal.NewFromFloat(2130), decimal.NewFromFloat(2130),
+				decimal.NewFromFloat(25560), decimal.NewFromFloat(25560), decimal.NewFromFloat(25560),
+				decimal.NewFromFloat(25560), decimal.NewFromFloat(25560),
 			},
 			expectedPay: [5]decimal.Decimal{
-				decimal.NewFromFloat(16330), decimal.NewFromFloat(16330), decimal.NewFromFloat(16330),
-				decimal.NewFromFloat(16330), decimal.NewFromFloat(16330),
+				decimal.NewFromFloat(195960), decimal.NewFromFloat(195960), decimal.NewFromFloat(195960),
+				decimal.NewFromFloat(195960), decimal.NewFromFloat(195960),
 			},
 		},
 	}
@@ -222,4 +228,48 @@ func TestComputeStaffPayroll(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestIncentiveCapZeroMeansNoCap is a regression test for the semantic bug where
+// IncentiveCap = 0 (unset/default) was treated as "cap at 0%", silently zeroing all
+// percentage-based incentives.  Zero must mean "no cap configured" — the full
+// IncentivePct must be applied.
+func TestIncentiveCapZeroMeansNoCap(t *testing.T) {
+	tenantID := uuid.New()
+	scenarioID := uuid.New()
+	now := time.Now()
+
+	cfg := model.PlanConfig{
+		ScenarioID:            scenarioID,
+		EmployerTaxRate:       decimal.NewFromFloat(0.42),
+		IncentiveCap:          decimal.Zero, // unset — must NOT cap incentives to 0
+		SalaryMonthsPerYear:   12,
+		FirstFiscalYearMonths: 12,
+		ForecastStart:         now,
+	}
+
+	headcounts := []model.StaffHeadcount{
+		{TenantScoped: model.TenantScoped{TenantID: tenantID}, ScenarioID: scenarioID,
+			Category: model.CategoryRnDEngineers, YearIndex: 1, FTE: decimal.NewFromInt(1)},
+	}
+	salaries := []model.StaffSalary{
+		{TenantScoped: model.TenantScoped{TenantID: tenantID}, ScenarioID: scenarioID,
+			Category: model.CategoryRnDEngineers, YearIndex: 1, MonthlyGrossSalary: decimal.NewFromInt(3000)},
+	}
+	incentives := []model.StaffIncentive{
+		{TenantScoped: model.TenantScoped{TenantID: tenantID}, ScenarioID: scenarioID,
+			YearIndex: 1, IncentivePct: decimal.NewFromFloat(0.10)},
+	}
+
+	result := ComputeStaffPayroll(headcounts, salaries, incentives, cfg)
+
+	// SubtotalPayroll (€) = 1 × 3000 × 1.42 × 12 = 51120
+	// With zero cap (= no cap), IncentiveAmount = 51120 × 0.10 = 5112
+	expectedSubtotal := decimal.NewFromFloat(51120)
+	expectedIncentive := decimal.NewFromFloat(5112)
+
+	assertDecEq(t, expectedSubtotal, result.Payroll[0].SubtotalPayroll,
+		"SubtotalPayroll should be 51120 €")
+	assertDecEq(t, expectedIncentive, result.Payroll[0].IncentiveAmount,
+		"IncentiveAmount must not be zeroed when IncentiveCap is 0 (no cap configured)")
 }

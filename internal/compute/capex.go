@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -18,13 +18,16 @@ func ComputeCapexSummary(entries []model.CapexEntry, config model.PlanConfig) mo
 	// Build investment grid: map category to [5]decimal.Decimal
 	investmentGrid := make(map[model.AssetCategory][MaxYears]decimal.Decimal)
 
-	// Accumulate entries into investment grid
+	// Accumulate entries into investment grid.
+	// YearIndex is 1-based (1–MaxYears); convert to 0-based array index.
+	// Amounts are already in k€ (the displayed unit), matching revenue and payroll.
 	for _, entry := range entries {
-		if entry.YearIndex < 0 || entry.YearIndex >= MaxYears {
+		if entry.YearIndex < 1 || entry.YearIndex > MaxYears {
 			continue
 		}
+		idx := entry.YearIndex - 1
 		grid := investmentGrid[entry.Category]
-		grid[entry.YearIndex] = grid[entry.YearIndex].Add(entry.Amount)
+		grid[idx] = grid[idx].Add(entry.Amount)
 		investmentGrid[entry.Category] = grid
 	}
 
@@ -134,8 +137,10 @@ func computeDepreciationGrid(investmentGrid map[model.AssetCategory][MaxYears]de
 			// Annual depreciation expense (straight-line)
 			yearlyDep := SafeDiv(amount, decimal.NewFromInt(int64(depYears)))
 
-			// Apply from year after investment through min(investYear+depYears, MaxYears)
-			endYear := investYear + depYears
+			// Apply from year after investment through min(investYear+depYears, MaxYears-1).
+			// Use +1 on endYear so the < comparison is exclusive and the full
+			// depYears worth of depreciation entries are included within the horizon.
+			endYear := investYear + depYears + 1
 			if endYear > MaxYears {
 				endYear = MaxYears
 			}

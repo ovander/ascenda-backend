@@ -7,6 +7,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// d is a decimal literal helper shared by all compute package tests.
+func d(s string) decimal.Decimal {
+	v, err := decimal.NewFromString(s)
+	if err != nil {
+		panic("invalid decimal literal in test: " + s)
+	}
+	return v
+}
+
 // assertDecEq compares two decimal.Decimal values for numerical equality.
 func assertDecEq(t *testing.T, expected, actual decimal.Decimal, msgAndArgs ...interface{}) {
 	t.Helper()
@@ -164,7 +173,8 @@ func TestComputeNPV(t *testing.T) {
 				decimal.NewFromInt(1000),
 			},
 			discountRate: decimal.NewFromFloat(0.10),
-			expected:     decimal.NewFromFloat(4169.87),
+			// 1000/1.1 + 1000/1.21 + 1000/1.331 + 1000/1.4641 + 1000/1.61051 = 3790.79
+			expected: decimal.NewFromFloat(3790.79),
 		},
 		{
 			name: "zero cash flows",
@@ -188,7 +198,8 @@ func TestComputeNPV(t *testing.T) {
 				decimal.NewFromInt(2500),
 			},
 			discountRate: decimal.NewFromFloat(0.05),
-			expected:     decimal.NewFromFloat(6597.36),
+			// 500/1.05 + 1000/1.1025 + 1500/1.157625 + 2000/1.21550625 + 2500/1.2762815... = 6282.95
+			expected: decimal.NewFromFloat(6282.95),
 		},
 	}
 
@@ -238,7 +249,7 @@ func TestComputeIRR(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ComputeIRR(tt.cashFlows, tt.initialInvestment)
+			result, _ := ComputeIRR(tt.cashFlows, tt.initialInvestment)
 			resultFloat, _ := result.Float64()
 			assert.True(t,
 				resultFloat >= tt.expectedRange[0] && resultFloat <= tt.expectedRange[1],

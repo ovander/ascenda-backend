@@ -1,7 +1,9 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"sync"
+
+	"ascenda/internal/model"
 )
 
 // FullPlanInput aggregates all inputs needed for full plan computation
@@ -38,42 +40,57 @@ type FullPlanInput struct {
 }
 
 // ComputeFullPlan orchestrates the 7-layer dependency graph
-// Layer 1: Revenue, Payroll, Capex (independent), Opex (depends on Revenue + Payroll)
-// Layer 2: P&L (depends on Layer 1 + empty FiPlan)
-// Layer 3: WCR, FiPlan, PnlCash (depends on Layer 1 + PnL)
-// Layer 4: BSheet (depends on PnL + WCR + Capex + FiPlan)
-// Layer 5: Ratios (depends on all above)
-// Layer 6: Cash (depends on PnL + WCR + Capex + FiPlan + Revenue + Staff + Opex)
-// Layer 7: Budget1 + Budget2 (depends on PnL + Opex + Staff + Capex)
-// Final: Validation warnings
+//
+// Layer 1  : Revenue, Payroll, Capex (independent), Opex (depends on Revenue + Payroll)
+// Layer 2a : P&L first pass — empty FiPlan/WCR (breaks the circular dependency)
+// Layer 3  : WCR, FiPlan (depend on Layer 1 + Layer 2a P&L)
+// Layer 2b : P&L second pass — real WCR inventory change, FiPlan loan interest & grants
+// Layer 3b : FiPlan re-run — uses updated P&L CashFlow for accurate Requirements table
+// Layer 3c : PnlCash (depends on Layer 1 + final P&L)
+// Layer 4  : BSheet (depends on P&L + WCR + Capex + FiPlan)
+// Layer 5  : Ratios (depends on all above)
+// Layer 6  : Cash (depends on P&L + WCR + Capex + FiPlan + Revenue + Staff + Opex)
+// Layer 7  : Budget1 + Budget2 (depends on P&L + Opex + Staff + Capex)
+// Final    : Validation warnings
 func ComputeFullPlan(input FullPlanInput) model.FullPlanOutput {
 	output := model.FullPlanOutput{}
 
-	// LAYER 1: Independent computations
-	// ================================
+	// LAYER 1: Independent computations — Revenue, Payroll, Capex run in parallel.
+	// Opex depends on Revenue + Payroll so it runs after the WaitGroup completes.
+	// ============================================================================
+	var wg sync.WaitGroup
+	wg.Add(3)
 
-	// Compute revenue
-	output.Revenue = ComputeConsolidatedRevenue(
-		input.Products,
-		input.ProductData,
-		input.Config,
-	)
+	go func() {
+		defer wg.Done()
+		output.Revenue = ComputeConsolidatedRevenue(
+			input.Products,
+			input.ProductData,
+			input.Config,
+		)
+	}()
 
-	// Compute staff payroll
-	output.Payroll = ComputeStaffPayroll(
-		input.Headcounts,
-		input.Salaries,
-		input.Incentives,
-		input.Config,
-	)
+	go func() {
+		defer wg.Done()
+		output.Payroll = ComputeStaffPayroll(
+			input.Headcounts,
+			input.Salaries,
+			input.Incentives,
+			input.Config,
+		)
+	}()
 
-	// Compute capex
-	output.Capex = ComputeCapexSummary(
-		input.CapexEntries,
-		input.Config,
-	)
+	go func() {
+		defer wg.Done()
+		output.Capex = ComputeCapexSummary(
+			input.CapexEntries,
+			input.Config,
+		)
+	}()
 
-	// Compute opex (depends on Revenue and Payroll)
+	wg.Wait()
+
+	// Compute opex (depends on Revenue and Payroll — must follow wg.Wait)
 	output.Opex = ComputeOpexSummary(
 		input.OpexEntries,
 		input.OpexPerHire,
@@ -82,8 +99,11 @@ func ComputeFullPlan(input FullPlanInput) model.FullPlanOutput {
 		input.Config,
 	)
 
-	// LAYER 2: P&L computation (depends on Layer 1)
-	// =============================================
+	// LAYER 2a: P&L first pass — empty FiPlan and WCR (circular dependency bootstrap)
+	// =================================================================================
+	// FiPlan needs P&L.CashFlow; P&L needs FiPlan.LoanInterest and WCR.InventoryValue.
+	// We break the cycle with a first-pass using zero values, then recompute after
+	// Layer 3 has produced the real WCR and FiPlan.
 
 	output.PnL = ComputePnl(
 		input.PnlEntries,
@@ -91,12 +111,13 @@ func ComputeFullPlan(input FullPlanInput) model.FullPlanOutput {
 		output.Payroll,
 		output.Capex,
 		output.Opex,
-		model.FiplanReport{}, // Will be computed in Layer 3, pass empty for now
+		model.FiplanReport{}, // placeholder — will be replaced in Layer 2b
+		model.WCRReport{},    // placeholder — will be replaced in Layer 2b
 		input.Config,
 	)
 
-	// LAYER 3: Finance statements (depend on Layer 1 + Layer 2)
-	// ========================================================
+	// LAYER 3: Finance statements (depend on Layer 1 + Layer 2a P&L)
+	// ===============================================================
 
 	output.WCR = ComputeWCR(
 		input.WCREntries,
@@ -118,6 +139,40 @@ func ComputeFullPlan(input FullPlanInput) model.FullPlanOutput {
 		input.OpeningBalance,
 		input.Config,
 	)
+
+	// LAYER 2b: P&L second pass — now with real WCR and FiPlan
+	// =========================================================
+	// Wires: StoredProduction (WCR inventory Δ), GrantsOtherRevenue (FiPlan
+	// subsidies+otherGrants), FinancialExpenses (FiPlan loan interest).
+
+	output.PnL = ComputePnl(
+		input.PnlEntries,
+		output.Revenue,
+		output.Payroll,
+		output.Capex,
+		output.Opex,
+		output.FiPlan,
+		output.WCR,
+		input.Config,
+	)
+
+	// LAYER 3b: FiPlan re-run with the updated P&L CashFlow
+	// =====================================================
+	// The Requirements.NegativeCashFlow / Resources.PositiveCashFlow rows in
+	// FiPlan depend on P&L.CashFlow.  Now that we have the final P&L we do one
+	// more FiPlan pass so the Financing table is accurate.
+
+	output.FiPlan = ComputeFiplan(
+		input.FiplanEntries,
+		output.Capex,
+		output.PnL,
+		output.WCR,
+		input.OpeningBalance,
+		input.Config,
+	)
+
+	// LAYER 3c: PnlCash (depends on Layer 1 + final P&L)
+	// ===================================================
 
 	output.PnlCash = ComputePnlCash(
 		input.PnlCashEntries,

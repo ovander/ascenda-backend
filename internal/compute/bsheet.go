@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -54,9 +54,8 @@ func ComputeBSheet(
 		Sub(openBal.LoansAndDebt).
 		Sub(openBal.SupplierPayables).
 		Sub(openBal.SocialAndTaxDebts)
-	if otherPayables0.IsNegative() {
-		otherPayables0 = decimal.Zero
-	}
+	// otherPayables0 may be negative when the explicit liabilities already exceed total
+	// assets (equity-negative opening balance). The negative plug keeps Assets = Liabilities.
 	detailedLiabilities.OtherPayables[0] = otherPayables0
 	detailedLiabilities.TotalLiabilities[0] = detailedAssets.TotalAssets[0]
 
@@ -92,12 +91,20 @@ func ComputeBSheet(
 		capitalIncrease := sumFiplanCapitalIncreases(fiplan, yearIdx)
 		detailedLiabilities.ShareCapital[y+1] = detailedLiabilities.ShareCapital[y].Add(capitalIncrease)
 
-		// NetProfit from pnl (year y index)
+		// NetProfit: current forecast year's net profit (shown separately on the BS)
 		detailedLiabilities.NetProfit[y+1] = pnl.Years[yearIdx].NetProfit
 
-		// RetainedEarnings: prior retained + prior year net profit
-		detailedLiabilities.RetainedEarnings[y+1] = detailedLiabilities.RetainedEarnings[y].
-			Add(pnl.Years[yearIdx].NetProfit)
+		// RetainedEarnings: accumulate PRIOR years' profits only.
+		// Current year profit is shown separately in NetProfit above, so do NOT
+		// include it here — that would double-count it in Equity.
+		if yearIdx == 0 {
+			// First forecast year — no prior forecast profit to roll over
+			detailedLiabilities.RetainedEarnings[y+1] = detailedLiabilities.RetainedEarnings[y]
+		} else {
+			// Roll the previous forecast year's net profit into retained earnings
+			detailedLiabilities.RetainedEarnings[y+1] = detailedLiabilities.RetainedEarnings[y].
+				Add(pnl.Years[yearIdx-1].NetProfit)
+		}
 
 		// LongTermDebt: updated from fiplan
 		detailedLiabilities.LongTermDebt[y+1] = computeLongTermDebt(fiplan, detailedLiabilities.LongTermDebt[y], yearIdx)
@@ -116,9 +123,7 @@ func ComputeBSheet(
 			Sub(detailedLiabilities.LongTermDebt[y+1]).
 			Sub(detailedLiabilities.TradePayables[y+1]).
 			Sub(detailedLiabilities.SocialTaxDebts[y+1])
-		if otherPayablesY.IsNegative() {
-			otherPayablesY = decimal.Zero
-		}
+		// otherPayablesY may be negative; the plug is signed to enforce Assets = Liabilities.
 		detailedLiabilities.OtherPayables[y+1] = otherPayablesY
 		detailedLiabilities.TotalLiabilities[y+1] = detailedAssets.TotalAssets[y+1]
 
@@ -194,11 +199,8 @@ func ComputeBSheet(
 		wcMinus := analysisData.WorkingCapital[y].Sub(analysisData.WCR[y])
 		analysisData.WCMinusWCR[y] = wcMinus
 
-		// Net Debt = Long-term debt + Short-term debt - Cash
+		// Net Debt = Total Debt − Cash  (negative = net-cash position; never clamped)
 		analysisData.NetDebt[y] = ltDebt.Add(stDebt).Sub(cash)
-		if analysisData.NetDebt[y].IsNegative() {
-			analysisData.NetDebt[y] = decimal.Zero
-		}
 	}
 
 	// ==================== CAPITAL EMPLOYED & INVESTED ====================
@@ -256,17 +258,88 @@ func ComputeBSheet(
 		charts.WCInvested[y] = wcInvested.Invested[y]
 	}
 
+	// ==================== ROUND ALL OUTPUT TO 2 d.p. ====================
+	r2 := roundBSheet6 // shorthand
+
+	detailedAssets.NoncurrentAssets   = r2(detailedAssets.NoncurrentAssets)
+	detailedAssets.Inventory          = r2(detailedAssets.Inventory)
+	detailedAssets.AccountsReceivable = r2(detailedAssets.AccountsReceivable)
+	detailedAssets.Cash               = r2(detailedAssets.Cash)
+	detailedAssets.TotalAssets        = r2(detailedAssets.TotalAssets)
+
+	detailedLiabilities.ShareCapital     = r2(detailedLiabilities.ShareCapital)
+	detailedLiabilities.NetProfit        = r2(detailedLiabilities.NetProfit)
+	detailedLiabilities.RetainedEarnings = r2(detailedLiabilities.RetainedEarnings)
+	detailedLiabilities.LongTermDebt     = r2(detailedLiabilities.LongTermDebt)
+	detailedLiabilities.TradePayables    = r2(detailedLiabilities.TradePayables)
+	detailedLiabilities.SocialTaxDebts   = r2(detailedLiabilities.SocialTaxDebts)
+	detailedLiabilities.OtherPayables    = r2(detailedLiabilities.OtherPayables)
+	detailedLiabilities.TotalLiabilities = r2(detailedLiabilities.TotalLiabilities)
+
+	for i := range result.Equity {
+		result.Equity[i] = result.Equity[i].Round(2)
+	}
+
+	condensedAssets.NoncurrentAssets = r2(condensedAssets.NoncurrentAssets)
+	condensedAssets.CurrentAssets    = r2(condensedAssets.CurrentAssets)
+	condensedAssets.Cash             = r2(condensedAssets.Cash)
+	condensedAssets.Total            = r2(condensedAssets.Total)
+
+	condensedLiabilities.Equity       = r2(condensedLiabilities.Equity)
+	condensedLiabilities.LongTermDebt = r2(condensedLiabilities.LongTermDebt)
+	condensedLiabilities.ShortTermDebt = r2(condensedLiabilities.ShortTermDebt)
+	condensedLiabilities.Total        = r2(condensedLiabilities.Total)
+
+	analysisData.Equity           = r2(analysisData.Equity)
+	analysisData.LongTermDebt     = r2(analysisData.LongTermDebt)
+	analysisData.PermanentCapital = r2(analysisData.PermanentCapital)
+	analysisData.ShortTermDebt    = r2(analysisData.ShortTermDebt)
+	analysisData.TotalSources     = r2(analysisData.TotalSources)
+	analysisData.NoncurrentAssets = r2(analysisData.NoncurrentAssets)
+	analysisData.CurrentAssets    = r2(analysisData.CurrentAssets)
+	analysisData.Cash             = r2(analysisData.Cash)
+	analysisData.TotalUses        = r2(analysisData.TotalUses)
+	analysisData.WorkingCapital   = r2(analysisData.WorkingCapital)
+	analysisData.WCR              = r2(analysisData.WCR)
+	analysisData.WCMinusWCR       = r2(analysisData.WCMinusWCR)
+	analysisData.NetDebt          = r2(analysisData.NetDebt)
+
+	capitalEmp.Employed = r2(capitalEmp.Employed)
+	capitalEmp.Invested = r2(capitalEmp.Invested)
+	wcEmployed.Employed = r2(wcEmployed.Employed)
+	wcInvested.Invested = r2(wcInvested.Invested)
+
+	// Round chart fields (computed before rounding block — must be rounded here)
+	for i := range charts.AssetStructure {
+		charts.AssetStructure[i]    = charts.AssetStructure[i].Round(4)
+		charts.LiabilityStructure[i] = charts.LiabilityStructure[i].Round(4)
+	}
+	charts.CapitalEmployed = r2(charts.CapitalEmployed)
+	charts.CapitalInvested = r2(charts.CapitalInvested)
+	charts.WCEmployed      = r2(charts.WCEmployed)
+	charts.WCInvested      = r2(charts.WCInvested)
+
 	// Assign computed structures to result
-	result.Detailed.Assets = detailedAssets
-	result.Detailed.Liabilities = detailedLiabilities
-	result.Condensed.Assets = condensedAssets
-	result.Condensed.Liabilities = condensedLiabilities
-	result.Analysis = analysisData
-	result.Capital = capitalEmp
-	result.WorkingCapital = wcEmployed
-	result.Charts = charts
+	result.Detailed.Assets            = detailedAssets
+	result.Detailed.Liabilities       = detailedLiabilities
+	result.Condensed.Assets           = condensedAssets
+	result.Condensed.Liabilities      = condensedLiabilities
+	result.Analysis                   = analysisData
+	result.Capital                    = capitalEmp
+	result.WorkingCapital.Employed    = wcEmployed.Employed // fix: was result.WorkingCapital = wcEmployed
+	result.WorkingCapital.Invested    = wcInvested.Invested //      (wcInvested.Invested was discarded)
+	result.Charts                     = charts
 
 	return result
+}
+
+// roundBSheet6 rounds every element of a [6]decimal.Decimal array to 2 d.p.
+func roundBSheet6(arr [6]decimal.Decimal) [6]decimal.Decimal {
+	var out [6]decimal.Decimal
+	for i, v := range arr {
+		out[i] = v.Round(2)
+	}
+	return out
 }
 
 // sumFiplanCapitalIncreases sums capital increases from fiplan up to yearIdx

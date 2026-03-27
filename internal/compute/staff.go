@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -83,12 +83,11 @@ func ComputeStaffPayroll(
 				monthlySalary = msLookup
 			}
 
-			// AnnualPayroll = FTE × MonthlySalary × (1 + EmployerTaxRate) × Months / 12
+			// AnnualPayroll (€) = FTE × MonthlySalary(€) × (1 + EmployerTaxRate) × Months
 			annualPayroll := fte.
 				Mul(monthlySalary).
 				Mul(decimal.NewFromInt(1).Add(config.EmployerTaxRate)).
-				Mul(decimal.NewFromInt(int64(months))).
-				Div(decimal.NewFromInt(12))
+				Mul(decimal.NewFromInt(int64(months)))
 
 			categoryPayroll := model.StaffCategoryPayroll{
 				Category:      category,
@@ -123,11 +122,13 @@ func ComputeStaffPayroll(
 		yearPayroll.IncentivePct = incentive.IncentivePct
 
 		// IncentiveAmount = SubtotalPayroll × min(IncentivePct, IncentiveCap)
+		// A zero IncentiveCap means "no cap configured" — skip the guard entirely.
 		cappedIncentivePct := incentive.IncentivePct
-		if cappedIncentivePct.GreaterThan(config.IncentiveCap) {
+		if !config.IncentiveCap.IsZero() && cappedIncentivePct.GreaterThan(config.IncentiveCap) {
 			cappedIncentivePct = config.IncentiveCap
 		}
 		yearPayroll.IncentiveAmount = subtotalPayroll.Mul(cappedIncentivePct)
+		// SpecificIncentives stored in base €, consistent with other payroll fields.
 		yearPayroll.SpecificIncentives = incentive.SpecificIncentives
 		yearPayroll.SubtotalIncentives = yearPayroll.IncentiveAmount.Add(yearPayroll.SpecificIncentives)
 		yearPayroll.TotalPayroll = subtotalPayroll.Add(yearPayroll.SubtotalIncentives)

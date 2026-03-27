@@ -5,7 +5,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 func TestComputeCash(t *testing.T) {
@@ -125,7 +125,7 @@ func TestComputeCash(t *testing.T) {
 			checkMonthly: func(t *testing.T, result model.CashReport) {
 				// Check year 1, month 1
 				year1 := result.Years[0]
-				assert.Equal(t, 1, year1.Year)
+				assert.Equal(t, 1, year1.YearIndex)
 				assert.Equal(t, 1, len(year1.Revenue.Lines), "Revenue section should have 1 line (Sales Revenue)")
 
 				// Check section totals for first month (Total is [12]decimal.Decimal fixed array)
@@ -137,7 +137,7 @@ func TestComputeCash(t *testing.T) {
 				// Check that all 12 months are processed for each year
 				assert.Equal(t, 3, len(result.Years), "Should have 3 years of data")
 				for yearIdx := 0; yearIdx < 3; yearIdx++ {
-					assert.Equal(t, yearIdx+1, result.Years[yearIdx].Year,
+					assert.Equal(t, yearIdx+1, result.Years[yearIdx].YearIndex,
 						"Year index mismatch for year %d", yearIdx)
 					assert.Equal(t, 12, len(result.Years[yearIdx].Revenue.Total),
 						"Each year should have 12 months of revenue")

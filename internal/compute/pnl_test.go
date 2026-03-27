@@ -2,9 +2,10 @@ package compute
 
 import (
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 func TestComputePnl(t *testing.T) {
@@ -26,6 +27,7 @@ func TestComputePnl(t *testing.T) {
 	}{
 		{
 			name: "basic P&L with positive earnings",
+			// YearIndex is 0-based (0..4) in storage, matching opex/capex manual entry convention.
 			pnlEntries: []model.PnlManualEntry{
 				{YearIndex: 0, LineID: model.PnlOtherOperatingExp, Amount: decimal.NewFromInt(5000)},
 				{YearIndex: 1, LineID: model.PnlOtherOperatingExp, Amount: decimal.NewFromInt(5000)},
@@ -126,6 +128,7 @@ func TestComputePnl(t *testing.T) {
 		},
 		{
 			name: "loss carryforward scenario",
+			// YearIndex is 0-based (0..4) in storage, matching opex/capex manual entry convention.
 			pnlEntries: []model.PnlManualEntry{
 				{YearIndex: 0, LineID: model.PnlOtherOperatingExp, Amount: decimal.NewFromInt(100000)},
 				{YearIndex: 1, LineID: model.PnlOtherOperatingExp, Amount: decimal.NewFromInt(10000)},
@@ -266,7 +269,7 @@ func TestComputePnl(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ComputePnl(tt.pnlEntries, tt.revenue, tt.staff, tt.capex, tt.opex, model.FiplanReport{}, config)
+			result := ComputePnl(tt.pnlEntries, tt.revenue, tt.staff, tt.capex, tt.opex, model.FiplanReport{}, model.WCRReport{}, config)
 
 			for year := 0; year < 5; year++ {
 				if len(tt.expectedEBIT) > 0 && tt.expectedEBIT[year] != decimal.Zero {
@@ -278,5 +281,138 @@ func TestComputePnl(t *testing.T) {
 					"Net profit mismatch in year %d", year+1)
 			}
 		})
+	}
+}
+
+// ── Fix-1: FiPlan loan interest wired to P&L Financial Expenses ──────────────
+
+// TestPnlFinancialExpensesFromFiplan verifies that FinancialExpenses (P&L line 20)
+// is populated from fiplan.LoanInterest and correctly reduces PreTaxEarnings.
+func TestPnlFinancialExpensesFromFiplan(t *testing.T) {
+	config := model.PlanConfig{
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		ForecastStart:    time.Now(),
+	}
+
+	// Minimal revenue to give EBIT = 200 000 per year (before financial charges).
+	revenue := model.ConsolidatedRevenue{
+		Totals: [5]model.ConsolidatedRevenueYear{
+			{TotalTurnover: decimal.NewFromInt(200_000)},
+			{TotalTurnover: decimal.NewFromInt(200_000)},
+			{TotalTurnover: decimal.NewFromInt(200_000)},
+			{TotalTurnover: decimal.NewFromInt(200_000)},
+			{TotalTurnover: decimal.NewFromInt(200_000)},
+		},
+	}
+
+	// Simulate FiPlan with decreasing loan interest (debt is being paid down).
+	fiplan := model.FiplanReport{
+		LoanInterest: [5]decimal.Decimal{
+			decimal.NewFromInt(5_000),
+			decimal.NewFromInt(4_000),
+			decimal.NewFromInt(3_000),
+			decimal.NewFromInt(2_000),
+			decimal.NewFromInt(1_000),
+		},
+	}
+
+	result := ComputePnl(nil, revenue, model.StaffPayrollSummary{}, model.CapexSummary{},
+		model.OpexSummary{}, fiplan, model.WCRReport{}, config)
+
+	expectedExpenses := []decimal.Decimal{
+		decimal.NewFromInt(5_000),
+		decimal.NewFromInt(4_000),
+		decimal.NewFromInt(3_000),
+		decimal.NewFromInt(2_000),
+		decimal.NewFromInt(1_000),
+	}
+	for y := 0; y < 5; y++ {
+		assertDecEq(t, expectedExpenses[y], result.Years[y].FinancialExpenses,
+			"Year %d: FinancialExpenses should equal FiPlan.LoanInterest[%d]", y, y)
+		// PreTaxEarnings = EBIT + FinancialRevenues - FinancialExpenses
+		// EBIT ≈ Sales (no payroll, opex, depn in this minimal test)
+		expectedPTE := result.Years[y].EBIT.Sub(expectedExpenses[y])
+		assertDecEq(t, expectedPTE, result.Years[y].PreTaxEarnings,
+			"Year %d: PreTaxEarnings must be reduced by FinancialExpenses", y)
+	}
+}
+
+// ── Fix-2: FiPlan subsidies / other grants wired to P&L GrantsOtherRevenue ──
+
+// TestPnlGrantsOtherRevenueFromFiplan verifies that GrantsOtherRevenue (P&L line 16)
+// is populated from fiplan.Plan.Resources.Subsidies + OtherGrants, and that
+// RepayableGrants (financing, not P&L income) are excluded.
+func TestPnlGrantsOtherRevenueFromFiplan(t *testing.T) {
+	config := model.PlanConfig{
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		ForecastStart:    time.Now(),
+	}
+
+	fiplan := model.FiplanReport{
+		Plan: model.FiplanPlan{
+			Resources: model.FiplanResources{
+				Subsidies:    [5]decimal.Decimal{decimal.NewFromInt(20_000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
+				OtherGrants:  [5]decimal.Decimal{decimal.NewFromInt(10_000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
+				// RepayableGrants must NOT appear in GrantsOtherRevenue
+				RepayableGrants: [5]decimal.Decimal{decimal.NewFromInt(50_000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
+			},
+		},
+	}
+
+	result := ComputePnl(nil, model.ConsolidatedRevenue{}, model.StaffPayrollSummary{},
+		model.CapexSummary{}, model.OpexSummary{}, fiplan, model.WCRReport{}, config)
+
+	// Year 0: 20k subsidies + 10k other grants = 30k total
+	assertDecEq(t, decimal.NewFromInt(30_000), result.Years[0].GrantsOtherRevenue,
+		"Year 0 GrantsOtherRevenue should be Subsidies + OtherGrants = 30k")
+
+	// RepayableGrants must not be included
+	assertDecEq(t, decimal.NewFromInt(30_000), result.Years[0].GrantsOtherRevenue,
+		"RepayableGrants (50k) must not inflate GrantsOtherRevenue")
+
+	// Years 1-4: no grants, should be zero
+	for y := 1; y < 5; y++ {
+		assertDecEq(t, decimal.Zero, result.Years[y].GrantsOtherRevenue,
+			"Year %d: GrantsOtherRevenue should be zero when no grants entered", y)
+	}
+}
+
+// ── Fix-3: WCR inventory change wired to P&L Stored Production ───────────────
+
+// TestPnlStoredProductionFromWCR verifies that StoredProduction (P&L line 4)
+// reflects the annual change in WCR inventory values.  A growing inventory
+// creates positive StoredProduction (operating revenue); a draw-down is negative.
+func TestPnlStoredProductionFromWCR(t *testing.T) {
+	config := model.PlanConfig{
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		ForecastStart:    time.Now(),
+	}
+
+	wcr := model.WCRReport{
+		Inventory: model.WCRInventory{
+			InitialInventory: decimal.NewFromInt(10_000), // opening balance inventory
+			InventoryValue: [5]decimal.Decimal{
+				decimal.NewFromInt(15_000), // Y1: inventory grew by 5k
+				decimal.NewFromInt(20_000), // Y2: grew by 5k
+				decimal.NewFromInt(18_000), // Y3: draw-down of 2k
+				decimal.NewFromInt(18_000), // Y4: no change
+				decimal.NewFromInt(16_000), // Y5: draw-down of 2k
+			},
+		},
+	}
+
+	result := ComputePnl(nil, model.ConsolidatedRevenue{}, model.StaffPayrollSummary{},
+		model.CapexSummary{}, model.OpexSummary{}, model.FiplanReport{}, wcr, config)
+
+	expected := []decimal.Decimal{
+		decimal.NewFromInt(5_000),  // Y0: 15k - 10k (initial)
+		decimal.NewFromInt(5_000),  // Y1: 20k - 15k
+		decimal.NewFromInt(-2_000), // Y2: 18k - 20k
+		decimal.Zero,               // Y3: 18k - 18k
+		decimal.NewFromInt(-2_000), // Y4: 16k - 18k
+	}
+	for y, exp := range expected {
+		assertDecEq(t, exp, result.Years[y].StoredProduction,
+			"Year %d: StoredProduction mismatch", y)
 	}
 }

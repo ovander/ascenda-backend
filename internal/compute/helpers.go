@@ -27,14 +27,17 @@ func NormalizeYear(year int) int {
 	return year - 1
 }
 
-// ComputeNPV calculates Net Present Value using discount rate
+// ComputeNPV calculates Net Present Value using discount rate.
+// cashFlows[0..4] represent annual cash flows for periods 1..5.
+// Each flow is discounted by 1/(1+r)^(year+1) so the first cash flow
+// is one period out (standard end-of-period convention).
 func ComputeNPV(cashFlows [MaxYears]decimal.Decimal, discountRate decimal.Decimal) decimal.Decimal {
 	npv := decimal.Zero
 	for year := 0; year < MaxYears; year++ {
-		yearDecimal := decimal.NewFromInt(int64(year))
-		// Discount factor = 1 / (1 + rate)^year
+		// period = year+1 so cashFlows[0] is discounted by (1+r)^1, etc.
+		period := decimal.NewFromInt(int64(year + 1))
 		discountFactor := decimal.NewFromInt(1).Add(discountRate)
-		discountFactor = discountFactor.Pow(yearDecimal)
+		discountFactor = discountFactor.Pow(period)
 		discountFactor = SafeDiv(decimal.NewFromInt(1), discountFactor)
 
 		pv := cashFlows[year].Mul(discountFactor)
@@ -43,60 +46,62 @@ func ComputeNPV(cashFlows [MaxYears]decimal.Decimal, discountRate decimal.Decima
 	return npv
 }
 
-// ComputeIRR calculates Internal Rate of Return using Newton's method
-func ComputeIRR(cashFlows [MaxYears]decimal.Decimal, initialInvestment decimal.Decimal) decimal.Decimal {
-	// Initialize guess at 10% IRR
-	rate := ParseDecimal(0.1)
+// ComputeIRR calculates the Internal Rate of Return using Newton's method.
+// cashFlows[0..4] are annual flows for periods 1..5 (same convention as ComputeNPV).
+// initialInvestment is the positive capital outlay at period 0 (negated inside).
+// Returns (irr, converged). If Newton's method diverges or the result exceeds
+// the clamp bounds the second return value is false.
+func ComputeIRR(cashFlows [MaxYears]decimal.Decimal, initialInvestment decimal.Decimal) (decimal.Decimal, bool) {
+	rate := ParseDecimal(0.1) // initial guess 10%
 	tolerance := ParseDecimal(0.0001)
+	converged := false
 
 	for iteration := 0; iteration < IRRMaxIterations; iteration++ {
-		// Calculate NPV at current rate
+		// f(r) = -C0 + Σ CF[y]/(1+r)^(y+1)   for y = 0..4
 		npv := initialInvestment.Neg()
 		for year := 0; year < MaxYears; year++ {
-			yearDecimal := decimal.NewFromInt(int64(year))
-			discountFactor := decimal.NewFromInt(1).Add(rate)
-			discountFactor = discountFactor.Pow(yearDecimal)
-			discountFactor = SafeDiv(decimal.NewFromInt(1), discountFactor)
-			npv = npv.Add(cashFlows[year].Mul(discountFactor))
+			period := decimal.NewFromInt(int64(year + 1))
+			onePlusR := decimal.NewFromInt(1).Add(rate)
+			df := SafeDiv(decimal.NewFromInt(1), onePlusR.Pow(period))
+			npv = npv.Add(cashFlows[year].Mul(df))
 		}
 
-		// Calculate derivative (NPV')
+		// f'(r) = -Σ (y+1)·CF[y]/(1+r)^(y+2)   for y = 0..4
 		derivNPV := decimal.Zero
-		for year := 1; year < MaxYears; year++ {
-			yearDecimal := decimal.NewFromInt(int64(year))
-			yMinusOne := yearDecimal.Sub(decimal.NewFromInt(1))
-			discountFactor := decimal.NewFromInt(1).Add(rate)
-			discountFactor = discountFactor.Pow(yMinusOne)
-			discountFactor = SafeDiv(yearDecimal.Neg(), discountFactor)
-			derivNPV = derivNPV.Add(cashFlows[year].Mul(discountFactor))
+		for year := 0; year < MaxYears; year++ {
+			period := decimal.NewFromInt(int64(year + 1))
+			power := decimal.NewFromInt(int64(year + 2))
+			onePlusR := decimal.NewFromInt(1).Add(rate)
+			df := SafeDiv(period.Neg(), onePlusR.Pow(power))
+			derivNPV = derivNPV.Add(cashFlows[year].Mul(df))
 		}
 
-		// Newton's method: rate_new = rate_old - f(rate_old) / f'(rate_old)
 		if derivNPV.IsZero() {
 			break
 		}
 
 		rateNew := rate.Sub(SafeDiv(npv, derivNPV))
 
-		// Check convergence
 		if rateNew.Sub(rate).Abs().LessThan(tolerance) {
-			return rateNew
+			rate = rateNew
+			converged = true
+			break
 		}
 
 		rate = rateNew
 	}
 
-	// Clamp IRR to reasonable bounds (-100% to +500%)
+	// Clamp to reasonable bounds; return false if clamping was needed
 	minRate := ParseDecimal(-1.0)
 	maxRate := ParseDecimal(5.0)
 	if rate.LessThan(minRate) {
-		return minRate
+		return minRate, false
 	}
 	if rate.GreaterThan(maxRate) {
-		return maxRate
+		return maxRate, false
 	}
 
-	return rate
+	return rate, converged
 }
 
 // RoundDecimal rounds a decimal to n places

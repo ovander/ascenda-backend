@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -25,7 +25,7 @@ func ComputeRatios(
 		result.Years[i] = i + 1
 	}
 
-	// Set scaling factor (1 if values are in k€, 1000 if in €)
+	// Scaling factor — all values are now in base €; frontend applies ÷1000 (or other unit).
 	result.ScalingFactor = decimal.NewFromInt(1)
 
 	// Process each year (0-4 array indices)
@@ -176,10 +176,14 @@ func ComputeRatios(
 			result.EquityLeverage.TotalEquityEOY[y],
 		)
 
-		// EquityToAssets[y] = Equity / TotalAssets from bsheet
+		// TotalAssets[y] = bsheet.Detailed.Assets.TotalAssets[y+1]
+		// Stored explicitly so EquityToAssets is auditable.
+		result.EquityLeverage.TotalAssets[y] = bsheet.Detailed.Assets.TotalAssets[y+1]
+
+		// EquityToAssets[y] = TotalEquityEOY / TotalAssets
 		result.EquityLeverage.EquityToAssets[y] = SafeDiv(
-			bsheet.Equity[y+1],
-			bsheet.Detailed.Assets.TotalAssets[y+1],
+			result.EquityLeverage.TotalEquityEOY[y],
+			result.EquityLeverage.TotalAssets[y],
 		)
 
 		// LTLoans[y] = bsheet.Detailed.Liabilities.LongTermDebt[y+1]
@@ -203,8 +207,32 @@ func ComputeRatios(
 			result.Profitability.EBITDA[y],
 		)
 
+		// WCR[y] = bsheet.Analysis.WCR[y+1]  (working capital requirement in currency)
+		// Stored explicitly so WCRRotationDays is auditable.
+		result.EquityLeverage.WCR[y] = bsheet.Analysis.WCR[y+1]
+
 		// WCRRotationDays = wcr.Summary.BasicWCRDays[y]
 		result.EquityLeverage.WCRRotationDays[y] = wcr.Summary.BasicWCRDays[y]
+	}
+
+	// ────────────────────────────────────────────────────────────
+	// FREE CASH FLOW  (computed after per-year loop; needs all years)
+	// FCF[y] = CashFlow[y] − CapEx[y] − ΔWCR[y]
+	// ΔWCR[y] = WCR[y] − WCR[y−1]  (y=0 uses opening-balance WCR from bsheet)
+	// ────────────────────────────────────────────────────────────
+	for y := 0; y < MaxYears; y++ {
+		prevWCR := bsheet.Analysis.WCR[y] // index 0 = opening period, y = prior year-end
+		deltaWCR := result.EquityLeverage.WCR[y].Sub(prevWCR)
+
+		result.Profitability.FreeCashFlow[y] = result.Profitability.CashFlow[y].
+			Sub(result.Operational.CapitalExpenditure[y]).
+			Sub(deltaWCR)
+
+		// FreeCashFlowPct[y] = FreeCashFlow / Sales
+		result.Profitability.FreeCashFlowPct[y] = SafeDiv(
+			result.Profitability.FreeCashFlow[y],
+			result.Sales.Sales[y],
+		)
 	}
 
 	// ────────────────────────────────────────────────────────────
@@ -220,32 +248,48 @@ func ComputeRatios(
 	// DiscountRate = config.DiscountRate
 	result.Valuation.DiscountRate = config.DiscountRate
 
-	// Prepare cash flows for NPV and IRR calculations
+	// Use Free Cash Flow (= CashFlow − CapEx − ΔWCR) for NPV and IRR.
 	cashFlows := [MaxYears]decimal.Decimal{}
 	for y := 0; y < MaxYears; y++ {
-		cashFlows[y] = fiplan.Plan.Balance.CumulativeCash[y]
+		cashFlows[y] = result.Profitability.FreeCashFlow[y]
 	}
 
-	// NPV = ComputeNPV(cashFlows, discountRate)
+	// NPV = Σ FCF[y] / (1+r)^(y+1)  for y = 0..4
 	result.Valuation.NPV = ComputeNPV(cashFlows, config.DiscountRate)
 
-	// IRR = ComputeIRR(cashFlows, initialInvestment)
-	// Use first year capex as initial investment
-	initialInvestment := capex.Totals.TotalCapex[0]
+	// IRR: initial investment = equity injected at t=0 (opening equity + Y1 capital increase).
+	// Falls back to Y1 capex when no equity data is available.
+	initialInvestment := bsheet.Equity[0].Add(fiplan.Plan.Resources.CapitalIncrease[0])
 	if initialInvestment.IsZero() {
-		initialInvestment = decimal.NewFromInt(1) // Avoid zero division
+		initialInvestment = capex.Totals.TotalCapex[0]
 	}
-	result.Valuation.IRR = ComputeIRR(cashFlows, initialInvestment)
-	result.Valuation.IRRValid = true // Mark as valid if converged
+	if initialInvestment.IsZero() {
+		initialInvestment = decimal.NewFromInt(1) // prevent divide-by-zero in Newton step
+	}
+	result.Valuation.IRR, result.Valuation.IRRValid = ComputeIRR(cashFlows, initialInvestment)
 
-	// PEMultiple = Sales[4] / NetProfit[4] (Price/Earnings for year 5)
+	// Terminal Value = FCF[4] / tvRate  (Gordon perpetuity, no long-term growth)
+	// tvRate = max(discountRate, 5%) to avoid unreasonably large terminal values
+	// when the analyst sets a near-zero discount rate.
+	tvRate := MaxDecimal(config.DiscountRate, decimal.NewFromFloat(0.05))
+	tv := SafeDiv(result.Profitability.FreeCashFlow[MaxYears-1], tvRate)
+	// Discount TV back to today: TV / (1+discountRate)^5
+	// Use max(discountRate, 0) — no negative discounting.
+	tvDiscountBase := decimal.NewFromInt(1).Add(MaxDecimal(config.DiscountRate, decimal.Zero))
+	tvDiscountFactor := SafeDiv(
+		decimal.NewFromInt(1),
+		tvDiscountBase.Pow(decimal.NewFromInt(MaxYears)),
+	)
+	result.Valuation.TerminalValue = tv.Mul(tvDiscountFactor)
+
+	// DiscountedValue = NPV + TerminalValue  (enterprise value estimate)
+	result.Valuation.DiscountedValue = result.Valuation.NPV.Add(result.Valuation.TerminalValue)
+
+	// PEMultiple = DiscountedValue / NetProfit[last year] — DCF-implied earnings multiple.
 	result.Valuation.PEMultiple = SafeDiv(
-		result.Sales.Sales[MaxYears-1],
+		result.Valuation.DiscountedValue,
 		result.Profitability.NetProfit[MaxYears-1],
 	)
-
-	// DiscountedValue = NPV-based valuation (typically same as NPV for DCF)
-	result.Valuation.DiscountedValue = result.Valuation.NPV
 
 	// ────────────────────────────────────────────────────────────
 	// CHARTS

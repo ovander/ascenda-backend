@@ -6,7 +6,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 func TestComputePnlCash(t *testing.T) {

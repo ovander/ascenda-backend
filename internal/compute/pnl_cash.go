@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -129,27 +129,27 @@ func ComputePnlCash(
 		result.Years[yearIndex] = model.PnlCashYear{
 			Year:             year,
 			YearIndex:        yearIndex,
-			Sales:            sales,
-			CostOfSales:      costOfSales,
-			GrossMargin:      grossMargin,
-			RDPayroll:        rdPayroll,
-			OutsourcedRD:     outsourcedRD,
-			RoyaltiesMisc:    royaltiesMisc,
-			SalesPayroll:     salesPayroll,
-			AdvertisingPromo: advertisingPromo,
-			MiscSalesCosts:   miscSalesCosts,
-			GAPayroll:        gaPayroll,
-			InsuranceRent:    insuranceRent,
-			LeasedEquip:      leasedEquip,
-			LegalConsulting:  legalConsulting,
-			TravelMisc:       travelMisc,
-			Depreciation:     depreciation,
-			EBIT:             ebit,
-			InterestExpense:  interestExpense,
-			Subsidies:        subsidies,
-			TaxesIncurred:    taxesIncurred,
-			NetProfit:        netProfit,
-			SalesPct:         salesPct,
+			Sales:            sales.Round(2),
+			CostOfSales:      costOfSales.Round(2),
+			GrossMargin:      grossMargin.Round(2),
+			RDPayroll:        rdPayroll.Round(2),
+			OutsourcedRD:     outsourcedRD.Round(2),
+			RoyaltiesMisc:    royaltiesMisc.Round(2),
+			SalesPayroll:     salesPayroll.Round(2),
+			AdvertisingPromo: advertisingPromo.Round(2),
+			MiscSalesCosts:   miscSalesCosts.Round(2),
+			GAPayroll:        gaPayroll.Round(2),
+			InsuranceRent:    insuranceRent.Round(2),
+			LeasedEquip:      leasedEquip.Round(2),
+			LegalConsulting:  legalConsulting.Round(2),
+			TravelMisc:       travelMisc.Round(2),
+			Depreciation:     depreciation.Round(2),
+			EBIT:             ebit.Round(2),
+			InterestExpense:  interestExpense.Round(2),
+			Subsidies:        subsidies.Round(2),
+			TaxesIncurred:    taxesIncurred.Round(2),
+			NetProfit:        netProfit.Round(2),
+			SalesPct:         salesPct.Round(4),
 		}
 	}
 
@@ -169,18 +169,18 @@ func computeChartData(years [5]model.PnlCashYear) model.PnlCashChartData {
 		// RDProduction = RDPayroll + OutsourcedRD + RoyaltiesMisc
 		chartData.RDProduction[i] = years[i].RDPayroll.
 			Add(years[i].OutsourcedRD).
-			Add(years[i].RoyaltiesMisc)
+			Add(years[i].RoyaltiesMisc).Round(2)
 		// SalesMarketing = SalesPayroll + AdvertisingPromo + MiscSalesCosts
 		chartData.SalesMarketing[i] = years[i].SalesPayroll.
 			Add(years[i].AdvertisingPromo).
-			Add(years[i].MiscSalesCosts)
+			Add(years[i].MiscSalesCosts).Round(2)
 		// GeneralAdmin = GAPayroll + InsuranceRent + LeasedEquip + LegalConsulting + TravelMisc
 		chartData.GeneralAdmin[i] = years[i].GAPayroll.
 			Add(years[i].InsuranceRent).
 			Add(years[i].LeasedEquip).
 			Add(years[i].LegalConsulting).
-			Add(years[i].TravelMisc)
-		// EBIT (split positive/negative)
+			Add(years[i].TravelMisc).Round(2)
+		// EBIT (split positive/negative) — already rounded in Years array
 		if years[i].EBIT.IsPositive() {
 			chartData.EBITPositive[i] = years[i].EBIT
 			chartData.EBITNegative[i] = decimal.Zero

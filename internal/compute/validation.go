@@ -2,7 +2,7 @@ package compute
 
 import (
 	"fmt"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )

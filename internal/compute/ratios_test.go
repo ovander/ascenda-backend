@@ -5,7 +5,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 )
 
 func TestComputeRatios(t *testing.T) {
@@ -487,4 +487,182 @@ func TestComputeRatios(t *testing.T) {
 			tt.checkRatios(t, result)
 		})
 	}
+}
+
+// TestRatiosInvariants checks that key identity relationships hold between
+// fields in the RatiosReport, enforcing the "implicit formula" definitions
+// called out in the technical anomaly report.
+func TestRatiosInvariants(t *testing.T) {
+	tol := decimal.NewFromFloat(0.01) // 0.01 currency unit tolerance
+
+	config := model.PlanConfig{
+		DiscountRate:     decimal.NewFromFloat(0.10),
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+	}
+
+	pnl := model.PnlReport{
+		Years: [5]model.PnlYear{
+			{
+				Sales:             decimal.NewFromInt(100000),
+				AddedValue:        decimal.NewFromInt(70000),
+				EBITDA:            decimal.NewFromInt(50000),
+				NetProfit:         decimal.NewFromInt(20000),
+				CashFlow:          decimal.NewFromInt(25000), // NetProfit + Depreciation
+				ExternalExpenses:  decimal.NewFromInt(10000),
+				FinancialExpenses: decimal.Zero,
+			},
+			{
+				Sales:             decimal.NewFromInt(120000),
+				AddedValue:        decimal.NewFromInt(85000),
+				EBITDA:            decimal.NewFromInt(62000),
+				NetProfit:         decimal.NewFromInt(28000),
+				CashFlow:          decimal.NewFromInt(33000),
+				ExternalExpenses:  decimal.NewFromInt(12000),
+				FinancialExpenses: decimal.Zero,
+			},
+			{Sales: decimal.NewFromInt(144000), AddedValue: decimal.NewFromInt(102000), EBITDA: decimal.NewFromInt(77000), NetProfit: decimal.NewFromInt(36000), CashFlow: decimal.NewFromInt(41000)},
+			{Sales: decimal.NewFromInt(172800), AddedValue: decimal.NewFromInt(123000), EBITDA: decimal.NewFromInt(94000), NetProfit: decimal.NewFromInt(46000), CashFlow: decimal.NewFromInt(51000)},
+			{Sales: decimal.NewFromInt(207360), AddedValue: decimal.NewFromInt(148000), EBITDA: decimal.NewFromInt(115000), NetProfit: decimal.NewFromInt(58000), CashFlow: decimal.NewFromInt(63000)},
+		},
+	}
+
+	equity := [6]decimal.Decimal{
+		decimal.NewFromInt(50000),
+		decimal.NewFromInt(70000),
+		decimal.NewFromInt(98000),
+		decimal.NewFromInt(134000),
+		decimal.NewFromInt(180000),
+		decimal.NewFromInt(238000),
+	}
+	totalAssets := [6]decimal.Decimal{
+		decimal.NewFromInt(60000),
+		decimal.NewFromInt(85000),
+		decimal.NewFromInt(118000),
+		decimal.NewFromInt(160000),
+		decimal.NewFromInt(212000),
+		decimal.NewFromInt(275000),
+	}
+	// WCR in currency per period (opening + 5 years)
+	wcrValues := [6]decimal.Decimal{
+		decimal.NewFromInt(8000),
+		decimal.NewFromInt(9000),
+		decimal.NewFromInt(10800),
+		decimal.NewFromInt(12960),
+		decimal.NewFromInt(15552),
+		decimal.NewFromInt(18662),
+	}
+
+	bsheet := model.BSheetReport{
+		Equity: equity,
+		Detailed: model.BSheetDetailed{
+			Assets: model.BSheetDetailedAssets{TotalAssets: totalAssets},
+			Liabilities: model.BSheetDetailedLiabilities{
+				LongTermDebt: [6]decimal.Decimal{
+					decimal.NewFromInt(10000), decimal.NewFromInt(10000), decimal.NewFromInt(10000),
+					decimal.NewFromInt(10000), decimal.NewFromInt(10000), decimal.NewFromInt(10000),
+				},
+			},
+		},
+		Analysis: model.BSheetAnalysis{WCR: wcrValues},
+	}
+
+	capex := model.CapexSummary{
+		Totals: model.CapexTotals{
+			TotalCapex: [5]decimal.Decimal{
+				decimal.NewFromInt(5000),
+				decimal.NewFromInt(6000),
+				decimal.NewFromInt(7200),
+				decimal.NewFromInt(8640),
+				decimal.NewFromInt(10368),
+			},
+			TotalDepreciation: [5]decimal.Decimal{
+				decimal.NewFromInt(5000),
+				decimal.NewFromInt(5000),
+				decimal.NewFromInt(5000),
+				decimal.NewFromInt(5000),
+				decimal.NewFromInt(5000),
+			},
+		},
+	}
+
+	revenue := model.ConsolidatedRevenue{
+		Totals: [5]model.ConsolidatedRevenueYear{
+			{TotalTurnover: decimal.NewFromInt(100000), GrossMarginPct: decimal.NewFromFloat(0.7)},
+			{TotalTurnover: decimal.NewFromInt(120000), GrossMarginPct: decimal.NewFromFloat(0.7)},
+			{TotalTurnover: decimal.NewFromInt(144000), GrossMarginPct: decimal.NewFromFloat(0.7)},
+			{TotalTurnover: decimal.NewFromInt(172800), GrossMarginPct: decimal.NewFromFloat(0.7)},
+			{TotalTurnover: decimal.NewFromInt(207360), GrossMarginPct: decimal.NewFromFloat(0.7)},
+		},
+	}
+
+	fiplan := model.FiplanReport{
+		Plan: model.FiplanPlan{
+			Balance: model.FiplanBalance{
+				CumulativeCash: [5]decimal.Decimal{
+					decimal.NewFromInt(15000), decimal.NewFromInt(43000), decimal.NewFromInt(79000),
+					decimal.NewFromInt(125000), decimal.NewFromInt(183000),
+				},
+			},
+			Resources: model.FiplanResources{
+				CapitalIncrease: [5]decimal.Decimal{
+					decimal.NewFromInt(50000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero,
+				},
+			},
+		},
+	}
+
+	result := ComputeRatios(pnl, bsheet, model.WCRReport{}, fiplan, revenue,
+		model.StaffPayrollSummary{}, capex, config)
+
+	for y := 0; y < MaxYears; y++ {
+		// Invariant: NetProfitPct = NetProfit / Sales
+		expectedNPPct := SafeDiv(pnl.Years[y].NetProfit, revenue.Totals[y].TotalTurnover)
+		assertDecEqApprox(t, expectedNPPct, result.Profitability.NetProfitPct[y], tol,
+			"NetProfitPct invariant failed at year %d", y)
+
+		// Invariant: EBITDAPct = EBITDA / Sales
+		expectedEBITDAPct := SafeDiv(pnl.Years[y].EBITDA, revenue.Totals[y].TotalTurnover)
+		assertDecEqApprox(t, expectedEBITDAPct, result.Profitability.EBITDAPct[y], tol,
+			"EBITDAPct invariant failed at year %d", y)
+
+		// Invariant: FinancialReturn = NetProfit / TotalEquityEOY
+		expectedFR := SafeDiv(pnl.Years[y].NetProfit, equity[y+1])
+		assertDecEqApprox(t, expectedFR, result.EquityLeverage.FinancialReturn[y], tol,
+			"FinancialReturn invariant failed at year %d", y)
+
+		// Invariant: EquityToAssets = TotalEquityEOY / TotalAssets
+		expectedETA := SafeDiv(equity[y+1], totalAssets[y+1])
+		assertDecEqApprox(t, expectedETA, result.EquityLeverage.EquityToAssets[y], tol,
+			"EquityToAssets invariant failed at year %d", y)
+
+		// Invariant: TotalAssets stored correctly
+		assertDecEqApprox(t, totalAssets[y+1], result.EquityLeverage.TotalAssets[y], tol,
+			"TotalAssets stored incorrectly at year %d", y)
+
+		// Invariant: WCR stored correctly
+		assertDecEqApprox(t, wcrValues[y+1], result.EquityLeverage.WCR[y], tol,
+			"WCR stored incorrectly at year %d", y)
+
+		// Invariant: FreeCashFlow = CashFlow − CapEx − ΔWCR
+		deltaWCR := wcrValues[y+1].Sub(wcrValues[y])
+		expectedFCF := pnl.Years[y].CashFlow.
+			Sub(capex.Totals.TotalCapex[y]).
+			Sub(deltaWCR)
+		assertDecEqApprox(t, expectedFCF, result.Profitability.FreeCashFlow[y], tol,
+			"FreeCashFlow invariant failed at year %d", y)
+	}
+
+	// Invariant: DiscountedValue > NPV (terminal value adds a positive component
+	// when FCF[4] > 0)
+	assert.True(t, result.Valuation.DiscountedValue.GreaterThan(result.Valuation.NPV),
+		"DiscountedValue should exceed NPV when last-year FCF is positive")
+
+	// Invariant: PEMultiple = DiscountedValue / NetProfit[4]
+	expectedPE := SafeDiv(result.Valuation.DiscountedValue, pnl.Years[4].NetProfit)
+	assertDecEqApprox(t, expectedPE, result.Valuation.PEMultiple, tol,
+		"PEMultiple invariant failed")
+
+	// Invariant: TerminalValue > 0 when last FCF is positive
+	assert.True(t, result.Valuation.TerminalValue.GreaterThan(decimal.Zero),
+		"TerminalValue should be positive when FCF[4] > 0")
 }

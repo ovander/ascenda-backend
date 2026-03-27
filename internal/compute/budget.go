@@ -1,7 +1,7 @@
 package compute
 
 import (
-	"kerplan/internal/model"
+	"ascenda/internal/model"
 
 	"github.com/shopspring/decimal"
 )
@@ -36,13 +36,18 @@ func ComputeBudget1(
 	// Year 1 index (0-based)
 	yearIdx := 0
 
+	// currentSection tracks which section header to stamp on each row.
+	currentSection := ""
+
 	// Helper to create a row with monthly distribution
 	addRow := func(lineID model.BudgetLineID, label string, annual decimal.Decimal, isTotal bool) {
 		row := model.BudgetMonthlyRow{
-			LineID:  lineID,
-			Label:   label,
-			Annual:  annual,
-			IsTotal: isTotal,
+			LineID:           lineID,
+			Label:            label,
+			Section:          currentSection,
+			Annual:           annual,
+			IsTotal:          isTotal,
+			DistributionRule: model.DistEvenSpread,
 		}
 
 		// Distribute evenly across 12 months
@@ -71,7 +76,7 @@ func ComputeBudget1(
 	// ─────────────────────────────────────────────────────────────
 	// Revenue Section
 	// ─────────────────────────────────────────────────────────────
-
+	currentSection = "Revenue"
 	salesRevenue := pnl.Years[yearIdx].Sales
 	addRow(model.BudgetSalesRevenue, "Sales Revenue", salesRevenue, false)
 
@@ -84,7 +89,7 @@ func ComputeBudget1(
 	// ─────────────────────────────────────────────────────────────
 	// COGS Section
 	// ─────────────────────────────────────────────────────────────
-
+	currentSection = "COGS"
 	rawMaterials := pnl.Years[yearIdx].COGS
 	addRow(model.BudgetRawMaterials, "Raw Materials", rawMaterials, false)
 
@@ -104,7 +109,7 @@ func ComputeBudget1(
 	// ─────────────────────────────────────────────────────────────
 	// External Expenses (from OpexSummary)
 	// ─────────────────────────────────────────────────────────────
-
+	currentSection = "External Expenses"
 	rentExpenses := getOpexSubcategoryTotal(opex, model.OpexSubPremises, yearIdx)
 	addRow(model.BudgetRentExpenses, "Rent Expenses", rentExpenses, false)
 
@@ -133,7 +138,7 @@ func ComputeBudget1(
 	// ─────────────────────────────────────────────────────────────
 	// Staff Costs (from StaffPayrollSummary)
 	// ─────────────────────────────────────────────────────────────
-
+	currentSection = "Staff Costs"
 	payroll := staff.Payroll[yearIdx].SubtotalPayroll
 	addRow(model.BudgetPayroll, "Payroll", payroll, false)
 
@@ -146,7 +151,7 @@ func ComputeBudget1(
 	// ─────────────────────────────────────────────────────────────
 	// Taxes & Depreciation
 	// ─────────────────────────────────────────────────────────────
-
+	currentSection = "Taxes & Depreciation"
 	taxesDuties := pnl.Years[yearIdx].TaxesAndDuties
 	addRow(model.BudgetTaxesDuties, "Taxes and Duties", taxesDuties, false)
 
@@ -165,7 +170,7 @@ func ComputeBudget1(
 	// ─────────────────────────────────────────────────────────────
 	// Financial Items & Net Profit
 	// ─────────────────────────────────────────────────────────────
-
+	currentSection = "Financial & Net Profit"
 	financialIncome := pnl.Years[yearIdx].FinancialRevenues
 	addRow(model.BudgetFinancialIncome, "Financial Income", financialIncome, false)
 
@@ -225,10 +230,11 @@ func ComputeBudget2(
 			values[q] = quarterly
 		}
 		quarterlyRows = append(quarterlyRows, model.Budget2Row{
-			LineID:  row.LineID,
-			Label:   row.Label,
-			Values:  values,
-			IsTotal: row.IsTotal,
+			LineID:      row.LineID,
+			Label:       row.Label,
+			Values:      values,
+			IsTotal:     row.IsTotal,
+			IsAggregate: row.IsTotal,
 		})
 	}
 	result.Quarterly = addView("Quarterly", []string{"Q1", "Q2", "Q3", "Q4"}, quarterlyRows)
