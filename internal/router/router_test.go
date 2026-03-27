@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"kerplan/internal/middleware"
-	"kerplan/internal/model"
-	"kerplan/internal/pkg/ctxutil"
-	"kerplan/internal/repo"
+	"ascenda/internal/middleware"
+	"ascenda/internal/model"
+	"ascenda/internal/pkg/ctxutil"
+	"ascenda/internal/repo"
 )
 
 // ── Stub handler that returns 200 with handler name ───────────────
@@ -180,10 +180,11 @@ func TestRouterUserManagementRBAC(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 	})
 
-	t.Run("admin can list users", func(t *testing.T) {
+	t.Run("admin CANNOT list tenant users (no PermManageUsers)", func(t *testing.T) {
+		// platform admin has PermPlatformAdmin only — tenant-scoped user list is owner-only
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, newReq("GET", "/api/v1/users/", "admin"))
-		assert.Equal(t, 200, w.Code)
+		assert.Equal(t, 403, w.Code)
 	})
 
 	t.Run("user CANNOT list users", func(t *testing.T) {
