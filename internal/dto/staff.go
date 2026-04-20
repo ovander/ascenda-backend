@@ -176,9 +176,6 @@ type TenantResponse struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Slug      string `json:"slug"`
-	Tier      string `json:"tier"`
-	MaxPlans  int    `json:"maxPlans"`
-	MaxUsers  int    `json:"maxUsers"`
 	AICredits int    `json:"aiCredits"`
 	IsActive  bool   `json:"isActive"`
 	Timestamps
@@ -190,9 +187,6 @@ func TenantFromModel(t model.Tenant) TenantResponse {
 		ID:         t.ID.String(),
 		Name:       t.Name,
 		Slug:       t.Slug,
-		Tier:       t.Tier,
-		MaxPlans:   t.MaxPlans,
-		MaxUsers:   t.MaxUsers,
 		AICredits:  t.AICredits,
 		IsActive:   t.IsActive,
 		Timestamps: Timestamps{CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt},
