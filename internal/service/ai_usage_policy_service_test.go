@@ -58,9 +58,10 @@ func aiTestWeekKey(t time.Time) string {
 
 func TestDefaultAIUsagePolicies_Count(t *testing.T) {
 	policies := model.DefaultAIUsagePolicies()
-	// 4 roles × 3 tiers × 13 features = 156 entries
-	// (5 standard + 7 Pro driver-aware + 1 Enterprise)
-	assert.Equal(t, 156, len(policies), "expected 4 roles × 3 tiers × 13 features = 156")
+	// Freemium tier adds 4 roles × 13 features = 52 entries (all denied).
+	// Paid tiers (standard, pro, enterprise): 4 roles × 3 tiers × 13 features = 156.
+	// Total: 156 + 52 = 208.
+	assert.Equal(t, 208, len(policies), "expected 4 roles × 4 tiers × 13 features = 208")
 }
 
 func TestDefaultAIUsagePolicies_AdminHasFullUnlimitedAccess(t *testing.T) {
@@ -78,7 +79,10 @@ func TestDefaultAIUsagePolicies_AdminHasFullUnlimitedAccess(t *testing.T) {
 
 func TestDefaultAIUsagePolicies_ViewerOnlyGetsPlanNarration(t *testing.T) {
 	lookup := model.NewAIUsagePolicyLookup(model.DefaultAIUsagePolicies())
-	for _, tier := range model.AllAISubscriptionTiers() {
+	// On paid tiers (standard, pro, enterprise) viewers get only plan narration.
+	// On freemium all AI is denied, so we skip it in this test.
+	paidTiers := []string{model.AITierStandard, model.AITierPro, model.AITierEnterprise}
+	for _, tier := range paidTiers {
 		assert.True(t, lookup.GetPolicy(model.AIRoleViewer, tier, model.AIFeaturePlanNarration).Allowed,
 			"viewer/%s should get plan narration", tier)
 
@@ -91,6 +95,20 @@ func TestDefaultAIUsagePolicies_ViewerOnlyGetsPlanNarration(t *testing.T) {
 			p := lookup.GetPolicy(model.AIRoleViewer, tier, blocked)
 			require.NotNil(t, p)
 			assert.False(t, p.Allowed, "viewer/%s should NOT have %s", tier, blocked)
+		}
+	}
+}
+
+func TestDefaultAIUsagePolicies_FreemiumDeniesAllFeaturesForAllRoles(t *testing.T) {
+	lookup := model.NewAIUsagePolicyLookup(model.DefaultAIUsagePolicies())
+	// Admin bypasses tier restrictions and has full access on every plan,
+	// including freemium. Only non-admin roles are blocked on the freemium tier.
+	nonAdminRoles := []string{model.AIRoleOwner, model.AIRoleUser, model.AIRoleViewer}
+	for _, role := range nonAdminRoles {
+		for _, feat := range model.AllAIFeatures() {
+			p := lookup.GetPolicy(role, model.AITierFreemium, feat)
+			require.NotNil(t, p, "freemium/%s/%s policy must exist", role, feat)
+			assert.False(t, p.Allowed, "freemium/%s/%s must be denied — no AI on freemium plan", role, feat)
 		}
 	}
 }

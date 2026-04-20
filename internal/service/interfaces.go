@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/pagination"
+	"github.com/ovander/backendkit/pagination"
 )
 
 // PlanServicer is the interface that PlanHandler depends on. Depending on this

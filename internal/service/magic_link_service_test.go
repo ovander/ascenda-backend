@@ -12,7 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/socrate"
 )
 
 // ── in-memory mock token repo ─────────────────────────────────────────────────
@@ -71,19 +72,18 @@ type mockMailer struct {
 }
 
 type mockMailCall struct {
-	email       string
-	callbackURL string
+	email string
 }
 
-func (m *mockMailer) SendMagicLink(_ context.Context, email, callbackURL string) error {
+func (m *mockMailer) SendMagicLink(_ context.Context, email string) (*socrate.MagicLinkResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.failNext {
 		m.failNext = false
-		return apierror.Internal("mailer error")
+		return nil, apierror.Internal("mailer error")
 	}
-	m.calls = append(m.calls, mockMailCall{email: email, callbackURL: callbackURL})
-	return nil
+	m.calls = append(m.calls, mockMailCall{email: email})
+	return &socrate.MagicLinkResponse{}, nil
 }
 
 func (m *mockMailer) lastCall() (mockMailCall, bool) {
@@ -120,7 +120,6 @@ func TestMagicLinkService_Send_CallsMailer(t *testing.T) {
 	call, ok := mailer.lastCall()
 	require.True(t, ok)
 	assert.Equal(t, "user@example.com", call.email)
-	assert.Contains(t, call.callbackURL, "http://localhost:8080/auth/magic-link/verify?token=")
 }
 
 func TestMagicLinkService_Send_EmailNormalisedToLowercase(t *testing.T) {
@@ -169,17 +168,20 @@ func TestMagicLinkService_Send_TTL(t *testing.T) {
 // ── VerifyMagicLink tests ─────────────────────────────────────────────────────
 
 func TestMagicLinkService_Verify_HappyPath(t *testing.T) {
-	mailer := &mockMailer{}
-	svc, _ := newTestMagicLinkService(mailer)
+	svc, repo := newTestMagicLinkService(nil)
 
-	// Send to obtain a real raw token via the verify URL.
-	err := svc.SendMagicLink(context.Background(), "user@example.com", "/reports")
+	// Pre-seed a known raw token directly into the mock repo.
+	rawToken, tokenHash, err := generateToken()
 	require.NoError(t, err)
-
-	// Extract raw token from the callback URL.
-	call, _ := mailer.lastCall()
-	rawToken := extractToken(call.callbackURL)
-	require.NotEmpty(t, rawToken)
+	repo.mu.Lock()
+	repo.tokens[tokenHash] = &model.MagicLinkToken{
+		ID:          uuid.New(),
+		Email:       "user@example.com",
+		TokenHash:   tokenHash,
+		RedirectURL: "/reports",
+		ExpiresAt:   time.Now().Add(15 * time.Minute),
+	}
+	repo.mu.Unlock()
 
 	result, err := svc.VerifyMagicLink(context.Background(), rawToken)
 	require.NoError(t, err)
@@ -188,14 +190,20 @@ func TestMagicLinkService_Verify_HappyPath(t *testing.T) {
 }
 
 func TestMagicLinkService_Verify_TokenSingleUse(t *testing.T) {
-	mailer := &mockMailer{}
-	svc, _ := newTestMagicLinkService(mailer)
-	_ = svc.SendMagicLink(context.Background(), "u@x.com", "")
-	call, _ := mailer.lastCall()
-	rawToken := extractToken(call.callbackURL)
+	svc, repo := newTestMagicLinkService(nil)
+	rawToken, tokenHash, err := generateToken()
+	require.NoError(t, err)
+	repo.mu.Lock()
+	repo.tokens[tokenHash] = &model.MagicLinkToken{
+		ID:        uuid.New(),
+		Email:     "u@x.com",
+		TokenHash: tokenHash,
+		ExpiresAt: time.Now().Add(15 * time.Minute),
+	}
+	repo.mu.Unlock()
 
 	// First verify: OK.
-	_, err := svc.VerifyMagicLink(context.Background(), rawToken)
+	_, err = svc.VerifyMagicLink(context.Background(), rawToken)
 	require.NoError(t, err)
 
 	// Second verify: must fail — token already used.

@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
 )
 
 // BSheetService provides read-only balance sheet reporting.

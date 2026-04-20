@@ -17,9 +17,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
 	aiClient "ascenda/internal/pkg/ai"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ============================================================================
@@ -135,6 +137,12 @@ type NarrationContext struct {
 	Currency     string            `json:"currency"`     // e.g. "EUR"
 	UserRole     NarrationUserRole `json:"user_role"`
 
+	// Language is the BCP-47 language tag in which the narration should be
+	// produced.  Defaults to "en" when empty or unsupported.
+	// Callers should populate this from PlanConfig.Language so that AI output
+	// matches the user's configured language preference.
+	Language string `json:"language,omitempty"` // NEW — "en" | "fr" | …
+
 	// Narration type (optional — inferred if empty)
 	NarrationType NarrationType `json:"narration_type,omitempty"`
 
@@ -213,12 +221,12 @@ type NarrationOutput struct {
 type AINarrationService struct {
 	client *aiClient.Client
 	log    *logrus.Entry
-	cache  *NarrationCache // nil = caching disabled
+	cache  NarrationCacher // nil = caching disabled
 }
 
-// NewAINarrationService creates a new AINarrationService with the default
-// narration cache enabled (LRU 200 entries, 2-hour TTL).
-// All configuration is supplied via config.AIConfig (centralised in config.Load).
+// NewAINarrationService creates a new AINarrationService with a pure in-memory
+// cache (LRU 200 entries, 2-hour TTL).  Use NewAINarrationServiceWithCache to
+// inject a DB-backed or layered cache instead.
 func NewAINarrationService(aiCfg config.AIConfig, log *logrus.Entry) *AINarrationService {
 	return &AINarrationService{
 		client: aiClient.NewClient(aiCfg, log),
@@ -227,10 +235,20 @@ func NewAINarrationService(aiCfg config.AIConfig, log *logrus.Entry) *AINarratio
 	}
 }
 
+// NewAINarrationServiceWithCache creates an AINarrationService using the
+// supplied cache implementation.  Pass a *LayeredNarrationCache in production
+// to get both in-memory speed and DB persistence.
+func NewAINarrationServiceWithCache(aiCfg config.AIConfig, log *logrus.Entry, cache NarrationCacher) *AINarrationService {
+	return &AINarrationService{
+		client: aiClient.NewClient(aiCfg, log),
+		log:    log,
+		cache:  cache,
+	}
+}
+
 // SetCache replaces the narration cache. Pass nil to disable caching entirely.
-// Intended for testing (inject a Flush()-able cache) and for future
-// distributed-cache adapters.
-func (s *AINarrationService) SetCache(c *NarrationCache) {
+// Accepts any NarrationCacher implementation (in-memory, DB, layered, mock).
+func (s *AINarrationService) SetCache(c NarrationCacher) {
 	s.cache = c
 }
 
@@ -271,11 +289,19 @@ func (s *AINarrationService) GenerateNarration(ctx context.Context, nCtx *Narrat
 		nCtx.NarrationType = narrationType
 	}
 
+	// Tenant ID is required for DB-scoped cache storage.
+	tenantID := ctxutil.GetTenantID(ctx)
+	if tenantID == uuid.Nil {
+		// Platform admins (no tenant) or tests without a tenant context: still
+		// allow narration but use a sentinel so cache rows are distinguishable.
+		tenantID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
+	}
+
 	// ── Cache lookup ─────────────────────────────────────────────────────────
 	var cacheKey string
 	if s.cache != nil {
 		cacheKey = NarrationCacheKey(nCtx)
-		if cached, ok := s.cache.Get(cacheKey); ok {
+		if cached, ok := s.cache.Get(tenantID, cacheKey); ok {
 			s.log.WithField("cache_key", cacheKey).Debug("AI narration cache hit")
 			return cached, nil
 		}
@@ -305,7 +331,7 @@ func (s *AINarrationService) GenerateNarration(ctx context.Context, nCtx *Narrat
 
 	// ── Cache store ───────────────────────────────────────────────────────────
 	if s.cache != nil && cacheKey != "" {
-		s.cache.Put(cacheKey, output)
+		s.cache.Put(tenantID, cacheKey, output)
 		s.log.WithField("cache_key", cacheKey).Debug("AI narration result cached")
 	}
 
@@ -318,7 +344,7 @@ func (s *AINarrationService) GenerateNarration(ctx context.Context, nCtx *Narrat
 
 func (s *AINarrationService) buildPrompt(nCtx *NarrationContext, nt NarrationType) string {
 	var sb strings.Builder
-	sb.WriteString(systemPrompt(nCtx.UserRole))
+	sb.WriteString(systemPrompt(nCtx.UserRole, normalizeLanguage(nCtx.Language)))
 	sb.WriteString("\n\n=== FINANCIAL DATA (use ONLY this data — do not invent figures) ===\n")
 	sb.WriteString(buildDataContext(nCtx))
 	sb.WriteString("\n\n=== NARRATION REQUEST ===\n")
@@ -327,7 +353,10 @@ func (s *AINarrationService) buildPrompt(nCtx *NarrationContext, nt NarrationTyp
 }
 
 // systemPrompt returns the strict system prompt for the narrator role.
-func systemPrompt(role NarrationUserRole) string {
+// lang is the normalised 2-letter language code ("en", "fr", …).
+// When lang != "en", a language instruction is appended to force the model
+// to produce output in the requested language.
+func systemPrompt(role NarrationUserRole, lang string) string {
 	base := `You are a financial narrator for Ascenda, a business planning application.
 
 CRITICAL RULES:
@@ -348,24 +377,36 @@ Respond with a single JSON object — no markdown, no prose outside the JSON:
   "key_takeaways": ["concise bullet 1", "concise bullet 2", "concise bullet 3"]
 }`
 
+	// Language instruction: appended after role / tone section so the language
+	// constraint is processed last (highest priority for the model).
+	langInstruction := ""
+	switch lang {
+	case "fr":
+		langInstruction = "\n\nLANGUAGE: Respond strictly in French (fr). All title, summary, paragraphs, and key_takeaways MUST be in French."
+	case "en", "":
+		// default — no extra instruction needed
+	default:
+		langInstruction = fmt.Sprintf("\n\nLANGUAGE: Respond strictly in %s. All output fields MUST be in that language.", lang)
+	}
+
 	switch role {
 	case NarrationRoleAdmin, NarrationRoleOwner:
 		return base + `
 
 AUDIENCE: Business owner / plan administrator
-TONE: Analytical, precise, executive-level. Include specific figures. Highlight risks and opportunities. Use professional financial language.`
+TONE: Analytical, precise, executive-level. Include specific figures. Highlight risks and opportunities. Use professional financial language.` + langInstruction
 	case NarrationRoleUser:
 		return base + `
 
 AUDIENCE: Team member / plan contributor
-TONE: Clear, structured, informative. Explain what the figures mean for the team. Avoid overly technical jargon while keeping precision.`
+TONE: Clear, structured, informative. Explain what the figures mean for the team. Avoid overly technical jargon while keeping precision.` + langInstruction
 	case NarrationRoleViewer:
 		return base + `
 
 AUDIENCE: Read-only stakeholder
-TONE: High-level, accessible, balanced. Focus on the overall story. Avoid sensitive internal details. Keep it concise and non-technical.`
+TONE: High-level, accessible, balanced. Focus on the overall story. Avoid sensitive internal details. Keep it concise and non-technical.` + langInstruction
 	default:
-		return base
+		return base + langInstruction
 	}
 }
 
@@ -487,7 +528,7 @@ Do NOT recommend adding or removing products.`
 Based on the product_economics data and any generic-driver products present, suggest which structured driver type (saas, consulting, marketplace, industry, media, session_based) best fits each generic product.
 Use session_based when the product delivers discrete sessions or events (training, workshops, seminars) where revenue scales with participants × fill rate and cost splits between fixed-per-session and variable-per-participant.
 Explain the reasoning for each recommendation using the available assumption and KPI data.
-Structure your output JSON with an additional "structured_data" field containing an array of {"product_name": "...", "recommended_driver": "...", "confidence": "high|medium|low", "rationale": "..."}.`
+Structure your output JSON with an additional "structured_data" field containing an object: {"recommendations": [{"product_name": "...", "recommended_driver": "...", "confidence": "high|medium|low", "rationale": "..."}]}.`
 
 	case NarrationTypeScenarioSuggestion:
 		return `Generate a scenario suggestion narration.
@@ -579,45 +620,77 @@ func (s *AINarrationService) generateFallback(nCtx *NarrationContext, nt Narrati
 }
 
 // fallbackTitle returns a simple title without AI.
+// The type label is localised using nCtx.Language; plan/scenario names are kept
+// as-is since they are user-entered data and should not be translated.
 func fallbackTitle(nCtx *NarrationContext, nt NarrationType) string {
+	lang := normalizeLanguage(nCtx.Language)
+	label := fallbackTitleLabel(nt, lang, nCtx.ScenarioType)
 	switch nt {
-	case NarrationTypeVarianceAnalysis:
-		return fmt.Sprintf("Variance Analysis — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
-	case NarrationTypeScenarioComparison:
-		return fmt.Sprintf("Scenario Comparison — %s", nCtx.PlanName)
-	case NarrationTypeAnomalyDetection:
-		return fmt.Sprintf("Anomaly Report — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
-	case NarrationTypeCashRunway:
-		return fmt.Sprintf("Cash Runway — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
-	// Pro-tier
-	case NarrationTypeUnitEconomics:
-		return fmt.Sprintf("Unit Economics — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
-	case NarrationTypeAssumptionReview:
-		return fmt.Sprintf("Assumption Review — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
-	case NarrationTypeBenchmarkCommentary:
-		return fmt.Sprintf("Benchmark Commentary — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
-	case NarrationTypePortfolioMix:
-		return fmt.Sprintf("Portfolio Mix — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
-	case NarrationTypeDriverAdvisor:
-		return fmt.Sprintf("Driver Advisor — %s", nCtx.PlanName)
-	case NarrationTypeScenarioSuggestion:
-		label := nCtx.ScenarioType
-		if label == "" {
-			label = "variant"
-		}
-		return fmt.Sprintf("Scenario Suggestion (%s) — %s", label, nCtx.ScenarioName)
-	case NarrationTypeSensitivityNarrative:
-		return fmt.Sprintf("Sensitivity Narrative — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
-	// Enterprise
-	case NarrationTypeInvestorMemo:
-		return fmt.Sprintf("Investor Memo — %s", nCtx.PlanName)
+	case NarrationTypeScenarioComparison, NarrationTypeDriverAdvisor, NarrationTypeInvestorMemo:
+		return fmt.Sprintf("%s — %s", label, nCtx.PlanName)
 	default:
-		return fmt.Sprintf("Plan Summary — %s / %s", nCtx.ScenarioName, nCtx.PeriodLabel)
+		return fmt.Sprintf("%s — %s / %s", label, nCtx.ScenarioName, nCtx.PeriodLabel)
 	}
 }
 
+// fallbackTitleLabel returns the localised type label for a fallback title.
+func fallbackTitleLabel(nt NarrationType, lang, scenarioType string) string {
+	labels := map[NarrationType]map[string]string{
+		NarrationTypePlanSummary:        {"en": "Plan Summary", "fr": "Résumé du plan"},
+		NarrationTypeVarianceAnalysis:   {"en": "Variance Analysis", "fr": "Analyse des écarts"},
+		NarrationTypeScenarioComparison: {"en": "Scenario Comparison", "fr": "Comparaison de scénarios"},
+		NarrationTypeAnomalyDetection:   {"en": "Anomaly Report", "fr": "Rapport d'anomalies"},
+		NarrationTypeCashRunway:         {"en": "Cash Runway", "fr": "Autonomie de trésorerie"},
+		NarrationTypeUnitEconomics:      {"en": "Unit Economics", "fr": "Économie unitaire"},
+		NarrationTypeAssumptionReview:   {"en": "Assumption Review", "fr": "Revue des hypothèses"},
+		NarrationTypeBenchmarkCommentary:{"en": "Benchmark Commentary", "fr": "Commentaire benchmark"},
+		NarrationTypePortfolioMix:       {"en": "Portfolio Mix", "fr": "Mix portefeuille"},
+		NarrationTypeDriverAdvisor:      {"en": "Driver Advisor", "fr": "Conseiller de performance"},
+		NarrationTypeSensitivityNarrative:{"en": "Sensitivity Narrative", "fr": "Analyse de sensibilité"},
+		NarrationTypeInvestorMemo:       {"en": "Investor Memo", "fr": "Note investisseur"},
+	}
+
+	// ScenarioSuggestion needs the scenario type injected.
+	if nt == NarrationTypeScenarioSuggestion {
+		sType := scenarioType
+		if sType == "" {
+			if lang == "fr" {
+				sType = "variante"
+			} else {
+				sType = "variant"
+			}
+		}
+		if lang == "fr" {
+			return fmt.Sprintf("Suggestion de scénario (%s)", sType)
+		}
+		return fmt.Sprintf("Scenario Suggestion (%s)", sType)
+	}
+
+	if m, ok := labels[nt]; ok {
+		if l, ok2 := m[lang]; ok2 {
+			return l
+		}
+		return m["en"]
+	}
+	if lang == "fr" {
+		return "Résumé du plan"
+	}
+	return "Plan Summary"
+}
+
 // buildFallbackSummary constructs a brief summary using only available fields.
+// For non-English languages the English content-specific branches are bypassed
+// in favour of a generic localised message that avoids mixed-language output
+// (the fallback path is only reached when AI is unconfigured — a rare case
+// in production).
 func buildFallbackSummary(nCtx *NarrationContext, nt NarrationType) string {
+	lang := normalizeLanguage(nCtx.Language)
+	if lang == "fr" {
+		return fmt.Sprintf(
+			"Résumé financier pour le plan « %s », scénario « %s », période %s. La narration AI n'est pas disponible.",
+			nCtx.PlanName, nCtx.ScenarioName, nCtx.PeriodLabel,
+		)
+	}
 	switch nt {
 	case NarrationTypeVarianceAnalysis:
 		if len(nCtx.VarianceLines) == 0 {
@@ -743,7 +816,14 @@ func buildFallbackSummary(nCtx *NarrationContext, nt NarrationType) string {
 }
 
 // buildFallbackTakeaways returns concise takeaways constructed from available data.
+// For non-English languages, a single localised takeaway is returned since the
+// English-specific content branches are not translated in the fallback path.
 func buildFallbackTakeaways(nCtx *NarrationContext, nt NarrationType) []string {
+	lang := normalizeLanguage(nCtx.Language)
+	if lang == "fr" {
+		return []string{"La narration AI n'est pas disponible. Activez la narration AI pour obtenir des analyses détaillées."}
+	}
+
 	var items []string
 
 	switch nt {

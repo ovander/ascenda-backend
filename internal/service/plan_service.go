@@ -2,15 +2,16 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
-	"ascenda/internal/pkg/pagination"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/ovander/backendkit/pagination"
 	"ascenda/internal/repo"
 )
 
@@ -23,6 +24,7 @@ type PlanService struct {
 	// tests can inject any struct that implements repo.PlanDeps.
 	deps              repo.PlanDeps
 	countryRateSvc    *CountryRateConfigService // nil-safe: falls back to hard-coded defaults
+	featurePolicySvc  *FeaturePolicyService     // nil-safe: falls back to hard-coded limits
 	emitter           *event.Emitter
 	logger            *logrus.Entry
 }
@@ -38,6 +40,14 @@ func NewPlanService(planRepo repo.PlanRepository, settingsRepo repo.SettingsRepo
 		emitter:           emitter,
 		logger:            logger,
 	}
+}
+
+// WithFeaturePolicyService attaches the FeaturePolicyService so that plan/scenario
+// limits are read from the DB rather than hardcoded switch statements.
+// Called during service-bundle construction after both services are created.
+func (s *PlanService) WithFeaturePolicyService(fp *FeaturePolicyService) *PlanService {
+	s.featurePolicySvc = fp
+	return s
 }
 
 // ListPlans lists all plans for a tenant with pagination.
@@ -98,8 +108,46 @@ func (s *PlanService) countryForPlan(tenantID, planID uuid.UUID) string {
 	return cfg.Country
 }
 
+// planLimitFor returns the maximum number of business plans allowed for a given
+// commercial plan tier, consulting the FeaturePolicyService when available and
+// falling back to hardcoded defaults for tests that don't inject the service.
+func (s *PlanService) planLimitFor(userPlan string) int64 {
+	if s.featurePolicySvc != nil {
+		n := s.featurePolicySvc.NumericLimit(model.FeatureMaxPlans, userPlan)
+		return int64(n)
+	}
+	// Hardcoded fallback (used by unit tests that don't inject featurePolicySvc).
+	return planLimit(userPlan)
+}
+
+// planLimit is the hardcoded fallback used by tests.
+func planLimit(userPlan string) int64 {
+	switch userPlan {
+	case "freemium":
+		return 1
+	case "pro":
+		return 3
+	default:
+		return -1
+	}
+}
+
 // CreatePlan creates a new business plan with default scenario and configuration.
+// Plan count limits are read from the feature_policies table when available.
 func (s *PlanService) CreatePlan(ctx context.Context, tenantID, createdBy uuid.UUID, name, description, country string) (*model.BusinessPlan, error) {
+	if limit := s.planLimitFor(ctxutil.GetUserPlan(ctx)); limit > 0 {
+		existing, err := s.planRepo.CountByTenant(tenantID)
+		if err != nil {
+			s.logger.WithError(err).Error("failed to count plans for tier check")
+			return nil, apierror.Internal("failed to count plans")
+		}
+		if existing >= limit {
+			return nil, apierror.Forbidden(
+				fmt.Sprintf("your plan is limited to %d business plan(s) — upgrade to create more", limit),
+			)
+		}
+	}
+
 	plan := &model.BusinessPlan{
 		TenantScoped: model.TenantScoped{ID: uuid.New()},
 		Name:         name,
@@ -386,11 +434,46 @@ func (s *PlanService) ListScenarios(ctx context.Context, tenantID, planID uuid.U
 	return scenarios, nil
 }
 
+// scenarioLimitFor returns the maximum number of scenarios allowed per plan,
+// consulting the FeaturePolicyService when available.
+func (s *PlanService) scenarioLimitFor(userPlan string) int {
+	if s.featurePolicySvc != nil {
+		return s.featurePolicySvc.NumericLimit(model.FeatureMaxScenarios, userPlan)
+	}
+	return scenarioLimit(userPlan)
+}
+
+// scenarioLimit is the hardcoded fallback used by tests.
+func scenarioLimit(userPlan string) int {
+	switch userPlan {
+	case "freemium":
+		return 1
+	case "pro":
+		return 3
+	default:
+		return -1
+	}
+}
+
 // CreateScenario creates a new scenario for a plan.
+// Scenario count limits are read from the feature_policies table when available.
 func (s *PlanService) CreateScenario(ctx context.Context, tenantID, planID uuid.UUID, name, description string) (*model.Scenario, error) {
 	// Verify plan exists
 	if _, err := s.GetPlan(ctx, tenantID, planID); err != nil {
 		return nil, err
+	}
+
+	if limit := s.scenarioLimitFor(ctxutil.GetUserPlan(ctx)); limit > 0 {
+		existing, err := s.deps.GetScenario().ListByPlan(tenantID, planID)
+		if err != nil {
+			s.logger.WithError(err).Error("failed to list scenarios for tier check")
+			return nil, apierror.Internal("failed to count scenarios")
+		}
+		if len(existing) >= limit {
+			return nil, apierror.Forbidden(
+				"your plan is limited to " + fmt.Sprintf("%d", limit) + " scenario(s) per plan — upgrade to add more",
+			)
+		}
 	}
 
 	scenario := &model.Scenario{

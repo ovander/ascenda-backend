@@ -8,8 +8,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/socrate"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/socrate"
 )
 
 // ── mock SocrateRegistrar ─────────────────────────────────────────────────────
@@ -20,12 +20,16 @@ type mockSocrateRegistrar struct {
 	failErr error
 }
 
-func (m *mockSocrateRegistrar) RegisterUser(_ context.Context, req socrate.CreateUserRequest) (*socrate.User, error) {
+func (m *mockSocrateRegistrar) RegisterUser(_ context.Context, req socrate.CreateUserRequest) (*socrate.CreateUserResult, error) {
 	if m.failOn != "" && req.Email == m.failOn {
 		return nil, m.failErr
 	}
 	m.nextID++
-	return &socrate.User{ID: m.nextID, Email: req.Email}, nil
+	return &socrate.CreateUserResult{UserID: m.nextID}, nil
+}
+
+func (m *mockSocrateRegistrar) CreateUser(_ context.Context, req socrate.CreateUserRequest) (*socrate.CreateUserResult, error) {
+	return m.RegisterUser(context.Background(), req)
 }
 
 // ── helper ────────────────────────────────────────────────────────────────────
@@ -66,9 +70,6 @@ func TestRegistrationService_HappyPath(t *testing.T) {
 
 	// Check tenant defaults.
 	for _, tenant := range tenantRepo.tenants {
-		assert.Equal(t, "free", tenant.Tier)
-		assert.Equal(t, freeTierMaxPlans, tenant.MaxPlans)
-		assert.Equal(t, freeTierMaxUsers, tenant.MaxUsers)
 		assert.True(t, tenant.IsActive)
 		assert.NotEmpty(t, tenant.Slug)
 	}

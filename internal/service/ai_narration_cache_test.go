@@ -1,14 +1,20 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// noTenant is the zero UUID used in cache tests where tenant scoping is not
+// under test (in-memory cache ignores the tenant ID).
+var noTenant = uuid.Nil
 
 // ============================================================================
 // Helpers
@@ -39,7 +45,7 @@ func tinyCache(maxSize int) *NarrationCache {
 
 func TestNarrationCache_GetMiss_EmptyCache(t *testing.T) {
 	c := tinyCache(10)
-	out, ok := c.Get("missing-key")
+	out, ok := c.Get(noTenant, "missing-key")
 	assert.False(t, ok)
 	assert.Nil(t, out)
 }
@@ -48,9 +54,9 @@ func TestNarrationCache_PutGet_Hit(t *testing.T) {
 	c := tinyCache(10)
 	want := stubOutput("Revenue Summary")
 
-	c.Put("k1", want)
+	c.Put(noTenant, "k1", want)
 
-	got, ok := c.Get("k1")
+	got, ok := c.Get(noTenant, "k1")
 	require.True(t, ok)
 	assert.Equal(t, want.Title, got.Title)
 }
@@ -60,10 +66,10 @@ func TestNarrationCache_Get_ExpiredEntry_ReturnsMiss(t *testing.T) {
 		MaxSize: 10,
 		TTL:     1 * time.Millisecond, // expires almost immediately
 	})
-	c.Put("k1", stubOutput("will expire"))
+	c.Put(noTenant, "k1", stubOutput("will expire"))
 	time.Sleep(5 * time.Millisecond)
 
-	_, ok := c.Get("k1")
+	_, ok := c.Get(noTenant, "k1")
 	assert.False(t, ok, "expired entry should return false")
 	assert.Equal(t, 0, c.Size(), "expired entry should be evicted on Get")
 }
@@ -73,10 +79,10 @@ func TestNarrationCache_UpdateInPlace(t *testing.T) {
 	first := stubOutput("first")
 	second := stubOutput("second")
 
-	c.Put("k1", first)
-	c.Put("k1", second) // update
+	c.Put(noTenant, "k1", first)
+	c.Put(noTenant, "k1", second) // update
 
-	got, ok := c.Get("k1")
+	got, ok := c.Get(noTenant, "k1")
 	require.True(t, ok)
 	assert.Equal(t, "second", got.Title)
 	assert.Equal(t, 1, c.Size(), "update must not grow size")
@@ -85,20 +91,20 @@ func TestNarrationCache_UpdateInPlace(t *testing.T) {
 func TestNarrationCache_LRUEviction_RemovesOldest(t *testing.T) {
 	c := tinyCache(3)
 
-	c.Put("k1", stubOutput("one"))
-	c.Put("k2", stubOutput("two"))
-	c.Put("k3", stubOutput("three"))
+	c.Put(noTenant, "k1", stubOutput("one"))
+	c.Put(noTenant, "k2", stubOutput("two"))
+	c.Put(noTenant, "k3", stubOutput("three"))
 
 	// Access k1 to move it to MRU; k2 becomes oldest.
-	c.Get("k1")
+	c.Get(noTenant, "k1")
 
 	// Adding k4 should evict k2 (oldest unused).
-	c.Put("k4", stubOutput("four"))
+	c.Put(noTenant, "k4", stubOutput("four"))
 	assert.Equal(t, 3, c.Size())
 
-	_, k1ok := c.Get("k1")
-	_, k2ok := c.Get("k2")
-	_, k4ok := c.Get("k4")
+	_, k1ok := c.Get(noTenant, "k1")
+	_, k2ok := c.Get(noTenant, "k2")
+	_, k4ok := c.Get(noTenant, "k4")
 	assert.True(t, k1ok, "k1 (recently accessed) should survive eviction")
 	assert.False(t, k2ok, "k2 (oldest unused) should be evicted")
 	assert.True(t, k4ok, "k4 (just added) should survive eviction")
@@ -106,27 +112,27 @@ func TestNarrationCache_LRUEviction_RemovesOldest(t *testing.T) {
 
 func TestNarrationCache_LRUEviction_OldestByInsertOrder(t *testing.T) {
 	c := tinyCache(2)
-	c.Put("first", stubOutput("first"))
-	c.Put("second", stubOutput("second"))
-	c.Put("third", stubOutput("third")) // should evict "first"
+	c.Put(noTenant, "first", stubOutput("first"))
+	c.Put(noTenant, "second", stubOutput("second"))
+	c.Put(noTenant, "third", stubOutput("third")) // should evict "first"
 
-	_, firstOk := c.Get("first")
-	_, secondOk := c.Get("second")
+	_, firstOk := c.Get(noTenant, "first")
+	_, secondOk := c.Get(noTenant, "second")
 	assert.False(t, firstOk, "first entry should be evicted")
 	assert.True(t, secondOk)
 }
 
 func TestNarrationCache_Flush_EmptiesAll(t *testing.T) {
 	c := tinyCache(10)
-	c.Put("k1", stubOutput("a"))
-	c.Put("k2", stubOutput("b"))
-	c.Put("k3", stubOutput("c"))
+	c.Put(noTenant, "k1", stubOutput("a"))
+	c.Put(noTenant, "k2", stubOutput("b"))
+	c.Put(noTenant, "k3", stubOutput("c"))
 	require.Equal(t, 3, c.Size())
 
 	c.Flush()
 
 	assert.Equal(t, 0, c.Size())
-	_, ok := c.Get("k1")
+	_, ok := c.Get(noTenant, "k1")
 	assert.False(t, ok)
 }
 
@@ -134,13 +140,13 @@ func TestNarrationCache_Size_TracksCorrectly(t *testing.T) {
 	c := tinyCache(10)
 	assert.Equal(t, 0, c.Size())
 
-	c.Put("k1", stubOutput("a"))
+	c.Put(noTenant, "k1", stubOutput("a"))
 	assert.Equal(t, 1, c.Size())
 
-	c.Put("k2", stubOutput("b"))
+	c.Put(noTenant, "k2", stubOutput("b"))
 	assert.Equal(t, 2, c.Size())
 
-	c.Put("k1", stubOutput("a-updated")) // update, not grow
+	c.Put(noTenant, "k1", stubOutput("a-updated")) // update, not grow
 	assert.Equal(t, 2, c.Size())
 }
 
@@ -154,9 +160,9 @@ func TestNarrationCache_ConcurrentAccess_NoDataRace(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			key := fmt.Sprintf("k%d", id)
-			c.Put(key, stubOutput(key))
-			c.Get(key)
-			c.Get(fmt.Sprintf("k%d", (id+1)%goroutines))
+			c.Put(noTenant, key, stubOutput(key))
+			c.Get(noTenant, key)
+			c.Get(noTenant, fmt.Sprintf("k%d", (id+1)%goroutines))
 		}(i)
 	}
 	wg.Wait()
@@ -259,6 +265,92 @@ func TestNarrationCacheKey_AssumptionFlagChange_DifferentKey(t *testing.T) {
 	}
 
 	assert.NotEqual(t, NarrationCacheKey(ctx1), NarrationCacheKey(ctx2))
+}
+
+// ============================================================================
+// LayeredNarrationCache — L1 promotion and write-through
+// ============================================================================
+
+func TestLayeredCache_MissOnBothLayers(t *testing.T) {
+	tenantID := uuid.New()
+	c := NewLayeredNarrationCache(NarrationCacheConfig{MaxSize: 10, TTL: time.Minute}, &stubDBCache{})
+	_, ok := c.Get(tenantID, "nonexistent")
+	assert.False(t, ok)
+}
+
+func TestLayeredCache_PutThenGet_HitsL1(t *testing.T) {
+	tenantID := uuid.New()
+	db := &stubDBCache{}
+	c := NewLayeredNarrationCache(NarrationCacheConfig{MaxSize: 10, TTL: time.Minute}, db)
+
+	out := stubOutput("cached narration")
+	c.Put(tenantID, "k1", out)
+
+	// Both layers should have it.
+	got, ok := c.Get(tenantID, "k1")
+	require.True(t, ok)
+	assert.Equal(t, "cached narration", got.Title)
+	assert.Equal(t, 1, db.putCount, "Put must write to DB layer")
+}
+
+func TestLayeredCache_L2HitPromotesToL1(t *testing.T) {
+	tenantID := uuid.New()
+	// Pre-seed DB layer only.
+	out := stubOutput("from DB")
+	db := &stubDBCache{stored: map[string]*NarrationOutput{"k1": out}}
+	// L1 starts empty.
+	c := NewLayeredNarrationCache(NarrationCacheConfig{MaxSize: 10, TTL: time.Minute}, db)
+
+	// First Get: L1 miss → L2 hit → promote to L1.
+	got, ok := c.Get(tenantID, "k1")
+	require.True(t, ok)
+	assert.Equal(t, "from DB", got.Title)
+
+	// Second Get: should now be served from L1 (no additional DB read).
+	db.getCount = 0
+	_, ok2 := c.Get(tenantID, "k1")
+	require.True(t, ok2)
+	assert.Equal(t, 0, db.getCount, "second Get must be served from L1, not DB")
+}
+
+// ── stubDBCache ───────────────────────────────────────────────────────────────
+
+// stubDBCache is an in-memory stub that satisfies repo.AINarrationCacheRepository.
+type stubDBCache struct {
+	stored   map[string]*NarrationOutput
+	getCount int
+	putCount int
+}
+
+func (s *stubDBCache) Get(_ uuid.UUID, key string) ([]byte, error) {
+	s.getCount++
+	if s.stored == nil {
+		return nil, nil
+	}
+	out, ok := s.stored[key]
+	if !ok {
+		return nil, nil
+	}
+	b, _ := json.Marshal(out)
+	return b, nil
+}
+
+func (s *stubDBCache) Put(_ uuid.UUID, key string, raw []byte) error {
+	s.putCount++
+	if s.stored == nil {
+		s.stored = make(map[string]*NarrationOutput)
+	}
+	var out NarrationOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return err
+	}
+	s.stored[key] = &out
+	return nil
+}
+
+func (s *stubDBCache) DeleteByTenant(_ uuid.UUID) error {
+	s.stored = nil
+	return nil
 }
 
 // ============================================================================

@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -117,7 +118,7 @@ func TestGenerateNarration_CacheMiss_CallsAI_ThenCaches(t *testing.T) {
 
 	// The result must now be in the cache.
 	key := NarrationCacheKey(nCtx)
-	cached, ok := freshCache.Get(key)
+	cached, ok := freshCache.Get(uuid.Nil, key)
 	require.True(t, ok, "result must be stored in cache after AI call")
 	assert.Equal(t, out.Title, cached.Title)
 }
@@ -136,7 +137,7 @@ func TestGenerateNarration_CacheHit_NoAICall(t *testing.T) {
 
 	// Pre-populate the cache with the exact key the service will look up.
 	key := NarrationCacheKey(nCtx)
-	preloadedCache.Put(key, cachedResult)
+	preloadedCache.Put(uuid.Nil, key, cachedResult)
 
 	out, err := svc.GenerateNarration(context.Background(), nCtx)
 	require.NoError(t, err)
@@ -201,7 +202,7 @@ func TestGenerateNarration_CacheKey_ProType_PrePopulated(t *testing.T) {
 
 	nCtx := proCtx(NarrationTypeUnitEconomics)
 	want := stubOutput("Unit Economics — Starter Plan")
-	c.Put(NarrationCacheKey(nCtx), want)
+	c.Put(uuid.Nil, NarrationCacheKey(nCtx), want)
 
 	out, err := svc.GenerateNarration(context.Background(), nCtx)
 	require.NoError(t, err)

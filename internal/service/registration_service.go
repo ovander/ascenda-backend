@@ -11,17 +11,23 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/socrate"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/socrate"
 	"ascenda/internal/repo"
 )
 
-// SocrateRegistrar can create a user using an internally managed service token.
-// Satisfied by *socrate.Client (RegisterUser method).
-// Keeping it separate from SocrateUserManager avoids coupling the admin
-// user-management interface to the self-registration path.
+// SocrateRegistrar can create a user in Socrate via two strategies:
+//
+//   - CreateUser  — forwards the caller's JWT already stored in ctx by AuthMiddleware
+//                   (mirrors GPWA's socrateContext pattern). Works when the inviter is
+//                   a Socrate admin. Used as the primary invite path in InviteUser.
+//   - RegisterUser — uses the backend service-account (client_credentials) token.
+//                   Used for self-service registration where no user JWT is present.
+//
+// Both methods are satisfied by *socrate.Client.
 type SocrateRegistrar interface {
-	RegisterUser(ctx context.Context, req socrate.CreateUserRequest) (*socrate.User, error)
+	CreateUser(ctx context.Context, req socrate.CreateUserRequest) (*socrate.CreateUserResult, error)
+	RegisterUser(ctx context.Context, req socrate.CreateUserRequest) (*socrate.CreateUserResult, error)
 }
 
 // validCountries is the allow-list shown on the registration form.
@@ -34,11 +40,6 @@ var validCountries = map[string]bool{
 // slugRe strips characters that are not alphanumeric or hyphens.
 var slugRe = regexp.MustCompile(`[^a-z0-9-]+`)
 
-// Free-tier limits (corrected from the admin defaults).
-const (
-	freeTierMaxPlans = 1
-	freeTierMaxUsers = 2
-)
 
 // RegistrationService handles self-service account creation.
 type RegistrationService struct {
@@ -101,12 +102,10 @@ func (s *RegistrationService) Register(ctx context.Context, req RegisterRequest)
 	// ── 2. Socrate user creation ────────────────────────────────────────────
 	var socrateExternalID string
 	if s.socrateClient != nil {
-		socrateUser, err := s.socrateClient.RegisterUser(ctx, socrate.CreateUserRequest{
-			Email:     req.Email,
-			FullName:  fullName,
-			FirstName: req.FirstName,
-			LastName:  req.LastName,
-			Role:      "user",
+		socrateResult, err := s.socrateClient.RegisterUser(ctx, socrate.CreateUserRequest{
+			Email: req.Email,
+			Name:  fullName,
+			Role:  "user",
 		})
 		if err != nil {
 			if errors.Is(err, socrate.ErrUserAlreadyExists) {
@@ -115,25 +114,22 @@ func (s *RegistrationService) Register(ctx context.Context, req RegisterRequest)
 			s.logger.WithError(err).WithField("email", req.Email).Error("Socrate RegisterUser failed")
 			return nil, apierror.Internal("failed to create account in identity provider")
 		}
-		socrateExternalID = fmt.Sprintf("%d", socrateUser.ID)
+		socrateExternalID = fmt.Sprintf("%d", socrateResult.UserID)
 		s.logger.WithFields(logrus.Fields{
-			"email":      req.Email,
-			"socrateID":  socrateUser.ID,
+			"email":     req.Email,
+			"socrateID": socrateResult.UserID,
 		}).Info("registration: Socrate user created")
 	} else {
 		s.logger.WithField("email", req.Email).Debug("registration: Socrate not configured, skipping IdP step")
 	}
 
-	// ── 3. Create tenant (free tier) ────────────────────────────────────────
+	// ── 3. Create tenant ────────────────────────────────────────────────────
 	tenantID := uuid.New()
 	tenant := &model.Tenant{
 		ID:       tenantID,
 		Name:     req.CompanyName,
 		Slug:     slug,
-		Tier:     "free",
 		IsActive: true,
-		MaxPlans: freeTierMaxPlans,
-		MaxUsers: freeTierMaxUsers,
 	}
 	if err := s.tenantRepo.Create(tenant); err != nil {
 		s.logger.WithError(err).WithField("email", req.Email).Error("registration: failed to create tenant")
@@ -153,6 +149,7 @@ func (s *RegistrationService) Register(ctx context.Context, req RegisterRequest)
 		Email:      req.Email,
 		Name:       fullName,
 		Role:       "owner",
+		Plan:       "freemium",
 		IsActive:   true,
 		JoinedAt:   &now,
 	}

@@ -523,24 +523,24 @@ func TestParseAIResponse_EmptyTitleGotsFallback(t *testing.T) {
 
 func TestSystemPrompt_AdminOwnerAudience(t *testing.T) {
 	for _, role := range []NarrationUserRole{NarrationRoleAdmin, NarrationRoleOwner} {
-		p := systemPrompt(role)
+		p := systemPrompt(role, "en")
 		assert.Contains(t, p, "Business owner", "role %s prompt should mention business owner", role)
 		assert.Contains(t, p, "Analytical", "role %s prompt should mention analytical tone", role)
 	}
 }
 
 func TestSystemPrompt_UserAudience(t *testing.T) {
-	p := systemPrompt(NarrationRoleUser)
+	p := systemPrompt(NarrationRoleUser, "en")
 	assert.Contains(t, p, "Team member")
 }
 
 func TestSystemPrompt_ViewerAudience(t *testing.T) {
-	p := systemPrompt(NarrationRoleViewer)
+	p := systemPrompt(NarrationRoleViewer, "en")
 	assert.Contains(t, p, "Read-only stakeholder")
 }
 
 func TestSystemPrompt_UnknownRoleUsesBase(t *testing.T) {
-	p := systemPrompt("unknown_role")
+	p := systemPrompt("unknown_role", "en")
 	assert.Contains(t, p, "Ascenda")
 	// Should NOT contain audience-specific sections.
 	assert.NotContains(t, p, "AUDIENCE:")
@@ -549,9 +549,20 @@ func TestSystemPrompt_UnknownRoleUsesBase(t *testing.T) {
 func TestSystemPrompt_AllRolesContainOutputFormat(t *testing.T) {
 	roles := []NarrationUserRole{NarrationRoleAdmin, NarrationRoleOwner, NarrationRoleUser, NarrationRoleViewer}
 	for _, role := range roles {
-		p := systemPrompt(role)
+		p := systemPrompt(role, "en")
 		assert.Contains(t, p, "OUTPUT FORMAT", "role %s prompt must describe expected JSON format", role)
 	}
+}
+
+func TestSystemPrompt_FrenchLanguageInstruction(t *testing.T) {
+	p := systemPrompt(NarrationRoleAdmin, "fr")
+	assert.Contains(t, p, "LANGUAGE:", "French prompt must include LANGUAGE instruction")
+	assert.Contains(t, p, "French", "French prompt must name the language")
+}
+
+func TestSystemPrompt_EnglishNoLanguageInstruction(t *testing.T) {
+	p := systemPrompt(NarrationRoleAdmin, "en")
+	assert.NotContains(t, p, "LANGUAGE:", "English prompt must not add LANGUAGE instruction")
 }
 
 // ============================================================================

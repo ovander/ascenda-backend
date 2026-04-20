@@ -1,224 +1,201 @@
 // Package service — AI narration result cache.
 //
-// # Design rationale
+// Infrastructure is delegated to github.com/ovander/backendkit/ainarration:
+//   - CacheConfig / DefaultCacheConfig — tunable LRU+TTL parameters
+//   - NarrationCache (in-memory) — LRU eviction + TTL via ainarration.NarrationCache;
+//     Ascenda's domain-specific NarrationOutput is JSON-serialised into
+//     ainarration.NarrationOutput.Narrative so the backendkit mechanics are
+//     reused without coupling to backendkit's generic output type.
+//   - CacheKey — SHA-256 content-addressed key computation
 //
-// AI API calls are expensive (latency + cost). Two consecutive narration
-// requests for the *same financial data* should return the same result without
-// hitting the AI provider again.
-//
-// The cache is content-addressed: the key is derived from a SHA-256 hash of
-// the full NarrationContext. If any input field changes (a single assumption,
-// a product KPI, the narration type) the hash changes and the old entry is
-// never served. No explicit invalidation events are needed.
-//
-// The key also includes the narration feature type and the user role because
-// both influence the prompt and therefore the narration text.
-//
-// Entries expire after a configurable TTL (default 2 h). This prevents
-// unbounded growth and ensures that even stale-but-hash-identical contexts
-// eventually rotate out.
-//
-// The cache is purely in-process (no Redis dependency). For multi-instance
-// deployments a shared cache layer can be added later without changing the
-// service interface.
+// DB-backed and layered cache implementations remain Ascenda-specific because
+// they depend on Ascenda's repo layer and the richer NarrationOutput schema.
 package service
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"sync"
-	"time"
+
+	"github.com/google/uuid"
+	"github.com/ovander/backendkit/ainarration"
+	"ascenda/internal/repo"
 )
 
 // ============================================================================
-// Cache configuration
+// NarrationCacher — interface
 // ============================================================================
 
-const (
-	// DefaultNarrationCacheSize is the maximum number of cached narration results.
-	// Each entry holds a NarrationOutput (~1–4 KB of JSON), so 200 entries ≈ < 1 MB.
-	DefaultNarrationCacheSize = 200
+// NarrationCacher is the interface satisfied by all cache implementations.
+// tenantID is required so DB-backed implementations can scope storage per
+// tenant. In-memory implementations may ignore it (the content hash in the
+// key already provides effective tenant isolation).
+type NarrationCacher interface {
+	Get(tenantID uuid.UUID, key string) (*NarrationOutput, bool)
+	Put(tenantID uuid.UUID, key string, output *NarrationOutput)
+	Flush()
+	Size() int
+}
 
-	// DefaultNarrationCacheTTL is the time-to-live for a cached narration result.
-	// After this duration the entry is treated as a miss and the AI is called again.
-	DefaultNarrationCacheTTL = 2 * time.Hour
-)
+// ============================================================================
+// Cache configuration — delegated to backendkit/ainarration
+// ============================================================================
 
 // NarrationCacheConfig holds tunable parameters for the narration cache.
-type NarrationCacheConfig struct {
-	MaxSize int
-	TTL     time.Duration
-}
+// It is a type alias for ainarration.CacheConfig so the two packages stay in sync.
+type NarrationCacheConfig = ainarration.CacheConfig
 
-// DefaultNarrationCacheConfig returns the recommended production defaults.
+// DefaultNarrationCacheConfig returns the recommended production defaults
+// (200 entries, 2-hour TTL) from backendkit.
 func DefaultNarrationCacheConfig() NarrationCacheConfig {
-	return NarrationCacheConfig{
-		MaxSize: DefaultNarrationCacheSize,
-		TTL:     DefaultNarrationCacheTTL,
-	}
+	return ainarration.DefaultCacheConfig()
 }
 
 // ============================================================================
-// NarrationCache — LRU + TTL in-memory cache
+// NarrationCache — in-memory LRU+TTL (backed by ainarration.NarrationCache)
 // ============================================================================
 
-// NarrationCache stores AI narration results keyed by a content hash.
+// NarrationCache is an in-memory LRU+TTL cache of AI narration results.
+// It wraps ainarration.NarrationCache, serialising Ascenda's NarrationOutput
+// into the generic Narrative field so no LRU/TTL logic is duplicated here.
 // It is safe for concurrent use.
 type NarrationCache struct {
-	mu      sync.RWMutex
-	entries map[string]*narrationCacheEntry // key → entry
-	order   []string                        // LRU order (oldest first)
-	cfg     NarrationCacheConfig
-}
-
-type narrationCacheEntry struct {
-	output    *NarrationOutput
-	createdAt time.Time
+	inner *ainarration.NarrationCache
 }
 
 // NewNarrationCache creates a NarrationCache with the given configuration.
 func NewNarrationCache(cfg NarrationCacheConfig) *NarrationCache {
-	if cfg.MaxSize <= 0 {
-		cfg.MaxSize = DefaultNarrationCacheSize
-	}
-	if cfg.TTL <= 0 {
-		cfg.TTL = DefaultNarrationCacheTTL
-	}
-	return &NarrationCache{
-		entries: make(map[string]*narrationCacheEntry, cfg.MaxSize),
-		order:   make([]string, 0, cfg.MaxSize),
-		cfg:     cfg,
-	}
+	return &NarrationCache{inner: ainarration.NewNarrationCache(cfg)}
 }
 
-// Get retrieves a cached narration result for the given context.
-// Returns (nil, false) on a miss or if the entry has expired.
-func (c *NarrationCache) Get(key string) (*NarrationOutput, bool) {
-	c.mu.RLock()
-	entry, ok := c.entries[key]
-	c.mu.RUnlock()
-
-	if !ok {
+// Get retrieves a cached narration result. Returns (nil, false) on a miss or
+// if the entry has expired.
+func (c *NarrationCache) Get(tenantID uuid.UUID, key string) (*NarrationOutput, bool) {
+	raw, ok := c.inner.Get(tenantID, key)
+	if !ok || raw == nil {
 		return nil, false
 	}
-
-	// Expired?
-	if time.Since(entry.createdAt) > c.cfg.TTL {
-		c.mu.Lock()
-		delete(c.entries, key)
-		c.removeFromOrder(key)
-		c.mu.Unlock()
+	var out NarrationOutput
+	if err := json.Unmarshal([]byte(raw.Narrative), &out); err != nil {
 		return nil, false
 	}
-
-	// Promote to most-recently-used position.
-	c.mu.Lock()
-	c.moveToEnd(key)
-	c.mu.Unlock()
-
-	return entry.output, true
+	return &out, true
 }
 
-// Put stores a narration result under the given key.
-func (c *NarrationCache) Put(key string, output *NarrationOutput) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Update in place if the key is already present.
-	if _, ok := c.entries[key]; ok {
-		c.entries[key] = &narrationCacheEntry{output: output, createdAt: time.Now()}
-		c.moveToEnd(key)
+// Put stores output under key. Evicts the LRU entry when at capacity.
+func (c *NarrationCache) Put(tenantID uuid.UUID, key string, output *NarrationOutput) {
+	b, err := json.Marshal(output)
+	if err != nil {
 		return
 	}
-
-	// Evict the oldest entry when at capacity.
-	for len(c.entries) >= c.cfg.MaxSize && len(c.order) > 0 {
-		oldest := c.order[0]
-		c.order = c.order[1:]
-		delete(c.entries, oldest)
-	}
-
-	c.entries[key] = &narrationCacheEntry{output: output, createdAt: time.Now()}
-	c.order = append(c.order, key)
+	c.inner.Put(tenantID, key, &ainarration.NarrationOutput{Narrative: string(b)})
 }
 
-// Size returns the current number of cached entries (useful for tests / metrics).
-func (c *NarrationCache) Size() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return len(c.entries)
-}
+// Size returns the current number of cached entries.
+func (c *NarrationCache) Size() int { return c.inner.Size() }
 
-// Flush removes all entries from the cache. Useful for testing.
-func (c *NarrationCache) Flush() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.entries = make(map[string]*narrationCacheEntry, c.cfg.MaxSize)
-	c.order = c.order[:0]
-}
-
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
-// moveToEnd promotes key to the most-recently-used position.
-// Must be called with c.mu held (write lock).
-func (c *NarrationCache) moveToEnd(key string) {
-	for i, k := range c.order {
-		if k == key {
-			c.order = append(c.order[:i], c.order[i+1:]...)
-			c.order = append(c.order, key)
-			return
-		}
-	}
-}
-
-// removeFromOrder removes key from the LRU order slice.
-// Must be called with c.mu held (write lock).
-func (c *NarrationCache) removeFromOrder(key string) {
-	for i, k := range c.order {
-		if k == key {
-			c.order = append(c.order[:i], c.order[i+1:]...)
-			return
-		}
-	}
-}
+// Flush empties the cache. Useful in tests.
+func (c *NarrationCache) Flush() { c.inner.Flush() }
 
 // ============================================================================
-// Cache key computation
+// Cache key computation — delegated to backendkit/ainarration
 // ============================================================================
 
 // NarrationCacheKey computes a deterministic cache key from a NarrationContext.
 //
-// Key structure: "<featureType>:<role>:<sha256prefix>"
+// Key format: "<narratType>:<role>:<sha256-16-chars>"
 //
-// The SHA-256 is computed over the canonical JSON serialisation of the context.
-// Because Go's encoding/json marshals struct fields in declaration order, the
-// output is deterministic for the same input values. The first 16 hex chars
-// (64 bits of entropy) are used; the probability of a collision within a 200-
-// entry cache is negligible.
-//
-// The narration type is included in the hash (it is a field of NarrationContext),
-// but also surfaced in the prefix so cache keys are human-readable in logs.
+// Delegates to ainarration.CacheKey for consistent key derivation across
+// all Kerplan services that use backendkit.
 func NarrationCacheKey(nCtx *NarrationContext) string {
-	b, err := json.Marshal(nCtx)
-	if err != nil {
-		// Fallback: non-cacheable key that will never match a stored entry.
-		// This path is unreachable in practice (NarrationContext is always serialisable).
-		return fmt.Sprintf("err:uncacheable:%d", time.Now().UnixNano())
-	}
-
-	sum := sha256.Sum256(b)
-	hashPrefix := hex.EncodeToString(sum[:])[:16]
-
-	role := string(nCtx.UserRole)
-	if role == "" {
-		role = "unknown"
-	}
-	featureType := string(nCtx.NarrationType)
-	if featureType == "" {
-		featureType = "inferred"
-	}
-
-	return fmt.Sprintf("%s:%s:%s", featureType, role, hashPrefix)
+	return ainarration.CacheKey(string(nCtx.NarrationType), string(nCtx.UserRole), nCtx)
 }
+
+// ============================================================================
+// DBNarrationCache — DB-backed implementation of NarrationCacher
+// ============================================================================
+
+// DBNarrationCache stores narration results in PostgreSQL.
+// It satisfies NarrationCacher and is safe for concurrent use.
+type DBNarrationCache struct {
+	repo repo.AINarrationCacheRepository
+}
+
+// NewDBNarrationCache creates a DB-backed cache.
+func NewDBNarrationCache(r repo.AINarrationCacheRepository) *DBNarrationCache {
+	return &DBNarrationCache{repo: r}
+}
+
+func (c *DBNarrationCache) Get(tenantID uuid.UUID, key string) (*NarrationOutput, bool) {
+	raw, err := c.repo.Get(tenantID, key)
+	if err != nil || raw == nil {
+		return nil, false
+	}
+	var out NarrationOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, false
+	}
+	return &out, true
+}
+
+func (c *DBNarrationCache) Put(tenantID uuid.UUID, key string, output *NarrationOutput) {
+	raw, err := json.Marshal(output)
+	if err != nil {
+		return
+	}
+	_ = c.repo.Put(tenantID, key, raw)
+}
+
+// Flush is a no-op for the DB cache — use DeleteByTenant on the repo directly
+// for targeted eviction.
+func (c *DBNarrationCache) Flush() {}
+
+// Size is not tracked efficiently in the DB implementation; returns -1.
+func (c *DBNarrationCache) Size() int { return -1 }
+
+// ============================================================================
+// LayeredNarrationCache — L1 (in-memory) + L2 (DB)
+// ============================================================================
+
+// LayeredNarrationCache combines a fast in-memory L1 cache with a persistent
+// DB L2 cache.
+//
+// Read path:  L1 hit → return immediately.
+//
+//	L1 miss + L2 hit → promote to L1, return.
+//	Both miss → return (nil, false) — caller will call AI.
+//
+// Write path: Always write to both L1 and L2.
+type LayeredNarrationCache struct {
+	l1 *NarrationCache
+	l2 *DBNarrationCache
+}
+
+// NewLayeredNarrationCache creates a two-layer cache.
+func NewLayeredNarrationCache(l1Cfg NarrationCacheConfig, dbRepo repo.AINarrationCacheRepository) *LayeredNarrationCache {
+	return &LayeredNarrationCache{
+		l1: NewNarrationCache(l1Cfg),
+		l2: NewDBNarrationCache(dbRepo),
+	}
+}
+
+func (c *LayeredNarrationCache) Get(tenantID uuid.UUID, key string) (*NarrationOutput, bool) {
+	if out, ok := c.l1.Get(tenantID, key); ok {
+		return out, true
+	}
+	if out, ok := c.l2.Get(tenantID, key); ok {
+		c.l1.Put(tenantID, key, out)
+		return out, true
+	}
+	return nil, false
+}
+
+func (c *LayeredNarrationCache) Put(tenantID uuid.UUID, key string, output *NarrationOutput) {
+	c.l1.Put(tenantID, key, output)
+	c.l2.Put(tenantID, key, output)
+}
+
+func (c *LayeredNarrationCache) Flush() {
+	c.l1.Flush()
+	c.l2.Flush()
+}
+
+func (c *LayeredNarrationCache) Size() int { return c.l1.Size() }

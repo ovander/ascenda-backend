@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,7 +13,8 @@ import (
 	"gorm.io/gorm"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/repo"
 )
 
@@ -265,6 +267,71 @@ func TestPlanService_CreatePlan_Success(t *testing.T) {
 	retrieved, err := svc.GetPlan(ctx, tenantID, plan.ID)
 	require.NoError(t, err)
 	assert.Equal(t, plan.Name, retrieved.Name)
+}
+
+func TestPlanService_CreatePlan_FreemiumLimitedTo1(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+
+	planRepo := newInMemPlanRepo()
+	settingsRepo := newInMemSettingsRepo()
+	scenarioRepo := newInMemScenarioRepo()
+	deps := &mockPlanDeps{scenarioRepo: scenarioRepo}
+	svc := newTestPlanService(planRepo, settingsRepo, deps)
+
+	ctx := ctxutil.WithUserPlan(context.Background(), "freemium")
+
+	// First plan must succeed.
+	_, err := svc.CreatePlan(ctx, tenantID, userID, "Plan 1", "", "BE")
+	require.NoError(t, err)
+
+	// Second plan must be rejected.
+	_, err = svc.CreatePlan(ctx, tenantID, userID, "Plan 2", "", "BE")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "1")
+}
+
+func TestPlanService_CreatePlan_ProLimitedTo3(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+
+	planRepo := newInMemPlanRepo()
+	settingsRepo := newInMemSettingsRepo()
+	scenarioRepo := newInMemScenarioRepo()
+	deps := &mockPlanDeps{scenarioRepo: scenarioRepo}
+	svc := newTestPlanService(planRepo, settingsRepo, deps)
+
+	ctx := ctxutil.WithUserPlan(context.Background(), "pro")
+
+	// Three plans must succeed.
+	for i := 1; i <= 3; i++ {
+		_, err := svc.CreatePlan(ctx, tenantID, userID, fmt.Sprintf("Plan %d", i), "", "BE")
+		require.NoError(t, err, "plan %d should be allowed on Pro", i)
+	}
+
+	// Fourth plan must be rejected.
+	_, err := svc.CreatePlan(ctx, tenantID, userID, "Plan 4", "", "BE")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "3")
+}
+
+func TestPlanService_CreatePlan_EnterpriseUnlimited(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+
+	planRepo := newInMemPlanRepo()
+	settingsRepo := newInMemSettingsRepo()
+	scenarioRepo := newInMemScenarioRepo()
+	deps := &mockPlanDeps{scenarioRepo: scenarioRepo}
+	svc := newTestPlanService(planRepo, settingsRepo, deps)
+
+	ctx := ctxutil.WithUserPlan(context.Background(), "enterprise")
+
+	// Enterprise users must be able to create more than 3 plans.
+	for i := 1; i <= 5; i++ {
+		_, err := svc.CreatePlan(ctx, tenantID, userID, fmt.Sprintf("Plan %d", i), "", "BE")
+		require.NoError(t, err, "plan %d should be allowed on Enterprise", i)
+	}
 }
 
 // ── UpdatePlan tests ───────────────────────────────────────────────────────────

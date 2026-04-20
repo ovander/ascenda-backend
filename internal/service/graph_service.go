@@ -8,7 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/compute"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
 )
 
 // ChartDataset mirrors the frontend ChartDataset interface.

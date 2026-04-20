@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -15,7 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/repo"
 )
 
@@ -271,7 +273,8 @@ func TestPlanService_CreateScenario_RepoError(t *testing.T) {
 
 func TestPlanService_CreateScenario_MultipleScenariosIndependent(t *testing.T) {
 	tb := newScenarioTestBed(t)
-	ctx := context.Background()
+	// Use enterprise context so the unlimited tier allows multiple scenarios.
+	ctx := ctxutil.WithUserPlan(context.Background(), "enterprise")
 
 	sc1, err := tb.svc.CreateScenario(ctx, tb.tenantID, tb.planID, "Base", "Base desc")
 	require.NoError(t, err)
@@ -283,6 +286,57 @@ func TestPlanService_CreateScenario_MultipleScenariosIndependent(t *testing.T) {
 	assert.Equal(t, "High", sc2.Name)
 	assert.Equal(t, "Base desc", sc1.Description)
 	assert.Equal(t, "High desc", sc2.Description)
+}
+
+// ── Scenario tier limits ──────────────────────────────────────────────────────
+
+func TestPlanService_CreateScenario_FreemiumLimitedTo1(t *testing.T) {
+	tb := newScenarioTestBed(t)
+	ctx := ctxutil.WithUserPlan(context.Background(), "freemium")
+
+	// First scenario should succeed.
+	_, err := tb.svc.CreateScenario(ctx, tb.tenantID, tb.planID, "Base", "")
+	require.NoError(t, err)
+
+	// Second scenario must fail with 403.
+	_, err = tb.svc.CreateScenario(ctx, tb.tenantID, tb.planID, "Optimistic", "")
+	require.Error(t, err)
+	var apiErr *apierror.AppError
+	if assert.ErrorAs(t, err, &apiErr) {
+		assert.Equal(t, 403, apiErr.StatusCode)
+		assert.Contains(t, apiErr.Message, fmt.Sprintf("%d scenario(s)", 1))
+	}
+}
+
+func TestPlanService_CreateScenario_ProLimitedTo3(t *testing.T) {
+	tb := newScenarioTestBed(t)
+	ctx := ctxutil.WithUserPlan(context.Background(), "pro")
+
+	// First three scenarios should succeed.
+	for i := 1; i <= 3; i++ {
+		_, err := tb.svc.CreateScenario(ctx, tb.tenantID, tb.planID, fmt.Sprintf("Scenario %d", i), "")
+		require.NoError(t, err, "scenario %d should be created without error", i)
+	}
+
+	// Fourth scenario must fail with 403.
+	_, err := tb.svc.CreateScenario(ctx, tb.tenantID, tb.planID, "Scenario 4", "")
+	require.Error(t, err)
+	var apiErr *apierror.AppError
+	if assert.ErrorAs(t, err, &apiErr) {
+		assert.Equal(t, 403, apiErr.StatusCode)
+		assert.Contains(t, apiErr.Message, fmt.Sprintf("%d scenario(s)", 3))
+	}
+}
+
+func TestPlanService_CreateScenario_EnterpriseUnlimited(t *testing.T) {
+	tb := newScenarioTestBed(t)
+	ctx := ctxutil.WithUserPlan(context.Background(), "enterprise")
+
+	// Enterprise should allow well beyond the pro limit.
+	for i := 1; i <= 5; i++ {
+		_, err := tb.svc.CreateScenario(ctx, tb.tenantID, tb.planID, fmt.Sprintf("Scenario %d", i), "")
+		require.NoError(t, err, "enterprise scenario %d should not be blocked", i)
+	}
 }
 
 // ── UpdateScenario ────────────────────────────────────────────────────────────
@@ -430,7 +484,8 @@ func TestPlanService_Scenario_DescriptionRoundTrip(t *testing.T) {
 func TestPlanService_CreateScenario_InheritsCountryFromPlan(t *testing.T) {
 	// Seed a scenario with a config so countryForPlan returns "FR".
 	tb := newScenarioTestBed(t)
-	ctx := context.Background()
+	// Use enterprise context so the unlimited tier allows multiple scenarios.
+	ctx := ctxutil.WithUserPlan(context.Background(), "enterprise")
 
 	// Create first scenario, mark it as default, and set its config country to "FR".
 	sc1, err := tb.svc.CreateScenario(ctx, tb.tenantID, tb.planID, "First", "")

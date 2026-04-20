@@ -12,13 +12,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/socrate"
 )
 
 // SocrateMailer can dispatch a passwordless sign-in email via Socrate.
-// Satisfied by *socrate.Client (SendMagicLink method).
+// Satisfied by *socrate.Client. Socrate generates the magic link server-side;
+// the verify URL is configured on the Socrate application, not passed per-call.
 type SocrateMailer interface {
-	SendMagicLink(ctx context.Context, email, callbackURL string) error
+	SendMagicLink(ctx context.Context, email string) (*socrate.MagicLinkResponse, error)
 }
 
 const (
@@ -82,11 +84,11 @@ func (s *MagicLinkService) SendMagicLink(ctx context.Context, email, redirectURL
 		return apierror.Internal("failed to generate sign-in link")
 	}
 
-	// Build the verify URL that Socrate will embed in the email.
+	// Build the local verify URL for dev logging (Socrate sends its own link in production).
 	verifyURL := fmt.Sprintf("%s/auth/magic-link/verify?token=%s", s.appBaseURL, rawToken)
 
 	if s.mailer != nil {
-		if err := s.mailer.SendMagicLink(ctx, email, verifyURL); err != nil {
+		if _, err := s.mailer.SendMagicLink(ctx, email); err != nil {
 			// Log but do NOT fail — token is stored, a retry or manual link is possible.
 			s.logger.WithError(err).WithField("email", email).Warn("magic-link: Socrate email dispatch failed (non-fatal)")
 		}

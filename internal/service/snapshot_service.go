@@ -8,9 +8,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
-	"ascenda/internal/pkg/pagination"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/ovander/backendkit/pagination"
 	"ascenda/internal/repo"
 )
 

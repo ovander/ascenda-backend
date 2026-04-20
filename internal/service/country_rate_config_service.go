@@ -2,12 +2,13 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/repo"
 )
 
@@ -95,6 +96,51 @@ type UpdateCountryRateConfigRequest struct {
 	VATRate          *decimal.Decimal `json:"vatRate,omitempty"`
 	EmployerTaxRate  *decimal.Decimal `json:"employerTaxRate,omitempty"`
 	MLTInterestRate  *decimal.Decimal `json:"mltInterestRate,omitempty"`
+}
+
+// CreateCountryRateConfigRequest is the admin create payload.
+type CreateCountryRateConfigRequest struct {
+	CountryCode      string          `json:"countryCode"`
+	CountryName      string          `json:"countryName"`
+	CorporateTaxRate decimal.Decimal `json:"corporateTaxRate"`
+	VATRate          decimal.Decimal `json:"vatRate"`
+	EmployerTaxRate  decimal.Decimal `json:"employerTaxRate"`
+	MLTInterestRate  decimal.Decimal `json:"mltInterestRate"`
+	Language         string          `json:"language"`
+	CurrencySymbol   string          `json:"currencySymbol"`
+}
+
+// Create inserts a brand-new country rate config. Returns a conflict error if
+// the country code already exists.
+func (s *CountryRateConfigService) Create(req CreateCountryRateConfigRequest) (*model.CountryRateConfig, error) {
+	code := strings.ToUpper(strings.TrimSpace(req.CountryCode))
+	if len(code) != 2 {
+		return nil, apierror.BadRequest("country code must be exactly 2 characters (ISO 3166-1 alpha-2)")
+	}
+	if strings.TrimSpace(req.CountryName) == "" {
+		return nil, apierror.BadRequest("country name is required")
+	}
+	existing, err := s.repo.GetByCode(code)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, apierror.Internal("failed to check existing country config")
+	}
+	if existing != nil {
+		return nil, apierror.Conflict("a country config with code " + code + " already exists")
+	}
+	cfg := &model.CountryRateConfig{
+		CountryCode:      code,
+		CountryName:      req.CountryName,
+		CorporateTaxRate: req.CorporateTaxRate,
+		VATRate:          req.VATRate,
+		EmployerTaxRate:  req.EmployerTaxRate,
+		MLTInterestRate:  req.MLTInterestRate,
+		Language:         req.Language,
+		CurrencySymbol:   req.CurrencySymbol,
+	}
+	if err := s.repo.Upsert(cfg); err != nil {
+		return nil, apierror.Internal("failed to create country config")
+	}
+	return cfg, nil
 }
 
 // Update applies a partial update to an existing country rate config.

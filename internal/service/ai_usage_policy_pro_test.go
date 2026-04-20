@@ -23,9 +23,14 @@ func proLookup() *model.AIUsagePolicyLookup {
 
 func TestDefaultAIUsagePolicies_TotalCount_FullMatrix(t *testing.T) {
 	policies := model.DefaultAIUsagePolicies()
-	// 4 roles × 3 tiers × 13 features = 156 entries.
-	assert.Equal(t, 156, len(policies),
-		"expected 4 roles × 3 tiers × 13 features = 156 policy entries")
+	// 4 roles × 4 tiers × 13 features = 208 entries.
+	// Freemium tier: 3 non-admin roles × 13 features = 39 (admin bypasses tier restrictions).
+	// Admin: 4 tiers × 13 features = 52.
+	// Owner/User: 3 paid tiers × 13 features each = 26 (5 standard + 7 pro driver + 1 investor) × 3 tiers.
+	// Viewer: 3 paid tiers × 13 features each.
+	// Total: 4 roles × 4 tiers × 13 features = 208 unique entries.
+	assert.Equal(t, 208, len(policies),
+		"expected 4 roles × 4 tiers × 13 features = 208 policy entries (no duplicates)")
 }
 
 // ============================================================================

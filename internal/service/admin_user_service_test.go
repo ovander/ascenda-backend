@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/socrate"
+	"github.com/ovander/backendkit/socrate"
 )
 
 // ── Mock Socrate client ───────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ func (m *mockSocrateClient) GetUser(_ context.Context, userID string) (*socrate.
 	return m.users[userID], nil
 }
 
-func (m *mockSocrateClient) CreateUser(_ context.Context, req socrate.CreateUserRequest) (*socrate.User, error) {
+func (m *mockSocrateClient) CreateUser(_ context.Context, req socrate.CreateUserRequest) (*socrate.CreateUserResult, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -82,31 +82,25 @@ func (m *mockSocrateClient) CreateUser(_ context.Context, req socrate.CreateUser
 	u := &socrate.User{
 		ID:        m.nextID,
 		Email:     req.Email,
-		Name:      req.FullName,
+		Name:      req.Name,
 		Role:      req.Role,
-		Status:    "pending",
 		CreatedAt: time.Now(),
 	}
 	m.nextID++
 	m.users[fmt.Sprintf("%d", u.ID)] = u
-	return u, nil
+	return &socrate.CreateUserResult{UserID: u.ID, Role: u.Role}, nil
 }
 
-func (m *mockSocrateClient) UpdateUser(_ context.Context, userID string, req socrate.UpdateUserRequest) (*socrate.User, error) {
+func (m *mockSocrateClient) UpdateUserRole(_ context.Context, userID string, role string) error {
 	if m.err != nil {
-		return nil, m.err
+		return m.err
 	}
 	u, ok := m.users[userID]
 	if !ok {
-		return nil, errors.New("not found")
+		return errors.New("not found")
 	}
-	if req.FullName != nil {
-		u.Name = *req.FullName
-	}
-	if req.Role != nil {
-		u.Role = *req.Role
-	}
-	return u, nil
+	u.Role = role
+	return nil
 }
 
 func (m *mockSocrateClient) DeleteUser(_ context.Context, userID string) error {
@@ -121,7 +115,7 @@ func (m *mockSocrateClient) ResendVerification(_ context.Context, _ string) erro
 	return m.err
 }
 
-func (m *mockSocrateClient) ResetPassword(_ context.Context, _ string) error {
+func (m *mockSocrateClient) ForcePasswordReset(_ context.Context, _ string) error {
 	return m.err
 }
 
@@ -343,7 +337,7 @@ func TestAdminUserService_ListUsers_EnrichesWithAscendaData(t *testing.T) {
 
 	// Tenant and matching Ascenda user record
 	tenantID := uuid.New()
-	tenantRepo.Create(&model.Tenant{ID: tenantID, Name: "Acme Corp", Slug: "acme", Tier: "pro", IsActive: true})
+	tenantRepo.Create(&model.Tenant{ID: tenantID, Name: "Acme Corp", Slug: "acme", IsActive: true})
 	ascendaUser := &model.User{
 		ID:         uuid.New(),
 		TenantID:   tenantID,
@@ -500,6 +494,194 @@ func TestAdminUserService_UpdateUser_InvalidRole(t *testing.T) {
 	assert.Error(t, err, "should reject Ascenda-only role 'owner'")
 }
 
+func TestAdminUserService_UpdateUser_Plan_UpgradesToPro(t *testing.T) {
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 20, Email: "alice@example.com", Name: "Alice", Role: "user"})
+	svc, userRepo, tenantRepo := newTestAdminUserService(sc)
+
+	// Add a local Ascenda user record linked via ExternalID
+	tenantID := uuid.New()
+	tenantRepo.Create(&model.Tenant{ID: tenantID, Name: "ACME", Slug: "acme"})
+	localUser := &model.User{
+		ID:         uuid.New(),
+		TenantID:   tenantID,
+		ExternalID: "20",
+		Email:      "alice@example.com",
+		Name:       "Alice",
+		Plan:       "freemium",
+		Role:       "user",
+		IsActive:   true,
+	}
+	userRepo.addUser(localUser)
+
+	proPlan := "pro"
+	dto, err := svc.UpdateUser(context.Background(), "20", UpdateUserRequest{Plan: &proPlan})
+	require.NoError(t, err)
+	// Plan is a local-only field → service returns nil DTO (handler sends 204).
+	assert.Nil(t, dto, "plan-only change should return nil DTO")
+
+	// Verify the local DB record was mutated
+	updated, _ := userRepo.GetByExternalID("20")
+	assert.Equal(t, "pro", updated.Plan, "local user record should be persisted as pro")
+}
+
+func TestAdminUserService_UpdateUser_Plan_DowngradesToFreemium(t *testing.T) {
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 21, Email: "bob@example.com", Name: "Bob", Role: "user"})
+	svc, userRepo, tenantRepo := newTestAdminUserService(sc)
+
+	tenantID := uuid.New()
+	tenantRepo.Create(&model.Tenant{ID: tenantID, Name: "Startup", Slug: "startup"})
+	localUser := &model.User{
+		ID:         uuid.New(),
+		TenantID:   tenantID,
+		ExternalID: "21",
+		Email:      "bob@example.com",
+		Name:       "Bob",
+		Plan:       "enterprise",
+		Role:       "user",
+		IsActive:   true,
+	}
+	userRepo.addUser(localUser)
+
+	freemiumPlan := "freemium"
+	dto, err := svc.UpdateUser(context.Background(), "21", UpdateUserRequest{Plan: &freemiumPlan})
+	require.NoError(t, err)
+	assert.Nil(t, dto, "plan-only change should return nil DTO")
+
+	updated, _ := userRepo.GetByExternalID("21")
+	assert.Equal(t, "freemium", updated.Plan)
+}
+
+func TestAdminUserService_UpdateUser_Plan_InvalidValue(t *testing.T) {
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 22, Email: "carol@example.com", Name: "Carol", Role: "user"})
+	svc, _, _ := newTestAdminUserService(sc)
+
+	badPlan := "premium_plus"
+	_, err := svc.UpdateUser(context.Background(), "22", UpdateUserRequest{Plan: &badPlan})
+	assert.Error(t, err, "should reject unknown plan value")
+	assert.Contains(t, err.Error(), "invalid plan")
+}
+
+func TestAdminUserService_UpdateUser_Plan_NoLocalRecord_IsNoop(t *testing.T) {
+	// If there is no local user record (e.g. user never logged in), plan update
+	// should succeed without error — Socrate update goes through fine.
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 23, Email: "ghost@example.com", Name: "Ghost", Role: "user"})
+	svc, _, _ := newTestAdminUserService(sc)
+
+	proPlan := "pro"
+	dto, err := svc.UpdateUser(context.Background(), "23", UpdateUserRequest{Plan: &proPlan})
+	require.NoError(t, err)
+	// Plan is local-only → nil DTO regardless of whether a local record exists.
+	assert.Nil(t, dto, "plan-only change should return nil DTO")
+}
+
+func TestAdminUserService_UpdateUser_Plan_CombinedWithFullName(t *testing.T) {
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 24, Email: "diana@example.com", Name: "Diana", Role: "user"})
+	svc, userRepo, tenantRepo := newTestAdminUserService(sc)
+
+	tenantID := uuid.New()
+	tenantRepo.Create(&model.Tenant{ID: tenantID, Name: "Corp", Slug: "corp"})
+	localUser := &model.User{
+		ID:         uuid.New(),
+		TenantID:   tenantID,
+		ExternalID: "24",
+		Email:      "diana@example.com",
+		Name:       "Diana",
+		Plan:       "freemium",
+		Role:       "user",
+		IsActive:   true,
+	}
+	userRepo.addUser(localUser)
+
+	newName := "Diana Prince"
+	proPlan := "pro"
+	dto, err := svc.UpdateUser(context.Background(), "24", UpdateUserRequest{
+		FullName: &newName,
+		Plan:     &proPlan,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Diana Prince", dto.Name)
+	require.NotNil(t, dto.Plan)
+	assert.Equal(t, "pro", *dto.Plan)
+
+	updated, _ := userRepo.GetByExternalID("24")
+	assert.Equal(t, "pro", updated.Plan)
+}
+
+func TestAdminUserService_UpdateUser_AscendaRole_ChangesToOwner(t *testing.T) {
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 25, Email: "eve@example.com", Name: "Eve", Role: "user"})
+	svc, userRepo, tenantRepo := newTestAdminUserService(sc)
+
+	tenantID := uuid.New()
+	tenantRepo.Create(&model.Tenant{ID: tenantID, Name: "Org", Slug: "org"})
+	localUser := &model.User{
+		ID:         uuid.New(),
+		TenantID:   tenantID,
+		ExternalID: "25",
+		Email:      "eve@example.com",
+		Name:       "Eve",
+		Plan:       "freemium",
+		Role:       "user",
+		IsActive:   true,
+	}
+	userRepo.addUser(localUser)
+
+	ownerRole := "owner"
+	dto, err := svc.UpdateUser(context.Background(), "25", UpdateUserRequest{AscendaRole: &ownerRole})
+	require.NoError(t, err)
+	// AscendaRole is local-only → nil DTO (handler sends 204).
+	assert.Nil(t, dto, "ascendaRole-only change should return nil DTO")
+
+	updated, _ := userRepo.GetByExternalID("25")
+	assert.Equal(t, "owner", updated.Role, "local role should be persisted as owner")
+}
+
+func TestAdminUserService_UpdateUser_AscendaRole_InvalidValue(t *testing.T) {
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 26, Email: "frank@example.com", Name: "Frank", Role: "user"})
+	svc, _, _ := newTestAdminUserService(sc)
+
+	badRole := "superadmin"
+	_, err := svc.UpdateUser(context.Background(), "26", UpdateUserRequest{AscendaRole: &badRole})
+	assert.Error(t, err, "should reject unknown Ascenda role")
+	assert.Contains(t, err.Error(), "invalid Ascenda role")
+}
+
+func TestAdminUserService_UpdateUser_PlanOnly_DoesNotCallSocrateUpdate(t *testing.T) {
+	// When only Plan is changed (no FullName / Role), the service fetches the
+	// user via GetUser (not UpdateUser) so it never sends an empty-body PUT to Socrate.
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 27, Email: "grace@example.com", Name: "Grace", Role: "user"})
+	svc, userRepo, tenantRepo := newTestAdminUserService(sc)
+
+	tenantID := uuid.New()
+	tenantRepo.Create(&model.Tenant{ID: tenantID, Name: "Solo", Slug: "solo"})
+	userRepo.addUser(&model.User{
+		ID:         uuid.New(),
+		TenantID:   tenantID,
+		ExternalID: "27",
+		Email:      "grace@example.com",
+		Name:       "Grace",
+		Plan:       "freemium",
+		Role:       "user",
+		IsActive:   true,
+	})
+
+	proPlan := "pro"
+	dto, err := svc.UpdateUser(context.Background(), "27", UpdateUserRequest{Plan: &proPlan})
+	require.NoError(t, err)
+	// No Socrate call at all — service returns nil DTO (handler sends 204).
+	assert.Nil(t, dto, "plan-only change must not return a DTO")
+
+	updated, _ := userRepo.GetByExternalID("27")
+	assert.Equal(t, "pro", updated.Plan)
+}
+
 func TestAdminUserService_DeleteUser_RemovesFromSocrate(t *testing.T) {
 	sc := newMockSocrateClient()
 	sc.addUser(socrate.User{ID: 10, Email: "del@example.com"})
@@ -561,8 +743,8 @@ func TestAdminUserService_ListTenants_Empty(t *testing.T) {
 
 func TestAdminUserService_ListTenants_WithData(t *testing.T) {
 	svc, _, tenantRepo := newTestAdminUserService(nil)
-	tenantRepo.Create(&model.Tenant{ID: uuid.New(), Name: "Acme", Slug: "acme", Tier: "pro", IsActive: true})
-	tenantRepo.Create(&model.Tenant{ID: uuid.New(), Name: "Beta Corp", Slug: "beta", Tier: "free", IsActive: false})
+	tenantRepo.Create(&model.Tenant{ID: uuid.New(), Name: "Acme", Slug: "acme", IsActive: true})
+	tenantRepo.Create(&model.Tenant{ID: uuid.New(), Name: "Beta Corp", Slug: "beta", IsActive: false})
 
 	result, err := svc.ListTenants(context.Background(), 1, 10)
 	require.NoError(t, err)
@@ -573,12 +755,12 @@ func TestAdminUserService_ListTenants_WithData(t *testing.T) {
 func TestAdminUserService_GetTenant_Found(t *testing.T) {
 	svc, _, tenantRepo := newTestAdminUserService(nil)
 	id := uuid.New()
-	tenantRepo.Create(&model.Tenant{ID: id, Name: "FindMe", Slug: "find-me", Tier: "pro", IsActive: true})
+	tenantRepo.Create(&model.Tenant{ID: id, Name: "FindMe", Slug: "find-me", IsActive: true})
 
 	dto, err := svc.GetTenant(context.Background(), id)
 	require.NoError(t, err)
 	assert.Equal(t, "FindMe", dto.Name)
-	assert.Equal(t, "pro", dto.Tier)
+	assert.Equal(t, "find-me", dto.Slug)
 }
 
 func TestAdminUserService_GetTenant_NotFound(t *testing.T) {
@@ -597,9 +779,6 @@ func TestAdminUserService_CreateTenant_Defaults(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "New Co", dto.Name)
-	assert.Equal(t, "free", dto.Tier)  // default tier
-	assert.Equal(t, 5, dto.MaxUsers)   // default
-	assert.Equal(t, 3, dto.MaxPlans)   // default
 	assert.True(t, dto.IsActive)
 }
 
@@ -607,36 +786,25 @@ func TestAdminUserService_CreateTenant_CustomValues(t *testing.T) {
 	svc, _, _ := newTestAdminUserService(nil)
 
 	dto, err := svc.CreateTenant(context.Background(), CreateTenantRequest{
-		Name:     "Enterprise Co",
-		Slug:     "enterprise",
-		Tier:     "enterprise",
-		MaxUsers: 100,
-		MaxPlans: 50,
+		Name: "Enterprise Co",
+		Slug: "enterprise",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "enterprise", dto.Tier)
-	assert.Equal(t, 100, dto.MaxUsers)
-	assert.Equal(t, 50, dto.MaxPlans)
+	assert.Equal(t, "Enterprise Co", dto.Name)
+	assert.Equal(t, "enterprise", dto.Slug)
 }
 
 func TestAdminUserService_UpdateTenant(t *testing.T) {
 	svc, _, tenantRepo := newTestAdminUserService(nil)
 	id := uuid.New()
-	tenantRepo.Create(&model.Tenant{ID: id, Name: "Old Name", Slug: "old", Tier: "free", IsActive: true, MaxUsers: 5, MaxPlans: 3})
+	tenantRepo.Create(&model.Tenant{ID: id, Name: "Old Name", Slug: "old", IsActive: true})
 
 	newName := "New Name"
-	newTier := "pro"
-	newMax := 25
 	dto, err := svc.UpdateTenant(context.Background(), id, UpdateTenantRequest{
-		Name:     &newName,
-		Tier:     &newTier,
-		MaxUsers: &newMax,
+		Name: &newName,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "New Name", dto.Name)
-	assert.Equal(t, "pro", dto.Tier)
-	assert.Equal(t, 25, dto.MaxUsers)
-	assert.Equal(t, 3, dto.MaxPlans) // unchanged
 }
 
 func TestAdminUserService_UpdateTenant_NotFound(t *testing.T) {
@@ -659,13 +827,14 @@ func TestAdminUserService_UpdateTenant_Deactivate(t *testing.T) {
 }
 
 // ── Role boundary tests ───────────────────────────────────────────────────────
-// These document that Socrate roles ("admin"/"user") are entirely separate from
-// Ascenda tenant roles ("owner"/"user"). Neither side should bleed into the other.
+// These document the relationship between Socrate roles ("admin"/"user") and
+// Ascenda local roles ("admin"/"owner"/"user"):
+//   - Socrate "admin" → Ascenda ascendaRole "admin" (derived, not stored)
+//   - Socrate "user"  → Ascenda ascendaRole from local DB (owner, user, …)
 
 func TestSocrateRoleIsNotAscendaRole(t *testing.T) {
 	sc := newMockSocrateClient()
-	// A Socrate "admin" is a platform-admin in the identity provider —
-	// this does NOT mean they are a Ascenda tenant owner.
+	// A Socrate "admin" with no local Ascenda record: ascendaRole stays nil.
 	sc.addUser(socrate.User{ID: 20, Email: "socrateadmin@example.com", Role: "admin"})
 	svc, _, _ := newTestAdminUserService(sc)
 
@@ -673,4 +842,27 @@ func TestSocrateRoleIsNotAscendaRole(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "admin", dto.Role, "Socrate role is preserved")
 	assert.Nil(t, dto.AscendaRole, "no Ascenda record means no ascendaRole enrichment")
+}
+
+func TestSocrateAdminWithLocalRecord_AscendaRoleIsAdmin(t *testing.T) {
+	sc := newMockSocrateClient()
+	sc.addUser(socrate.User{ID: 21, Email: "platformadmin@example.com", Role: "admin"})
+	svc, userRepo, tenantRepo := newTestAdminUserService(sc)
+
+	tenantID := uuid.New()
+	tenantRepo.Create(&model.Tenant{ID: tenantID, Name: "Test Corp", Slug: "testcorp", IsActive: true})
+	userRepo.addUser(&model.User{
+		ID:         uuid.New(),
+		TenantID:   tenantID,
+		ExternalID: "21",
+		Email:      "platformadmin@example.com",
+		Role:       "user", // stored value is irrelevant for Socrate admins
+		IsActive:   true,
+	})
+
+	dto, err := svc.GetUser(context.Background(), "21")
+	require.NoError(t, err)
+	assert.Equal(t, "admin", dto.Role, "Socrate role preserved")
+	require.NotNil(t, dto.AscendaRole)
+	assert.Equal(t, "admin", *dto.AscendaRole, "Socrate admin is always Ascenda admin, regardless of stored local role")
 }

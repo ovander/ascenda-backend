@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/socrate"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/socrate"
 	"ascenda/internal/repo"
 )
 
@@ -20,11 +21,11 @@ import (
 type SocrateUserManager interface {
 	ListUsers(ctx context.Context, search string, page, pageSize int) (*socrate.UserListResponse, error)
 	GetUser(ctx context.Context, userID string) (*socrate.User, error)
-	CreateUser(ctx context.Context, req socrate.CreateUserRequest) (*socrate.User, error)
-	UpdateUser(ctx context.Context, userID string, req socrate.UpdateUserRequest) (*socrate.User, error)
+	CreateUser(ctx context.Context, req socrate.CreateUserRequest) (*socrate.CreateUserResult, error)
+	UpdateUserRole(ctx context.Context, userID, role string) error
 	DeleteUser(ctx context.Context, userID string) error
 	ResendVerification(ctx context.Context, userID string) error
-	ResetPassword(ctx context.Context, userID string) error
+	ForcePasswordReset(ctx context.Context, userID string) error
 }
 
 // socrateRoles are the only roles recognised by the Socrate identity provider.
@@ -66,13 +67,14 @@ type AdminUserDTO struct {
 	SocrateID   uint       `json:"socrateId"`
 	Email       string     `json:"email"`
 	Name        string     `json:"name"`
-	Role        string     `json:"role"`       // Socrate role
+	Role        string     `json:"role"`        // Socrate role: admin|user
 	Status      string     `json:"status"`
 	IsVerified  bool       `json:"isVerified"`
 	AscendaID   *string    `json:"ascendaId,omitempty"`
 	TenantID    *string    `json:"tenantId,omitempty"`
 	TenantName  *string    `json:"tenantName,omitempty"`
-	AscendaRole *string    `json:"ascendaRole,omitempty"` // owner|user (Ascenda tenant role)
+	AscendaRole *string    `json:"ascendaRole,omitempty"` // Ascenda role: "admin" (derived from Socrate) | "owner" | "user" (stored locally)
+	Plan        *string    `json:"plan,omitempty"`        // commercial plan: freemium|pro|enterprise
 	IsActive    bool       `json:"isActive"`
 	LastLogin   *time.Time `json:"lastLogin,omitempty"`
 	CreatedAt   time.Time  `json:"createdAt"`
@@ -154,10 +156,10 @@ func (s *AdminUserService) CreateUser(ctx context.Context, req CreateUserRequest
 		return nil, apierror.BadRequest("invalid Socrate role: must be 'admin' or 'user'")
 	}
 
-	u, err := s.socrateClient.CreateUser(ctx, socrate.CreateUserRequest{
-		Email:    req.Email,
-		FullName: req.FullName,
-		Role:     req.Role,
+	result, err := s.socrateClient.CreateUser(ctx, socrate.CreateUserRequest{
+		Email: req.Email,
+		Name:  req.FullName,
+		Role:  req.Role,
 	})
 	if err != nil {
 		if errors.Is(err, socrate.ErrUserAlreadyExists) {
@@ -168,22 +170,52 @@ func (s *AdminUserService) CreateUser(ctx context.Context, req CreateUserRequest
 	}
 
 	s.logger.WithFields(logrus.Fields{
-		"email":      req.Email,
-		"socrateID":  u.ID,
+		"email":     req.Email,
+		"socrateID": result.UserID,
 	}).Info("user created in Socrate")
 
-	dto := s.enrichUser(*u)
+	// Build a synthetic User for enrichment from what we know at creation time.
+	synthetic := socrate.User{
+		ID:    result.UserID,
+		Email: req.Email,
+		Name:  req.FullName,
+		Role:  result.Role,
+	}
+	dto := s.enrichUser(synthetic)
 	return &dto, nil
 }
 
 // UpdateUserRequest is the request to update a user via the platform admin API.
 type UpdateUserRequest struct {
 	FullName    *string `json:"fullName,omitempty"`
-	Role        *string `json:"role,omitempty"`
+	Role        *string `json:"role,omitempty"`        // Socrate platform role: admin|user
+	AscendaRole *string `json:"ascendaRole,omitempty"` // Ascenda local role: owner|user (stored); "admin" is derived from Socrate, not settable here
+	Plan        *string `json:"plan,omitempty"`        // commercial plan: freemium|pro|enterprise
 }
 
-// UpdateUser updates a user in Socrate.
-// If Role is provided it must be one of Socrate's two roles: "admin" or "user".
+// validPlans is the set of allowed commercial plan values.
+var validPlans = map[string]bool{
+	"freemium":   true,
+	"pro":        true,
+	"enterprise": true,
+}
+
+// validAscendaRoles is the set of allowed Ascenda tenant role values.
+// "owner" is assignable here; higher privilege (admin) is managed via Socrate.
+var validAscendaRoles = map[string]bool{
+	"owner":  true,
+	"editor": true,
+	"reader": true,
+	"user":   true, // legacy alias for editor
+}
+
+// UpdateUser updates a user. Plan and AscendaRole are local-only fields stored in
+// the Ascenda DB — Socrate is never involved. FullName and Role are Socrate fields;
+// when either is provided the service calls Socrate UpdateUser (reading the current
+// role first because Socrate requires it on every PUT).
+//
+// Returns nil DTO (→ 204 No Content) when only local fields were changed, so the
+// caller can avoid an extra Socrate round-trip.
 func (s *AdminUserService) UpdateUser(ctx context.Context, socrateID string, req UpdateUserRequest) (*AdminUserDTO, error) {
 	if err := s.requireSocrate(); err != nil {
 		return nil, err
@@ -192,19 +224,81 @@ func (s *AdminUserService) UpdateUser(ctx context.Context, socrateID string, req
 	if req.Role != nil && !socrateRoles[*req.Role] {
 		return nil, apierror.BadRequest("invalid Socrate role: must be 'admin' or 'user'")
 	}
-
-	u, err := s.socrateClient.UpdateUser(ctx, socrateID, socrate.UpdateUserRequest{
-		FullName: req.FullName,
-		Role:     req.Role,
-	})
-	if err != nil {
-		s.logger.WithError(err).Error("failed to update user in Socrate")
-		return nil, apierror.Internal("failed to update user in identity provider")
+	if req.AscendaRole != nil && !validAscendaRoles[*req.AscendaRole] {
+		return nil, apierror.BadRequest("invalid Ascenda role: must be 'owner' or 'user'")
+	}
+	if req.Plan != nil && !validPlans[*req.Plan] {
+		return nil, apierror.BadRequest("invalid plan: must be 'freemium', 'pro', or 'enterprise'")
 	}
 
-	s.logger.WithField("socrateID", socrateID).Info("user updated in Socrate")
+	// ── Local-only fields (plan, ascendaRole, fullName) ─────────────────────
+	// Persisted straight to the Ascenda DB; Socrate is never involved for these.
+	if req.Plan != nil || req.AscendaRole != nil || req.FullName != nil {
+		localUser, lookupErr := s.userRepo.GetByExternalID(socrateID)
+		if lookupErr == nil && localUser != nil {
+			if req.Plan != nil {
+				localUser.Plan = *req.Plan
+			}
+			if req.AscendaRole != nil {
+				localUser.Role = *req.AscendaRole
+			}
+			if req.FullName != nil {
+				localUser.Name = *req.FullName
+			}
+			if updateErr := s.userRepo.Update(localUser); updateErr != nil {
+				s.logger.WithError(updateErr).Warn("failed to persist local user fields")
+			} else {
+				s.logger.WithFields(map[string]interface{}{
+					"socrateID":   socrateID,
+					"plan":        req.Plan,
+					"ascendaRole": req.AscendaRole,
+				}).Info("local user fields updated")
+			}
+		}
+	}
 
-	dto := s.enrichUser(*u)
+	// ── Socrate fields (fullName, role) ───────────────────────────────────────
+	// Only touch Socrate when the caller actually wants to change a Socrate field.
+	if req.FullName == nil && req.Role == nil {
+		// Nothing Socrate-visible changed — return nil so the handler sends 204.
+		return nil, nil
+	}
+
+	// Socrate's PUT requires "role" on every call; read the current value first
+	// so we can carry it forward when only fullName is changing.
+	currentUser, fetchErr := s.socrateClient.GetUser(ctx, socrateID)
+	if fetchErr != nil {
+		s.logger.WithError(fetchErr).Error("failed to fetch user from Socrate")
+		return nil, apierror.Internal("failed to fetch user from identity provider")
+	}
+	if currentUser == nil || currentUser.ID == 0 {
+		return nil, apierror.NotFound("user", socrateID)
+	}
+
+	effectiveRole := currentUser.Role
+	if req.Role != nil {
+		effectiveRole = *req.Role
+	}
+
+	// Socrate only supports updating the role; name changes are local-only.
+	if updateErr := s.socrateClient.UpdateUserRole(ctx, socrateID, effectiveRole); updateErr != nil {
+		s.logger.WithError(updateErr).Error("failed to update user role in Socrate")
+		return nil, apierror.Internal("failed to update user in identity provider")
+	}
+	s.logger.WithField("socrateID", socrateID).Info("user role updated in Socrate")
+
+	// Re-fetch to build the DTO with the latest state.
+	updated, fetchErr := s.socrateClient.GetUser(ctx, socrateID)
+	if fetchErr != nil || updated == nil {
+		s.logger.WithError(fetchErr).Warn("failed to re-fetch user after update")
+		return nil, nil
+	}
+	// Name changes are local-only (Socrate has no name-update endpoint).
+	// Apply the requested name directly so the caller sees the new value.
+	if req.FullName != nil {
+		updated.Name = *req.FullName
+	}
+	dto := s.enrichUser(*updated)
 	return &dto, nil
 }
 
@@ -254,7 +348,7 @@ func (s *AdminUserService) ResetPassword(ctx context.Context, socrateID string) 
 		return err
 	}
 
-	if err := s.socrateClient.ResetPassword(ctx, socrateID); err != nil {
+	if err := s.socrateClient.ForcePasswordReset(ctx, socrateID); err != nil {
 		s.logger.WithError(err).Error("failed to reset password")
 		return apierror.Internal("failed to trigger password reset")
 	}
@@ -265,14 +359,19 @@ func (s *AdminUserService) ResetPassword(ctx context.Context, socrateID string) 
 
 // enrichUser adds Ascenda metadata to a Socrate user.
 func (s *AdminUserService) enrichUser(u socrate.User) AdminUserDTO {
+	// Best-effort display name: Name → Email
+	name := strings.TrimSpace(u.Name)
+	if name == "" {
+		name = u.Email
+	}
+
 	dto := AdminUserDTO{
 		SocrateID:  u.ID,
 		Email:      u.Email,
-		Name:       u.Name,
+		Name:       name,
 		Role:       u.Role,
-		Status:     u.Status,
 		IsVerified: u.IsVerified,
-		IsActive:   u.Status == "active",
+		IsActive:   u.IsVerified,
 		LastLogin:  u.LastLogin,
 		CreatedAt:  u.CreatedAt,
 	}
@@ -285,8 +384,20 @@ func (s *AdminUserService) enrichUser(u socrate.User) AdminUserDTO {
 		tenantIDStr := ascendaUser.TenantID.String()
 		dto.AscendaID = &idStr
 		dto.TenantID = &tenantIDStr
-		dto.AscendaRole = &ascendaUser.Role
+
+		// Socrate "admin" maps to Ascenda "admin" — derived, not stored locally.
+		// For Socrate "user" accounts the local DB role (owner, user, …) is used.
+		ascendaRole := ascendaUser.Role
+		if u.Role == "admin" {
+			ascendaRole = "admin"
+		}
+		dto.AscendaRole = &ascendaRole
 		dto.IsActive = ascendaUser.IsActive
+		plan := ascendaUser.Plan
+		if plan == "" {
+			plan = "freemium"
+		}
+		dto.Plan = &plan
 
 		// Enrich with tenant name
 		tenant, err := s.tenantRepo.GetByID(ascendaUser.TenantID)
@@ -302,15 +413,12 @@ func (s *AdminUserService) enrichUser(u socrate.User) AdminUserDTO {
 // Tenant Management (Ascenda DB)
 // ============================================================================
 
-// AdminTenantDTO is the admin view of a tenant with aggregate counts.
+// AdminTenantDTO is the admin view of a tenant.
 type AdminTenantDTO struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Slug      string    `json:"slug"`
-	Tier      string    `json:"tier"`
 	IsActive  bool      `json:"isActive"`
-	MaxUsers  int       `json:"maxUsers"`
-	MaxPlans  int       `json:"maxPlans"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -341,10 +449,7 @@ func (s *AdminUserService) ListTenants(_ context.Context, page, pageSize int) (*
 			ID:        t.ID.String(),
 			Name:      t.Name,
 			Slug:      t.Slug,
-			Tier:      t.Tier,
 			IsActive:  t.IsActive,
-			MaxUsers:  t.MaxUsers,
-			MaxPlans:  t.MaxPlans,
 			CreatedAt: t.CreatedAt,
 		})
 	}
@@ -368,10 +473,7 @@ func (s *AdminUserService) GetTenant(_ context.Context, id uuid.UUID) (*AdminTen
 		ID:        t.ID.String(),
 		Name:      t.Name,
 		Slug:      t.Slug,
-		Tier:      t.Tier,
 		IsActive:  t.IsActive,
-		MaxUsers:  t.MaxUsers,
-		MaxPlans:  t.MaxPlans,
 		CreatedAt: t.CreatedAt,
 	}
 	return &dto, nil
@@ -379,36 +481,17 @@ func (s *AdminUserService) GetTenant(_ context.Context, id uuid.UUID) (*AdminTen
 
 // CreateTenantRequest is the request to create a new tenant.
 type CreateTenantRequest struct {
-	Name     string `json:"name" validate:"required"`
-	Slug     string `json:"slug" validate:"required"`
-	Tier     string `json:"tier"`
-	MaxUsers int    `json:"maxUsers"`
-	MaxPlans int    `json:"maxPlans"`
+	Name string `json:"name" validate:"required"`
+	Slug string `json:"slug" validate:"required"`
 }
 
 // CreateTenant creates a new tenant.
 func (s *AdminUserService) CreateTenant(_ context.Context, req CreateTenantRequest) (*AdminTenantDTO, error) {
-	tier := req.Tier
-	if tier == "" {
-		tier = "free"
-	}
-	maxUsers := req.MaxUsers
-	if maxUsers == 0 {
-		maxUsers = 5
-	}
-	maxPlans := req.MaxPlans
-	if maxPlans == 0 {
-		maxPlans = 3
-	}
-
 	tenant := &model.Tenant{
 		ID:       uuid.New(),
 		Name:     req.Name,
 		Slug:     req.Slug,
-		Tier:     tier,
 		IsActive: true,
-		MaxUsers: maxUsers,
-		MaxPlans: maxPlans,
 	}
 
 	if err := s.tenantRepo.Create(tenant); err != nil {
@@ -425,10 +508,7 @@ func (s *AdminUserService) CreateTenant(_ context.Context, req CreateTenantReque
 		ID:        tenant.ID.String(),
 		Name:      tenant.Name,
 		Slug:      tenant.Slug,
-		Tier:      tenant.Tier,
 		IsActive:  tenant.IsActive,
-		MaxUsers:  tenant.MaxUsers,
-		MaxPlans:  tenant.MaxPlans,
 		CreatedAt: tenant.CreatedAt,
 	}
 	return &dto, nil
@@ -437,10 +517,7 @@ func (s *AdminUserService) CreateTenant(_ context.Context, req CreateTenantReque
 // UpdateTenantRequest is the request to update a tenant.
 type UpdateTenantRequest struct {
 	Name     *string `json:"name,omitempty"`
-	Tier     *string `json:"tier,omitempty"`
 	IsActive *bool   `json:"isActive,omitempty"`
-	MaxUsers *int    `json:"maxUsers,omitempty"`
-	MaxPlans *int    `json:"maxPlans,omitempty"`
 }
 
 // UpdateTenant updates a tenant.
@@ -453,17 +530,8 @@ func (s *AdminUserService) UpdateTenant(_ context.Context, id uuid.UUID, req Upd
 	if req.Name != nil {
 		tenant.Name = *req.Name
 	}
-	if req.Tier != nil {
-		tenant.Tier = *req.Tier
-	}
 	if req.IsActive != nil {
 		tenant.IsActive = *req.IsActive
-	}
-	if req.MaxUsers != nil {
-		tenant.MaxUsers = *req.MaxUsers
-	}
-	if req.MaxPlans != nil {
-		tenant.MaxPlans = *req.MaxPlans
 	}
 
 	if err := s.tenantRepo.Update(tenant); err != nil {
@@ -474,10 +542,7 @@ func (s *AdminUserService) UpdateTenant(_ context.Context, id uuid.UUID, req Upd
 		ID:        tenant.ID.String(),
 		Name:      tenant.Name,
 		Slug:      tenant.Slug,
-		Tier:      tenant.Tier,
 		IsActive:  tenant.IsActive,
-		MaxUsers:  tenant.MaxUsers,
-		MaxPlans:  tenant.MaxPlans,
 		CreatedAt: tenant.CreatedAt,
 	}
 	return &dto, nil

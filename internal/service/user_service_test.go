@@ -128,12 +128,9 @@ func newTestUserService() (*UserService, *MockUserRepo, *MockTenantRepoForUsers)
 		Name:     "Test Tenant",
 		Slug:     "test",
 		IsActive: true,
-		MaxUsers: 10,
-		MaxPlans: 5,
-		Tier:     "free",
 	})
 
-	svc := NewUserService(userRepo, tenantRepo, nil, emitter, logger)
+	svc := NewUserService(userRepo, tenantRepo, nil, nil, emitter, logger)
 	return svc, userRepo, tenantRepo
 }
 
@@ -230,33 +227,55 @@ func TestInviteUserRejectsInvalidRole(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestInviteUserRejectsDuplicateEmail(t *testing.T) {
-	svc, _, _ := newTestUserService()
+// TestInviteUserResendsPendingInvite verifies that re-inviting an email that
+// has a pending (unclaimed) invite record returns the existing record without
+// error, effectively acting as a resend. A hard error is only returned when
+// the user is already an active member (ExternalID set).
+func TestInviteUserResendsPendingInvite(t *testing.T) {
+	svc, userRepo, _ := newTestUserService()
 	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
-	svc.InviteUser(context.Background(), tenantID, uuid.New(), "dup@test.com", "", "user")
-	_, err := svc.InviteUser(context.Background(), tenantID, uuid.New(), "dup@test.com", "", "user")
+	first, err1 := svc.InviteUser(context.Background(), tenantID, uuid.New(), "pending@test.com", "", "user")
+	assert.NoError(t, err1)
+	assert.NotNil(t, first)
 
-	assert.Error(t, err)
+	// Second invite on a pending (unclaimed) record → resend, no error, same record returned.
+	second, err2 := svc.InviteUser(context.Background(), tenantID, uuid.New(), "pending@test.com", "", "user")
+	assert.NoError(t, err2)
+	assert.Equal(t, first.ID, second.ID) // same pending record returned
+
+	// Simulate a claimed user (ExternalID set) → should now be a hard conflict.
+	first.ExternalID = "42"
+	userRepo.Update(first)
+
+	_, err3 := svc.InviteUser(context.Background(), tenantID, uuid.New(), "pending@test.com", "", "user")
+	assert.Error(t, err3)
 }
 
 func TestUpdateRoleSuccess(t *testing.T) {
 	svc, userRepo, _ := newTestUserService()
 	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
-	// Tenant roles are only "user" and "owner" — owner transfer uses TransferOwnership
-	user := &model.User{
-		ID: uuid.New(), TenantID: tenantID, Email: "user@test.com",
-		Role: "user", IsActive: true,
+	cases := []struct{ from, to string }{
+		{"user", "editor"},
+		{"editor", "reader"},
+		{"reader", "user"},
+		{"user", "user"}, // no-op is also valid
 	}
-	userRepo.Create(user)
 
-	// Only valid target role is "user" (owner uses TransferOwnership, admin is platform-level)
-	err := svc.UpdateRole(context.Background(), tenantID, user.ID, "owner", "user")
-	assert.NoError(t, err)
+	for _, tc := range cases {
+		user := &model.User{
+			ID: uuid.New(), TenantID: tenantID, Email: tc.from + "@test.com",
+			Role: tc.from, IsActive: true,
+		}
+		userRepo.Create(user)
 
-	updated, _ := userRepo.GetByID(tenantID, user.ID)
-	assert.Equal(t, "user", updated.Role)
+		err := svc.UpdateRole(context.Background(), tenantID, user.ID, "owner", tc.to)
+		assert.NoError(t, err, "UpdateRole %s → %s should succeed", tc.from, tc.to)
+
+		updated, _ := userRepo.GetByID(tenantID, user.ID)
+		assert.Equal(t, tc.to, updated.Role)
+	}
 }
 
 func TestUpdateRoleCannotChangeOwner(t *testing.T) {

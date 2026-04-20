@@ -4,7 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
 	"ascenda/internal/event"
-	"ascenda/internal/pkg/socrate"
+	"github.com/ovander/backendkit/socrate"
 	"ascenda/internal/repo"
 )
 
@@ -12,6 +12,7 @@ import (
 type ServiceBundle struct {
 	Admin        *AdminService
 	AdminUser    *AdminUserService
+	Organization *OrganizationService
 	Registration *RegistrationService
 	MagicLink    *MagicLinkService
 	Tenant    *TenantService
@@ -36,11 +37,15 @@ type ServiceBundle struct {
 	Seed      *SeedService
 
 	// AI services
-	AIUsagePolicy *AIUsagePolicyService
-	AINarration   *AINarrationService
+	AIUsagePolicy    *AIUsagePolicyService
+	AINarration      *AINarrationService
+	PlanOrchestrator *PlanComputeOrchestrator
 
 	// Cap Table module (Enterprise tier)
 	CapTable *CapTableService
+
+	// ScenarioAnalysis — decision-intelligence layer (viability, risks, drivers)
+	ScenarioAnalysis *ScenarioAnalysisService
 
 	// BEP module (Pro tier and above)
 	BEP *BEPService
@@ -48,11 +53,20 @@ type ServiceBundle struct {
 	// Platform-wide country rate configs (admin-editable)
 	CountryRateConfig *CountryRateConfigService
 
+	// Feature policies — tier-to-feature access rules (admin-editable, cached)
+	FeaturePolicy *FeaturePolicyService
+
 	// Emitter is the in-process event bus shared by all services.
 	Emitter *event.Emitter
 
 	// ReportInvalidator tracks stale report caches.
 	ReportInvalidator *event.ReportInvalidator
+
+	// SocrateClient is the raw Socrate API client. Exposed so that the
+	// composition root (bootstrap.go) can wire it into TenantMiddleware for
+	// OIDC userinfo enrichment without building a second client instance.
+	// Nil when Socrate is not configured.
+	SocrateClient *socrate.Client
 }
 
 // NewServiceBundle creates a new ServiceBundle with all services initialized.
@@ -68,8 +82,12 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 	invalidator, invalidatorSub := event.NewReportInvalidator(logger)
 	emitter.Subscribe(invalidatorSub)
 
-	// Create ReportService first, as other services depend on it
-	reportService := NewReportService(repos, logger)
+	// Create the shared compute orchestrator — single owner of FullPlanInput
+	// assembly logic.  Both ReportService and ScenarioAnalysisService use it.
+	orchestrator := NewPlanComputeOrchestrator(repos, logger)
+
+	// Create ReportService (wraps orchestrator with an LRU cache)
+	reportService := NewReportService(orchestrator, logger)
 
 	// Wire report cache (LRU, max 50 scenarios) using the invalidator
 	reportCache := NewReportCache(50, invalidator)
@@ -80,16 +98,24 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 	// The same *socrate.Client also satisfies SocrateRegistrar for self-service registration.
 	var socrateClient SocrateUserManager
 	var socrateRegistrar SocrateRegistrar
+	var socrateInviter SocrateInviter
 	var socrateMailer SocrateMailer
+	var socrateProfiler SocrateProfileFetcher
+	var rawSocrateClient *socrate.Client // exported on bundle for TenantMiddleware wiring
 	if cfg.Socrate.BaseURL != "" && cfg.Socrate.ClientID != "" {
 		if sc, err := socrate.NewClient(socrate.ClientConfig{
 			BaseURL:      cfg.Socrate.BaseURL,
+			AdminBaseURL: cfg.Socrate.AdminBaseURL,
 			ClientID:     cfg.Socrate.ClientID,
 			ClientSecret: cfg.Socrate.ClientSecret,
+			AppID:        cfg.Socrate.AppID,
 		}); err == nil {
 			socrateClient = sc
 			socrateRegistrar = sc
+			socrateInviter = sc
 			socrateMailer = sc
+			socrateProfiler = sc
+			rawSocrateClient = sc
 		} else {
 			logger.WithError(err).Warn("Socrate client could not be initialised — admin user management will be unavailable")
 		}
@@ -107,17 +133,24 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 		logger.WithError(err).Warn("country rate config seed failed — falling back to hard-coded defaults")
 	}
 
+	// FeaturePolicyService — seed baseline tier rules on first boot.
+	featurePolicySvc := NewFeaturePolicyService(repos.FeaturePolicy, logger)
+	if err := featurePolicySvc.SeedDefaults(); err != nil {
+		logger.WithError(err).Warn("feature policy seed failed — limits will fall back to deny-all")
+	}
+
 	// SeedService is needed by RegistrationService; build it early.
 	seedSvc := NewSeedService(repos, countryRateSvc, logger)
 
 	bundle := &ServiceBundle{
-		Admin:             NewAdminService(repos.AdminStats, logger),
+		Admin:             NewAdminService(repos.AdminStats, socrateClient, logger),
 		AdminUser:         NewAdminUserService(socrateClient, repos.User, repos.Tenant, logger),
+		Organization:      NewOrganizationService(repos.Org, repos.Tenant, repos.User, socrateInviter, logger),
 		Registration:      NewRegistrationService(socrateRegistrar, repos.User, repos.Tenant, seedSvc, logger),
 		MagicLink:         NewMagicLinkService(socrateMailer, repos.MagicLink, cfg.AppBaseURL, logger),
 		Tenant:            NewTenantService(repos.Tenant, logger),
 		Report:            reportService,
-		Plan:              NewPlanService(repos.Plan, repos.Settings, repos.Audit, repos, countryRateSvc, emitter, logger),
+		Plan:              NewPlanService(repos.Plan, repos.Settings, repos.Audit, repos, countryRateSvc, emitter, logger).WithFeaturePolicyService(featurePolicySvc),
 		Settings:          NewSettingsService(repos.Settings, emitter, logger),
 		Product:           NewProductService(repos.Product, reportService, emitter, logger),
 		Staff:             NewStaffService(repos.Staff, reportService, emitter, logger),
@@ -133,22 +166,32 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 		Budget:            NewBudgetService(repos.Budget, reportService, emitter, logger),
 		Graph:             NewGraphService(reportService, logger),
 		Snapshot:          NewSnapshotService(repos.Snapshot, repos, emitter, logger),
-		User:              NewUserService(repos.User, repos.Tenant, socrateRegistrar, emitter, logger),
+		User:              NewUserService(repos.User, repos.Tenant, socrateInviter, socrateProfiler, emitter, logger),
 		Seed:              seedSvc,
 		// AI services
-		AIUsagePolicy:     NewAIUsagePolicyService(repos.AIUsagePolicy, repos.AIUsageRecord, logger),
-		AINarration:       NewAINarrationService(cfg.AI, logger),
+		AIUsagePolicy:    NewAIUsagePolicyService(repos.AIUsagePolicy, repos.AIUsageRecord, logger),
+		PlanOrchestrator: orchestrator,
+		AINarration: NewAINarrationServiceWithCache(cfg.AI, logger,
+			NewLayeredNarrationCache(DefaultNarrationCacheConfig(), repos.AINarrationCache),
+		),
 		Emitter:           emitter,
 		ReportInvalidator: invalidator,
+		SocrateClient:     rawSocrateClient,
 
 		// Cap Table module (Enterprise tier) — fiplanSvc injected for round→FiPlan sync
 		CapTable: NewCapTableService(repos.CapTable, repos.Settings, fiplanSvc, emitter, logger),
+
+		// ScenarioAnalysis — decision-intelligence layer
+		ScenarioAnalysis: NewScenarioAnalysisService(reportService, logger),
 
 		// BEP module (Pro tier and above)
 		BEP: NewBEPService(repos.BEP, reportService, emitter, logger),
 
 		// Platform-wide country rate configs (admin-editable)
 		CountryRateConfig: countryRateSvc,
+
+		// Feature policies (admin-editable, in-process cached)
+		FeaturePolicy: featurePolicySvc,
 	}
 
 	logger.WithFields(logrus.Fields{
