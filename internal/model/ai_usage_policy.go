@@ -379,8 +379,9 @@ const (
 
 // Ascenda subscription tiers (infrastructure ready for billing).
 const (
-	AITierStandard   = "standard"
-	AITierPro        = "pro"
+	AITierFreemium  = "freemium" // No AI access — base tier before any paid plan.
+	AITierStandard  = "standard"
+	AITierPro       = "pro"
 	AITierEnterprise = "enterprise"
 )
 
@@ -391,7 +392,7 @@ func AllAIRoles() []string {
 
 // AllAISubscriptionTiers returns all supported subscription tiers.
 func AllAISubscriptionTiers() []string {
-	return []string{AITierStandard, AITierPro, AITierEnterprise}
+	return []string{AITierFreemium, AITierStandard, AITierPro, AITierEnterprise}
 }
 
 // AllAIFeatures returns all Ascenda AI features (standard + pro + enterprise).
@@ -454,7 +455,18 @@ func DefaultAIUsagePolicies() []AIUsagePolicy {
 		AIFeatureCashRunway,
 	}
 
+	// ── Freemium: all AI features blocked for non-admin roles ────────────────
+	// The freemium plan includes no AI access. Users must upgrade to at least
+	// the standard tier to use any AI feature. Admin is excluded here because
+	// it has unrestricted access on all tiers (handled by the admin block below).
+	for _, role := range []string{AIRoleOwner, AIRoleUser, AIRoleViewer} {
+		for _, feat := range AllAIFeatures() {
+			add(role, AITierFreemium, feat, false, nil, nil, nil, 0)
+		}
+	}
+
 	// ── Admin: unlimited access on ALL features and ALL tiers ─────────────────
+	// Admins bypass tier restrictions so they can manage the platform on any plan.
 	for _, tier := range AllAISubscriptionTiers() {
 		for _, feat := range AllAIFeatures() {
 			add(AIRoleAdmin, tier, feat, true, nil, nil, nil, 100)
@@ -510,7 +522,8 @@ func DefaultAIUsagePolicies() []AIUsagePolicy {
 	}
 
 	// ── Viewer: plan narration only (read-only insight) ──────────────────────
-	for _, tier := range AllAISubscriptionTiers() {
+	// Freemium viewer entries are handled by the freemium block above.
+	for _, tier := range []string{AITierStandard, AITierPro, AITierEnterprise} {
 		add(AIRoleViewer, tier, AIFeaturePlanNarration,      true, ptr(3), ptr(10), nil, 2)
 		add(AIRoleViewer, tier, AIFeatureVarianceAnalysis,   false, nil, nil, nil, 2)
 		add(AIRoleViewer, tier, AIFeatureScenarioComparison, false, nil, nil, nil, 2)
@@ -551,7 +564,8 @@ func DefaultAIUsagePolicies() []AIUsagePolicy {
 	add(AIRoleOwner,  AITierStandard,   AIFeatureInvestorMemo, false, nil, nil, nil, 10)
 	add(AIRoleOwner,  AITierPro,        AIFeatureInvestorMemo, false, nil, nil, nil, 10)
 	add(AIRoleOwner,  AITierEnterprise, AIFeatureInvestorMemo, true,  nil, nil, nil, 20)
-	for _, tier := range AllAISubscriptionTiers() {
+	// Freemium entries for user/viewer are handled by the freemium block above.
+	for _, tier := range []string{AITierStandard, AITierPro, AITierEnterprise} {
 		add(AIRoleUser,   tier, AIFeatureInvestorMemo, false, nil, nil, nil, 5)
 		add(AIRoleViewer, tier, AIFeatureInvestorMemo, false, nil, nil, nil, 2)
 	}
