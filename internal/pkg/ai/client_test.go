@@ -75,7 +75,7 @@ func newTestClient(provider, apiKey, serverURL string) *Client {
 		apiKey:        apiKey,
 		claudeModel:   "claude-sonnet-4-6",
 		maxTokens:     100,
-		httpTimeout:   5 * time.Second,
+		httpClient:    &http.Client{Timeout: 5 * time.Second},
 		openAIBaseURL: serverURL,
 		claudeBaseURL: serverURL,
 	}
@@ -402,7 +402,8 @@ func TestNewClient_Defaults(t *testing.T) {
 	assert.Equal(t, "claude", c.aiProvider)
 	assert.Equal(t, "claude-sonnet-4-6", c.claudeModel)
 	assert.Equal(t, 4096, c.maxTokens)
-	assert.Equal(t, 30*time.Second, c.httpTimeout)
+	// Timeout is taken from testAIConfig().Timeout = 30, so httpClient.Timeout = 30s.
+	assert.Equal(t, 30*time.Second, c.httpClient.Timeout)
 }
 
 func TestNewClient_PicksUpAPIKey(t *testing.T) {
@@ -449,5 +450,5 @@ func TestNewClient_CustomTimeout(t *testing.T) {
 	c := NewClient(testAIConfig(func(cfg *config.AIConfig) {
 		cfg.Timeout = 60
 	}), nil)
-	assert.Equal(t, 60*time.Second, c.httpTimeout)
+	assert.Equal(t, 60*time.Second, c.httpClient.Timeout)
 }
