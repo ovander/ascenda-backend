@@ -9,16 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	sentry "github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
-)
-
-// Build-time variables injected via -ldflags.
-// Example: go build -ldflags "-X main.buildTime=2026-03-17T12:00:00Z -X main.gitCommit=abc1234"
-var (
-	buildTime string
-	gitCommit string
 )
 
 // shutdownTimeout is the maximum time we allow in-flight HTTP requests to
@@ -31,10 +25,22 @@ func main() {
 		fmt.Println("No .env file found, using environment variables")
 	}
 
-	// Load and stamp configuration
+	// Load configuration
 	cfg := config.Load()
-	cfg.BuildTime = buildTime
-	cfg.GitCommit = gitCommit
+
+	// ── Sub-command: migrate ──────────────────────────────────────────────────
+	// Usage: ./kerplan-api migrate
+	//
+	// Applies all pending SQL migrations using the embedded migration files and
+	// exits immediately — no HTTP server is started. Designed for use in deploy
+	// scripts before the server process is started:
+	//
+	//   $BIN_PATH migrate    # exit 0 on success, 1 on error (triggers set -e)
+	//   $BIN_PATH            # start the HTTP server normally
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		runMigrateCommand(cfg.DatabaseURL)
+		return // runMigrateCommand calls os.Exit; return keeps the linter happy
+	}
 
 	// Bootstrap the application (connects DB, wires repos/services/handlers/router)
 	resources, err := Bootstrap(cfg)
@@ -134,6 +140,12 @@ func main() {
 			shutLog.Info("database connection pool closed")
 		}
 	}
+
+	// ── Step 4: flush Sentry ──────────────────────────────────────────────────
+	//
+	// Sentry batches events; Flush blocks until the internal queue is empty or
+	// the timeout is reached. Must happen last so all errors are captured first.
+	sentry.Flush(2 * time.Second)
 
 	shutLog.WithField("exit_code", exitCode).Info("shutdown complete")
 	os.Exit(exitCode)

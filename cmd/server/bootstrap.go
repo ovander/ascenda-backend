@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -8,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	sentry "github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
+	"github.com/ovander/backendkit/buildinfo"
 	"github.com/sirupsen/logrus"
 	glogger "gorm.io/gorm/logger"
 	"gorm.io/driver/postgres"
@@ -16,10 +20,28 @@ import (
 	"ascenda/internal/event"
 	"ascenda/internal/handler"
 	"ascenda/internal/middleware"
-	"ascenda/internal/pkg/logger"
+	logger "github.com/ovander/backendkit/gormlogger"
+	"github.com/ovander/backendkit/socrate"
 	"ascenda/internal/repo"
 	"ascenda/internal/router"
 	"ascenda/internal/service"
+)
+
+// ── HTTP server timeout constants ────────────────────────────────────────────
+//
+// WriteTimeout MUST be greater than aiRouteTimeout so that the application's
+// context-based timeout always fires first and can write a proper JSON error
+// response.  If WriteTimeout ≤ aiRouteTimeout the Go HTTP server closes the
+// TCP connection before the handler writes any bytes — ERR_EMPTY_RESPONSE.
+const (
+	httpReadHeaderTimeout = 10 * time.Second
+	httpReadTimeout       = 30 * time.Second
+	httpWriteTimeout      = 150 * time.Second // must exceed aiRouteTimeout (120s)
+	httpIdleTimeout       = 120 * time.Second
+
+	// aiRouteTimeout is the application-level context timeout applied to all
+	// /ai/* routes.  It must be strictly less than httpWriteTimeout.
+	aiRouteTimeout = 120 * time.Second
 )
 
 // AppResources holds all resources created during bootstrap and needed for
@@ -51,13 +73,18 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	bootstrapStart := time.Now()
 
 	// =========================================================================
+	// 0. Sentry — init before logger so bootstrap panics are captured
+	// =========================================================================
+	initSentry(cfg)
+
+	// =========================================================================
 	// 1. Logger
 	// =========================================================================
 	log := setupLogger(cfg)
 	log.WithFields(logrus.Fields{
 		"phase":   "startup",
-		"version": cfg.Version,
-		"commit":  cfg.GitCommit,
+		"version": buildinfo.Version,
+		"commit":  buildinfo.GitCommit,
 		"go":      runtime.Version(),
 	}).Info("starting Ascenda backend")
 
@@ -115,10 +142,10 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	// =========================================================================
 	mwLog := log.WithField("phase", "middleware")
 	authMW := middleware.NewAuthMiddleware(cfg.Socrate.JWKSURL, cfg.Socrate.BaseURL, log)
-	tenantMW := middleware.NewTenantMiddleware(db, repos.User, log)
+	tenantMW := middleware.NewTenantMiddleware(db, repos.User, repos.Tenant, log, newSocrateProfiler(services.SocrateClient))
 	rbacMW := middleware.NewRBACMiddleware(log)
 	planAccessMW := middleware.NewPlanAccessMiddleware(repos.PlanMember, log)
-	tierGateMW := middleware.NewTierGateMiddleware(repos.Tenant, log)
+	tierGateMW := middleware.NewTierGateMiddleware(log)
 	aiAccessMW := middleware.NewAIAccessMiddleware(services.AIUsagePolicy, log)
 	loggerMW := middleware.NewLoggerMiddleware(log.Logger)
 	recoverMW := middleware.NewRecoverMiddleware(log.Logger)
@@ -137,24 +164,42 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 		cfg.MaxRequestBodyBytes,
 		cfg.MetricsEnabled,
 	)
-	_ = r // logged inside NewRouter
+
+	// Wrap outermost handler with Sentry HTTP middleware when DSN is set.
+	// Repanic: true ensures our existing recoverMW still handles the panic
+	// after Sentry has had a chance to capture it.
+	var httpHandler http.Handler = r
+	if cfg.Sentry.DSN != "" {
+		httpHandler = sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(r)
+		log.WithField("phase", "sentry").Info("Sentry HTTP middleware active")
+	}
 
 	// =========================================================================
-	// 11. HTTP Server — timeouts set explicitly (same values as GPWA)
+	// 11. HTTP Server — timeouts set explicitly.
+	//
+	// WriteTimeout MUST exceed the longest application-level timeout.
+	// The AI routes use aiTimeout = 120s; WriteTimeout is set to 150s so
+	// that the context-based timeout always fires first and returns a proper
+	// JSON error response.  If WriteTimeout were shorter (e.g. the previous
+	// 30s), the Go HTTP server would close the TCP connection before the
+	// handler could write any bytes — causing ERR_EMPTY_RESPONSE on the
+	// client with no logged response status.
 	// =========================================================================
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              fmt.Sprintf(":%d", cfg.Port),
+		Handler:           httpHandler,
+		ReadHeaderTimeout: httpReadHeaderTimeout,
+		ReadTimeout:       httpReadTimeout,
+		WriteTimeout:      httpWriteTimeout,
+		IdleTimeout:       httpIdleTimeout,
 	}
 	log.WithFields(logrus.Fields{
-		"phase":         "server",
-		"addr":          fmt.Sprintf(":%d", cfg.Port),
-		"read_timeout":  "30s",
-		"write_timeout": "30s",
-		"idle_timeout":  "120s",
+		"phase":               "server",
+		"addr":                fmt.Sprintf(":%d", cfg.Port),
+		"read_header_timeout": httpReadHeaderTimeout.String(),
+		"read_timeout":        httpReadTimeout.String(),
+		"write_timeout":       httpWriteTimeout.String(),
+		"idle_timeout":        httpIdleTimeout.String(),
 	}).Info("HTTP server configured")
 
 	// ── Bootstrap summary ─────────────────────────────────────────────────────
@@ -170,6 +215,28 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 		Emitter:    services.Emitter,
 		AIAccessMW: aiAccessMW,
 	}, nil
+}
+
+// ── Sentry ────────────────────────────────────────────────────────────────────
+
+// initSentry configures the Sentry SDK if SENTRY_DSN is set.
+// A missing or empty DSN is treated as "monitoring disabled" — not an error.
+func initSentry(cfg *config.Config) {
+	if cfg.Sentry.DSN == "" {
+		return
+	}
+	if err := sentry.Init(sentry.ClientOptions{
+		Dsn:              cfg.Sentry.DSN,
+		Environment:      cfg.Env,
+		Release:          buildinfo.Version,
+		AttachStacktrace: true,
+		// Send 10 % of transactions for performance monitoring.
+		// Operators can override this by sub-classing the SDK; 0 disables tracing.
+		TracesSampleRate: 0.1,
+	}); err != nil {
+		// Non-fatal: log the failure but continue — the app runs fine without Sentry.
+		fmt.Printf("sentry init failed: %v\n", err)
+	}
 }
 
 // ── Logger setup ──────────────────────────────────────────────────────────────
@@ -240,7 +307,7 @@ func connectDatabase(cfg *config.Config, log *logrus.Entry) (*gorm.DB, error) {
 		slowThreshold = 500 * time.Millisecond
 	}
 
-	gormLog := logger.NewGormLogger(log, gormLevel, slowThreshold, true /* ignoreNotFound */)
+	gormLog := logger.New(log, gormLevel, slowThreshold, true /* ignoreNotFound */)
 
 	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
 		Logger: gormLog,
@@ -356,4 +423,39 @@ func checkSocrateConnectivity(cfg *config.Config, log *logrus.Entry) error {
 
 	log.WithField("base_url", cfg.Socrate.BaseURL).Info("Socrate OAuth2 verified")
 	return nil
+}
+
+// ── Socrate userinfo profiler ─────────────────────────────────────────────────
+
+// socrateProfilerAdapter wraps *socrate.Client to satisfy middleware.UserProfileFetcher.
+// It calls the OIDC /oauth/userinfo endpoint using the JWT already stored in ctx
+// by AuthMiddleware (via socrate.WithJWT).
+type socrateProfilerAdapter struct{ c *socrate.Client }
+
+func (a *socrateProfilerAdapter) GetCurrentUserProfile(ctx context.Context) (email, name string, err error) {
+	u, err := a.c.GetCurrentUserProfile(ctx)
+	if err != nil || u == nil {
+		return "", "", err
+	}
+	// Derive best-available display name from ProfileInfo fields.
+	name = strings.TrimSpace(u.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(u.Name)
+	}
+	if name == "" {
+		combined := strings.TrimSpace(u.FirstName + " " + u.LastName)
+		if combined != " " {
+			name = strings.TrimSpace(combined)
+		}
+	}
+	return u.Email, name, nil
+}
+
+// newSocrateProfiler returns a middleware.UserProfileFetcher backed by the
+// Socrate client, or nil if the client is not configured.
+func newSocrateProfiler(c *socrate.Client) middleware.UserProfileFetcher {
+	if c == nil {
+		return nil
+	}
+	return &socrateProfilerAdapter{c: c}
 }

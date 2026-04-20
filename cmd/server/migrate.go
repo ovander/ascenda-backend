@@ -99,6 +99,9 @@ func runMigrations(db *gorm.DB, cfg *config.Config, log *logrus.Entry) error {
 		&model.PlanSnapshot{},
 		&model.AuditLog{},
 
+		// Platform-wide country rate configs (corporate tax, VAT, employer charge, MLT rate)
+		&model.CountryRateConfig{},
+
 		// AI usage control models
 		&model.AIUsagePolicy{},
 		&model.AIUsageRecord{},
@@ -118,6 +121,9 @@ func runMigrations(db *gorm.DB, cfg *config.Config, log *logrus.Entry) error {
 
 		// Magic-link sign-in tokens
 		&model.MagicLinkToken{},
+
+		// Feature policies — tier-to-feature access rules (admin-editable)
+		&model.FeaturePolicy{},
 
 		// Cap Table module (Enterprise tier)
 		&model.CapTableCompany{},
@@ -203,6 +209,13 @@ func runMigrations(db *gorm.DB, cfg *config.Config, log *logrus.Entry) error {
 		if err := quiet.Exec(sql).Error; err != nil {
 			return err
 		}
+	}
+
+	// ── Versioned SQL migrations (golang-migrate) ─────────────────────────────
+	// Applied after AutoMigrate so that the schema exists before data migrations run.
+	// Tracks applied versions in the schema_migrations table (auto-created).
+	if err := runSQLMigrations(cfg.DatabaseURL, log); err != nil {
+		return err
 	}
 
 	log.WithFields(logrus.Fields{

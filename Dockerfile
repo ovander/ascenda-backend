@@ -14,8 +14,13 @@ COPY . .
 
 # Build with optimizations
 ARG VERSION=dev
+ARG BUILD_TIME
+ARG GIT_COMMIT
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags "-s -w -X kerplan/internal/config.Version=${VERSION}" \
+    -ldflags "-s -w \
+      -X github.com/ovander/backendkit/buildinfo.Version=${VERSION} \
+      -X github.com/ovander/backendkit/buildinfo.BuildTime=${BUILD_TIME} \
+      -X github.com/ovander/backendkit/buildinfo.GitCommit=${GIT_COMMIT}" \
     -o /bin/kerplan-api ./cmd/server
 
 # ── Stage 2: Runtime ───────────────────────────

@@ -6,12 +6,17 @@ VERSION      := $(shell git describe --tags --always --dirty 2>/dev/null || echo
 BUILD_TIME   := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 GIT_COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GO           := go
-GOFLAGS      := -ldflags "-X main.buildTime=$(BUILD_TIME) -X main.gitCommit=$(GIT_COMMIT)"
+GOFLAGS      := -ldflags "-X github.com/ovander/backendkit/buildinfo.Version=$(VERSION) -X github.com/ovander/backendkit/buildinfo.BuildTime=$(BUILD_TIME) -X github.com/ovander/backendkit/buildinfo.GitCommit=$(GIT_COMMIT)"
 
 DATABASE_URL ?= postgres://kerplan:kerplan@localhost:5432/kerplan?sslmode=disable
+
+# golang-migrate CLI — used for local dev (make migrate-*).
+# Install via: make tools
+# The production deploy script uses the binary's built-in sub-command instead:
+#   ./kerplan-api migrate
 MIGRATE      := migrate -database "$(DATABASE_URL)" -path migrations
 
-.PHONY: help build run test lint clean migrate-up migrate-down migrate-create docker-build docker-run
+.PHONY: help build run test lint clean migrate-up migrate-down migrate-create migrate-version migrate-force migrate-status docker-build docker-run
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -57,7 +62,7 @@ vet: ## Run go vet
 
 # ── Database Migrations ──────────────
 
-migrate-up: ## Run all pending migrations
+migrate-up: ## Apply all pending SQL migrations (CLI runner)
 	$(MIGRATE) up
 
 migrate-down: ## Roll back one migration
@@ -66,14 +71,25 @@ migrate-down: ## Roll back one migration
 migrate-down-all: ## Roll back all migrations (DANGER)
 	$(MIGRATE) down
 
-migrate-create: ## Create a new migration (usage: make migrate-create name=add_foobar)
+migrate-create: ## Create a new migration pair (usage: make migrate-create name=add_foobar)
 	$(MIGRATE) create -ext sql -dir migrations -seq $(name)
+	@echo "Created migrations/$$(ls migrations/ | grep -E '[0-9]+_$(name)' | tail -1)"
 
 migrate-version: ## Show current migration version
 	$(MIGRATE) version
 
-migrate-force: ## Force a specific version (usage: make migrate-force version=5)
+migrate-status: ## Show pending vs applied migration count
+	@echo "Applied:" && $(MIGRATE) version 2>&1 || true
+	@echo "Files:  " && ls migrations/*.up.sql | wc -l | tr -d ' ' && echo " total"
+
+migrate-force: ## Mark a specific version as applied without running it (usage: make migrate-force version=12)
 	$(MIGRATE) force $(version)
+
+# On existing deployments that ran migrations manually before golang-migrate was
+# introduced, mark all 12 existing migrations as applied without re-running them:
+migrate-baseline: ## Mark all pre-numbered migrations as applied (run once on existing DBs)
+	$(MIGRATE) force 12
+	@echo "Baseline set to version 12 — only future migrations will be applied"
 
 # ── Database ─────────────────────────
 
