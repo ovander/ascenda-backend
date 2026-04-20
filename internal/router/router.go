@@ -51,6 +51,12 @@ func NewRouter(
 	reportTimeout := middleware.TimeoutMiddleware(30 * time.Second)
 	// Snapshot timeout (longest — captures/restores entire scenario)
 	snapshotTimeout := middleware.TimeoutMiddleware(60 * time.Second)
+	// AI timeout — LLM inference can take 30–90 s; give ample headroom.
+	// This value (120 s) MUST remain less than the HTTP server's WriteTimeout
+	// (150 s defined in cmd/server/bootstrap.go) so that this context-based
+	// timeout always fires first and can write a proper JSON error response.
+	// Raising this value above WriteTimeout would cause ERR_EMPTY_RESPONSE.
+	aiTimeout := middleware.TimeoutMiddleware(120 * time.Second)
 
 	// Rate limiters
 	generalLimiter := middleware.NewRateLimiter(100, 20) // 100 req/s, burst 20
@@ -106,6 +112,7 @@ func NewRouter(
 
 			// Aggregate stats
 			r.Get("/stats", handlers.Admin.AdminStats.GetStats)
+			r.Get("/ai-usage", handlers.Admin.AdminStats.GetAIUsage)
 
 			// Platform-wide user management (via Socrate proxy)
 			r.Route("/users", func(r chi.Router) {
@@ -130,27 +137,54 @@ func NewRouter(
 				})
 			})
 
+			// Enterprise organization management
+			// Each org is the billing umbrella for N department tenants.
+			r.Route("/organizations", func(r chi.Router) {
+				r.Get("/", handlers.Admin.AdminOrg.ListOrganizations)
+				r.Post("/", handlers.Admin.AdminOrg.CreateOrganization)
+				r.Route("/{orgId}", func(r chi.Router) {
+					r.Get("/", handlers.Admin.AdminOrg.GetOrganization)
+					r.Put("/", handlers.Admin.AdminOrg.UpdateOrganization)
+					r.Delete("/", handlers.Admin.AdminOrg.DeleteOrganization)
+					// Department tenants within the org
+					r.Get("/tenants", handlers.Admin.AdminOrg.ListOrgTenants)
+					r.Post("/tenants", handlers.Admin.AdminOrg.AddOrgTenant)
+				})
+			})
+
 			// Country rate config management
 			r.Route("/country-configs", func(r chi.Router) {
 				r.Get("/", handlers.Admin.AdminCountryConfig.List)
+				r.Post("/", handlers.Admin.AdminCountryConfig.Create)
 				r.Route("/{code}", func(r chi.Router) {
 					r.Get("/", handlers.Admin.AdminCountryConfig.Get)
 					r.Put("/", handlers.Admin.AdminCountryConfig.Update)
 					r.Post("/reset", handlers.Admin.AdminCountryConfig.Reset)
 				})
 			})
+
+			// Feature policy management — move features between tiers without redeploy
+			r.Route("/feature-policies", func(r chi.Router) {
+				r.Put("/{feature}", handlers.Admin.FeaturePolicy.Update)
+			})
 		})
 
-		// All data routes require tenant context (resolves Ascenda role from DB)
+		// All data routes require tenant context (resolves Ascenda role from DB).
+		// Note: the tenant middleware has a platform-admin fast-path — if the JWT
+		// role is "admin" it skips DB provisioning and preserves the role, so
+		// platform admins can safely call /users/me through this group too.
 		r.Group(func(r chi.Router) {
 			r.Use(tenantMW.Handler)
 
-			// User profile — needs tenant middleware to resolve Ascenda role
+			// User profile — works for both business users (DB role) and platform admins (JWT role).
 			r.Get("/users/me", handlers.Admin.User.GetMe)
 			r.Put("/users/me", handlers.Admin.User.UpdateMe)
 
 			// Metadata (enum lists for frontend)
 			r.Get("/metadata", handlers.Admin.Metadata.GetMetadata)
+
+			// Feature policies — public read so every client can evaluate tier limits
+			r.Get("/feature-policies", handlers.Admin.FeaturePolicy.List)
 
 			// User management routes (require manage:users permission)
 			r.Route("/users", func(r chi.Router) {
@@ -227,6 +261,13 @@ func NewRouter(
 						r.With(planAccessMW.RequirePlanEdit).Delete("/", handlers.Plans.Scenario.Delete)
 						r.With(planAccessMW.RequirePlanEdit).Post("/clone", handlers.Plans.Scenario.Clone)
 						r.Get("/impact", handlers.Plans.Plan.GetScenarioImpact)
+
+						// Scenario analysis — decision-intelligence layer (viability, risks, drivers)
+						r.Group(func(r chi.Router) {
+							r.Use(reportTimeout)
+							r.Use(reportLimiter.Handler)
+							r.Get("/analysis", handlers.Plans.ScenarioAnalysis.Analyze)
+						})
 
 						// Dev audit download — full audit trail for this scenario as JSON attachment.
 						r.Get("/audit/download", handlers.Plans.Audit.DownloadByScenario)
@@ -567,11 +608,11 @@ func NewRouter(
 						})
 
 						// ── AI narration routes ───────────────────────────────────────────────────────────────────
-						// Report timeout applied (LLM calls can take several seconds).
+						// AI timeout applied — LLM inference needs up to 120 s.
 						// Standard-tier: quota enforced by AI access middleware.
 						// Pro/Enterprise: structural tier gate + AI access middleware.
 						r.Route("/ai", func(r chi.Router) {
-							r.Use(reportTimeout)
+							r.Use(aiTimeout)
 							r.Use(reportLimiter.Handler)
 							// Resolve enriches every AI request with the tenant's real subscription
 							// tier before any access or recording middleware runs.  This ensures

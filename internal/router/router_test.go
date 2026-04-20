@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"ascenda/internal/middleware"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/repo"
 )
 
