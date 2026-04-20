@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 
 	pgContainer, err := tcpostgres.Run(ctx,
 		"postgres:16-alpine",
-		tcpostgres.WithDatabase("kerplan_test"),
+		tcpostgres.WithDatabase("ascenda_test"),
 		tcpostgres.WithUsername("testuser"),
 		tcpostgres.WithPassword("testpass"),
 		testcontainers.WithWaitStrategy(

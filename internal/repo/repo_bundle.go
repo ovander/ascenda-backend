@@ -31,8 +31,9 @@ type RepoBundle struct {
 	PlanMember *PlanMemberRepo
 
 	// AI usage control
-	AIUsagePolicy *AIUsagePolicyRepo
-	AIUsageRecord *AIUsageRecordRepo
+	AIUsagePolicy    *AIUsagePolicyRepo
+	AIUsageRecord    *AIUsageRecordRepo
+	AINarrationCache *AINarrationCacheRepo
 
 	// Cap Table module (Enterprise tier)
 	CapTable *CapTableRepo
@@ -48,6 +49,12 @@ type RepoBundle struct {
 
 	// Platform-wide country rate configs (admin-editable)
 	CountryRateConfig *CountryRateConfigRepo
+
+	// Feature policies — tier-to-feature access rules (admin-editable)
+	FeaturePolicy *FeaturePolicyRepo
+
+	// Organization — enterprise billing/admin umbrella for groups of tenants
+	Org *OrgRepo
 }
 
 // ── PlanDeps interface implementation ─────────────────────────────────────────
@@ -91,8 +98,9 @@ func NewRepoBundle(db *gorm.DB) *RepoBundle {
 		Audit:      NewAuditRepo(db),
 		PlanMember: NewPlanMemberRepo(db),
 		// AI usage control
-		AIUsagePolicy: NewAIUsagePolicyRepo(db),
-		AIUsageRecord: NewAIUsageRecordRepo(db),
+		AIUsagePolicy:    NewAIUsagePolicyRepo(db),
+		AIUsageRecord:    NewAIUsageRecordRepo(db),
+		AINarrationCache: NewAINarrationCacheRepo(db),
 
 		// Cap Table module (Enterprise tier)
 		CapTable: NewCapTableRepo(db),
@@ -108,5 +116,11 @@ func NewRepoBundle(db *gorm.DB) *RepoBundle {
 
 		// Platform-wide country rate configs (admin-editable)
 		CountryRateConfig: NewCountryRateConfigRepo(db),
+
+		// Feature policies
+		FeaturePolicy: NewFeaturePolicyRepo(db),
+
+		// Enterprise organizations
+		Org: NewOrgRepo(db),
 	}
 }

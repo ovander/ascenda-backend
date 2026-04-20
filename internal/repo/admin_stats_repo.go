@@ -7,6 +7,27 @@ import (
 	"ascenda/internal/model"
 )
 
+
+// ─── AI Usage result types ────────────────────────────────────────────────────
+
+// PlatformAIFeatureRow holds aggregated AI usage data for one feature across all tenants.
+type PlatformAIFeatureRow struct {
+	FeatureType        string  `gorm:"column:feature_type"`
+	TotalCalls         int64   `gorm:"column:total_calls"`
+	SuccessfulCalls    int64   `gorm:"column:successful_calls"`
+	TotalTokens        int64   `gorm:"column:total_tokens"`
+	EstimatedCostCents float64 `gorm:"column:estimated_cost_cents"`
+}
+
+// PlatformAITenantRow holds aggregated AI usage data per tenant.
+type PlatformAITenantRow struct {
+	TenantID           string  `gorm:"column:tenant_id"`
+	TotalCalls         int64   `gorm:"column:total_calls"`
+	SuccessfulCalls    int64   `gorm:"column:successful_calls"`
+	TotalTokens        int64   `gorm:"column:total_tokens"`
+	EstimatedCostCents float64 `gorm:"column:estimated_cost_cents"`
+}
+
 // AdminStatsRepo runs platform-wide aggregate queries for the admin dashboard.
 // All queries are intentionally unscoped by tenant_id — the platform admin sees
 // data across all tenants.
@@ -63,6 +84,22 @@ func (r *AdminStatsRepo) CountUsersByRole() ([]UserRoleCount, error) {
 	return results, err
 }
 
+// PlanCount holds a plan value and its user count.
+type PlanCount struct {
+	Plan  string
+	Count int64
+}
+
+// CountUsersByPlan returns the platform-wide number of users per commercial plan.
+func (r *AdminStatsRepo) CountUsersByPlan() ([]PlanCount, error) {
+	var results []PlanCount
+	err := r.db.Model(&model.User{}).
+		Select("plan, COUNT(*) as count").
+		Group("plan").
+		Scan(&results).Error
+	return results, err
+}
+
 // CountUsersByActivity returns the platform-wide active and inactive user counts.
 func (r *AdminStatsRepo) CountUsersByActivity() (active, inactive int64, err error) {
 	if e := r.db.Model(&model.User{}).
@@ -111,12 +148,12 @@ func (r *AdminStatsRepo) GetRecentActivity(limit int) ([]ActivityRow, error) {
 			a.entity_type,
 			COALESCE(bp.name, s.name, '') AS entity_name,
 			a.action,
-			u.email AS user_email,
+			COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(u.email), ''), NULLIF(TRIM(u.external_id), ''), 'User #' || LEFT(a.user_id::text, 8)) AS user_email,
 			a.created_at
 		FROM audit_logs a
 		LEFT JOIN business_plans bp ON bp.id = a.entity_id AND a.entity_type = 'plan'
 		LEFT JOIN scenarios      s  ON s.id  = a.entity_id AND a.entity_type = 'scenario'
-		JOIN  users u ON u.id = a.user_id
+		LEFT JOIN users          u  ON u.id  = a.user_id
 		WHERE a.entity_type IN ('plan', 'scenario')
 		ORDER BY a.created_at DESC
 		LIMIT ?
@@ -124,12 +161,73 @@ func (r *AdminStatsRepo) GetRecentActivity(limit int) ([]ActivityRow, error) {
 	return rows, err
 }
 
+// GetPlatformAIUsageByFeature returns aggregated AI usage grouped by feature type
+// for the given time range, across all tenants.
+func (r *AdminStatsRepo) GetPlatformAIUsageByFeature(start, end time.Time) ([]PlatformAIFeatureRow, error) {
+	var rows []PlatformAIFeatureRow
+	err := r.db.Raw(`
+		SELECT
+			feature_type,
+			COUNT(*)                              AS total_calls,
+			SUM(CASE WHEN success THEN 1 ELSE 0 END) AS successful_calls,
+			COALESCE(SUM(tokens_used), 0)         AS total_tokens,
+			COALESCE(SUM(estimated_cost_cents), 0) AS estimated_cost_cents
+		FROM ai_usage_records
+		WHERE used_at >= ? AND used_at < ?
+		GROUP BY feature_type
+		ORDER BY total_calls DESC
+	`, start, end).Scan(&rows).Error
+	return rows, err
+}
+
+// GetPlatformAIUsageByTenant returns aggregated AI usage grouped by tenant
+// for the given time range.
+func (r *AdminStatsRepo) GetPlatformAIUsageByTenant(start, end time.Time) ([]PlatformAITenantRow, error) {
+	var rows []PlatformAITenantRow
+	err := r.db.Raw(`
+		SELECT
+			tenant_id::text                       AS tenant_id,
+			COUNT(*)                              AS total_calls,
+			SUM(CASE WHEN success THEN 1 ELSE 0 END) AS successful_calls,
+			COALESCE(SUM(tokens_used), 0)         AS total_tokens,
+			COALESCE(SUM(estimated_cost_cents), 0) AS estimated_cost_cents
+		FROM ai_usage_records
+		WHERE used_at >= ? AND used_at < ?
+		GROUP BY tenant_id
+		ORDER BY total_calls DESC
+		LIMIT 50
+	`, start, end).Scan(&rows).Error
+	return rows, err
+}
+
+// CountPlatformAICalls returns total AI call counts for today, this week, and this month.
+func (r *AdminStatsRepo) CountPlatformAICalls(now time.Time) (today, week, month int64, err error) {
+	dailyKey := now.Format("2006-01-02")
+	year, w := now.ISOWeek()
+	weeklyKey := aiRecordFormatWeekKey(year, w)
+	monthlyKey := now.Format("2006-01")
+
+	type result struct {
+		Today int64
+		Week  int64
+		Month int64
+	}
+	var res result
+	err = r.db.Raw(`
+		SELECT
+			(SELECT COUNT(*) FROM ai_usage_records WHERE daily_key   = ?) AS today,
+			(SELECT COUNT(*) FROM ai_usage_records WHERE weekly_key  = ?) AS week,
+			(SELECT COUNT(*) FROM ai_usage_records WHERE monthly_key = ?) AS month
+	`, dailyKey, weeklyKey, monthlyKey).Scan(&res).Error
+	return res.Today, res.Week, res.Month, err
+}
+
 // GetTopUsers returns users ranked by the number of plans they created, across all tenants.
 func (r *AdminStatsRepo) GetTopUsers(limit int) ([]TopUserRow, error) {
 	var rows []TopUserRow
 	err := r.db.Raw(`
 		SELECT
-			u.name,
+			COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(u.email), ''), NULLIF(TRIM(u.external_id), ''), 'User #' || LEFT(u.id::text, 8)) AS name,
 			u.email,
 			u.tenant_id::text AS tenant_id,
 			COUNT(DISTINCT bp.id) AS plan_count,

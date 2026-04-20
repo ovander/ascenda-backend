@@ -307,7 +307,8 @@ type PlanDeps interface {
 // Compile-time interface compliance checks
 var (
 	_ PlanRepository        = (*PlanRepo)(nil)
-	_ PlanDeps = (*RepoBundle)(nil)
+	_ PlanDeps              = (*RepoBundle)(nil)
+	_ OrganizationRepository = (*OrgRepo)(nil)
 
 	_ ScenarioRepository    = (*ScenarioRepo)(nil)
 	_ TenantRepository      = (*TenantRepo)(nil)

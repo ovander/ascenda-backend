@@ -26,7 +26,6 @@ func TestTenantRepo_Create_Succeeds(t *testing.T) {
 		Name:     "Acme-" + uid,
 		Slug:     "acme-" + uid,
 		IsActive: true,
-		Tier:     "free",
 	}
 
 	err := r.Create(tenant)
@@ -45,7 +44,6 @@ func TestTenantRepo_Create_RejectsNonUniqueSlug(t *testing.T) {
 		Name:     "Other Name",
 		Slug:     existing.Slug, // same slug — unique index must reject this
 		IsActive: true,
-		Tier:     "free",
 	}
 
 	err := r.Create(duplicate)
@@ -213,7 +211,6 @@ func TestTenantRepo_Update_PersistsNameChange(t *testing.T) {
 	db := testDB(t)
 	tenant := makeTenant(t, db)
 	tenant.Name = "Renamed Corp"
-	tenant.Tier = "pro"
 
 	r := repo.NewTenantRepo(db)
 	require.NoError(t, r.Update(tenant))
@@ -221,7 +218,6 @@ func TestTenantRepo_Update_PersistsNameChange(t *testing.T) {
 	fetched, err := r.GetByID(tenant.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Renamed Corp", fetched.Name)
-	assert.Equal(t, "pro", fetched.Tier)
 }
 
 func TestTenantRepo_Update_DoesNotAffectOtherTenants(t *testing.T) {

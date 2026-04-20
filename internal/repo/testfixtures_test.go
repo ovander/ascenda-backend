@@ -25,9 +25,6 @@ func makeTenant(t *testing.T, db *gorm.DB) *model.Tenant {
 		Name:     "Tenant-" + uid,
 		Slug:     "tenant-" + uid,
 		IsActive: true,
-		Tier:     "free",
-		MaxPlans: 10,
-		MaxUsers: 10,
 	}
 	require.NoError(t, db.Create(tenant).Error, "makeTenant: create")
 	return tenant
