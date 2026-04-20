@@ -12,8 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/repo"
 	"ascenda/internal/service"
 )

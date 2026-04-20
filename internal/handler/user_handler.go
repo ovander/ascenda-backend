@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // UserServiceIface defines the service methods used by UserHandler.
@@ -43,7 +43,8 @@ type UserDTO struct {
 	ID         string  `json:"id"`
 	Email      string  `json:"email"`
 	Name       string  `json:"name"`
-	Role       string  `json:"role"`
+	Role       string  `json:"role"`        // Ascenda role: owner | editor | reader | admin
+	Plan       string  `json:"plan"`        // commercial plan: freemium | pro | enterprise
 	IsActive   bool    `json:"isActive"`
 	JoinedAt   *string `json:"joinedAt,omitempty"`
 	InvitedBy  *string `json:"invitedBy,omitempty"`
@@ -59,7 +60,12 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	role := ctxutil.GetUserRole(ctx)
 
 	if role == "" {
-		role = "user"
+		role = "editor"
+	}
+
+	plan := ctxutil.GetUserPlan(ctx)
+	if plan == "" {
+		plan = "freemium"
 	}
 
 	respondJSON(w, http.StatusOK, UserDTO{
@@ -67,6 +73,7 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		Email: email,
 		Name:  name,
 		Role:  role,
+		Plan:  plan,
 	})
 }
 
@@ -124,6 +131,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 			Email:      u.Email,
 			Name:       u.Name,
 			Role:       u.Role,
+			Plan:       u.Plan,
 			IsActive:   u.IsActive,
 			ExternalID: u.ExternalID,
 		}

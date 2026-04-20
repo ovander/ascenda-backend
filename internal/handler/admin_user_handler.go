@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/socrate"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/socrate"
 	"ascenda/internal/service"
 )
 
@@ -137,6 +137,13 @@ func (h *AdminUserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	user, err := h.adminUserService.UpdateUser(r.Context(), userID, req)
 	if err != nil {
 		handleError(w, r, err)
+		return
+	}
+
+	// nil DTO means only local fields (plan/ascendaRole) were changed —
+	// no Socrate data to return; the client merges the changes itself.
+	if user == nil {
+		respondNoContent(w)
 		return
 	}
 

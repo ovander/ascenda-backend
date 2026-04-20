@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/service"
 )
 
@@ -543,7 +543,6 @@ func TestAdminUserHandler_GetTenant_Success(t *testing.T) {
 		ID:   tenantID.String(),
 		Name: "ACME Corp",
 		Slug: "acme",
-		Tier: "professional",
 	}
 
 	svc := &mockAdminUserService{
@@ -602,7 +601,6 @@ func TestAdminUserHandler_CreateTenant_Success(t *testing.T) {
 		ID:   uuid.New().String(),
 		Name: "New Tenant",
 		Slug: "new-tenant",
-		Tier: "free",
 	}
 
 	svc := &mockAdminUserService{
@@ -668,7 +666,6 @@ func TestAdminUserHandler_UpdateTenant_Success(t *testing.T) {
 		ID:   tenantID.String(),
 		Name: "Updated Tenant",
 		Slug: "new-tenant",
-		Tier: "professional",
 	}
 
 	svc := &mockAdminUserService{

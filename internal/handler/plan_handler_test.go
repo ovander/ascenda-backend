@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
-	"ascenda/internal/pkg/pagination"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/ovander/backendkit/pagination"
 	"ascenda/internal/service"
 )
 

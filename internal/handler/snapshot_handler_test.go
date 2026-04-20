@@ -13,9 +13,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
-	"ascenda/internal/pkg/pagination"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/ovander/backendkit/pagination"
 	"ascenda/internal/service"
 )
 

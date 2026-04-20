@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/service"
 )
 

@@ -11,8 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
-	"ascenda/internal/pkg/pagination"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/ovander/backendkit/pagination"
 )
 
 // SnapshotServicer interface for dependency injection.

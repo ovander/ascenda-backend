@@ -1,14 +1,17 @@
 package handler
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
+	"ascenda/internal/repo"
 	"ascenda/internal/service"
 )
 
@@ -17,15 +20,17 @@ type AuthHandler struct {
 	config       *config.Config
 	httpClient   *http.Client
 	registration *service.RegistrationService
+	userRepo     repo.UserRepository // optional; used to enrich email/name from id_token
 	logger       *logrus.Entry
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(cfg *config.Config, registration *service.RegistrationService, logger *logrus.Entry) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, registration *service.RegistrationService, userRepo repo.UserRepository, logger *logrus.Entry) *AuthHandler {
 	return &AuthHandler{
 		config:       cfg,
 		httpClient:   &http.Client{Timeout: 10 * time.Second},
 		registration: registration,
+		userRepo:     userRepo,
 		logger:       logger,
 	}
 }
@@ -70,10 +75,13 @@ type CallbackRequest struct {
 	RedirectURI  string `json:"redirectUri,omitempty"`
 }
 
-// socrateTokenResponse represents the OAuth2 token response from Socrate (snake_case).
+// socrateTokenResponse represents the OAuth2/OIDC token response from Socrate (snake_case).
+// id_token is an OIDC ID token (JWT) that contains user claims (email, name, sub, etc.)
+// and is issued when the authorization request includes the "openid email profile" scopes.
 type socrateTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	IDToken      string `json:"id_token"` // OIDC ID token — contains email, name, sub
 	ExpiresIn    int    `json:"expires_in"`
 	TokenType    string `json:"token_type"`
 }
@@ -123,11 +131,74 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		handleError(w, r, apierror.Internal("failed to decode token response"))
 		return
 	}
+
+	// If Socrate returned an OIDC id_token, decode its payload to extract email/name
+	// and update the user record eagerly. The id_token is issued when the frontend
+	// requests the "openid email profile" scopes. No signature verification is needed
+	// here because the token came directly from Socrate over HTTPS (trusted channel).
+	if socrateTokens.IDToken != "" && h.userRepo != nil {
+		h.enrichUserFromIDToken(socrateTokens.IDToken)
+	}
+
 	respondJSON(w, http.StatusOK, TokenResponse{
 		AccessToken:  socrateTokens.AccessToken,
 		RefreshToken: socrateTokens.RefreshToken,
 		ExpiresIn:    socrateTokens.ExpiresIn,
 	})
+}
+
+// enrichUserFromIDToken decodes the OIDC id_token payload (no sig verification —
+// token came directly from Socrate over HTTPS) and updates the matching user record
+// with email and name if those fields are currently empty.
+func (h *AuthHandler) enrichUserFromIDToken(idToken string) {
+	parts := strings.Split(idToken, ".")
+	if len(parts) != 3 {
+		return
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return
+	}
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return
+	}
+
+	sub, _ := claims["sub"].(string)
+	email, _ := claims["email"].(string)
+	name, _ := claims["name"].(string)
+	if name == "" {
+		given, _ := claims["given_name"].(string)
+		family, _ := claims["family_name"].(string)
+		name = strings.TrimSpace(given + " " + family)
+	}
+
+	if sub == "" || (email == "" && name == "") {
+		return
+	}
+
+	user, err := h.userRepo.GetByExternalID(sub)
+	if err != nil || user == nil {
+		return // user hasn't been auto-provisioned yet — TenantMiddleware will do it on first request
+	}
+
+	changed := false
+	if email != "" && user.Email != email {
+		user.Email = email
+		changed = true
+	}
+	if name != "" && user.Name != name {
+		user.Name = name
+		changed = true
+	}
+	if changed {
+		if updateErr := h.userRepo.Update(user); updateErr != nil {
+			h.logger.WithError(updateErr).Warn("failed to persist user profile from id_token")
+		} else {
+			h.logger.WithFields(logrus.Fields{"sub": sub, "email": email}).
+				Debug("user profile enriched from OIDC id_token")
+		}
+	}
 }
 
 // RefreshRequest represents a token refresh request.

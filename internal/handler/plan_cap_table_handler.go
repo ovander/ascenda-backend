@@ -9,8 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/repo"
 )
 

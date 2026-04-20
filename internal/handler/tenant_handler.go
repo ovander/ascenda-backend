@@ -5,8 +5,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/service"
 )
 

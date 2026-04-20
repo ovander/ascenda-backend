@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // mockTenantService implements service.TenantServicer for handler unit tests.
@@ -47,9 +47,6 @@ func TestTenantHandlerGet(t *testing.T) {
 		ID:       tenantID,
 		Name:     "Acme",
 		Slug:     "acme",
-		Tier:     "pro",
-		MaxPlans: 10,
-		MaxUsers: 20,
 		IsActive: true,
 	}}
 	handler := newTestTenantHandler(svc)
@@ -68,9 +65,6 @@ func TestTenantHandlerGet(t *testing.T) {
 	assert.Equal(t, tenantID.String(), resp.ID)
 	assert.Equal(t, "Acme", resp.Name)
 	assert.Equal(t, "acme", resp.Slug)
-	assert.Equal(t, "pro", resp.Tier)
-	assert.Equal(t, 10, resp.MaxPlans)
-	assert.Equal(t, 20, resp.MaxUsers)
 	assert.True(t, resp.IsActive)
 }
 

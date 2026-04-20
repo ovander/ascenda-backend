@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

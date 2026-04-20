@@ -3,15 +3,17 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/socrate"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,27 +68,30 @@ func (s *handlerTestTokenStore) MarkUsed(id uuid.UUID) error {
 
 type capturingMailer struct {
 	mu       sync.Mutex
-	lastURL  string
 	lastMail string
 }
 
-func (m *capturingMailer) SendMagicLink(_ context.Context, email, callbackURL string) error {
+func (m *capturingMailer) SendMagicLink(_ context.Context, email string) (*socrate.MagicLinkResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lastMail = email
-	m.lastURL = callbackURL
-	return nil
+	return &socrate.MagicLinkResponse{}, nil
 }
 
-func (m *capturingMailer) capturedToken() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	// URL format: http://localhost:8080/auth/magic-link/verify?token=<rawToken>
-	idx := strings.LastIndex(m.lastURL, "?token=")
-	if idx < 0 {
-		return ""
+// seedToken inserts a known raw token directly into a handlerTestTokenStore
+// so verify tests can use a predictable token without relying on mailer capture.
+func seedToken(store *handlerTestTokenStore, rawToken, email, redirectURL string) {
+	h := sha256.Sum256([]byte(rawToken))
+	tokenHash := hex.EncodeToString(h[:])
+	store.mu.Lock()
+	store.tokens[tokenHash] = &model.MagicLinkToken{
+		ID:          uuid.New(),
+		Email:       email,
+		TokenHash:   tokenHash,
+		RedirectURL: redirectURL,
+		ExpiresAt:   time.Now().Add(15 * time.Minute),
 	}
-	return m.lastURL[idx+7:]
+	store.mu.Unlock()
 }
 
 // ── test config ───────────────────────────────────────────────────────────────
@@ -207,24 +212,13 @@ func TestMagicLinkHandler_Verify_InvalidToken_RedirectsWithError(t *testing.T) {
 }
 
 func TestMagicLinkHandler_Verify_ValidToken_RedirectsToSocrateOAuth(t *testing.T) {
-	h, mailer, _ := newHandlerWithMailer()
+	h, _, store := newHandlerWithMailer()
 
-	// Step 1: send a magic link for the email.
-	sendBody, _ := json.Marshal(map[string]string{
-		"email":    "user@example.com",
-		"redirect": "/reports",
-	})
-	sendReq := httptest.NewRequest(http.MethodPost, "/auth/magic-link", bytes.NewReader(sendBody))
-	sendReq.Header.Set("Content-Type", "application/json")
-	sendW := httptest.NewRecorder()
-	h.Send(sendW, sendReq)
-	require.Equal(t, http.StatusAccepted, sendW.Code)
+	// Pre-seed a known raw token directly into the store.
+	const rawToken = "aabbccdd1122334455667788aabbccdd1122334455667788aabbccdd11223344"
+	seedToken(store, rawToken, "user@example.com", "/reports")
 
-	// Step 2: recover the raw token from the captured email URL.
-	rawToken := mailer.capturedToken()
-	require.NotEmpty(t, rawToken, "mailer should have captured the token")
-
-	// Step 3: verify the token.
+	// Verify the token.
 	verifyReq := httptest.NewRequest(http.MethodGet, "/auth/magic-link/verify?token="+rawToken, nil)
 	verifyW := httptest.NewRecorder()
 	h.Verify(verifyW, verifyReq)
@@ -238,14 +232,10 @@ func TestMagicLinkHandler_Verify_ValidToken_RedirectsToSocrateOAuth(t *testing.T
 }
 
 func TestMagicLinkHandler_Verify_TokenSingleUse(t *testing.T) {
-	h, mailer, _ := newHandlerWithMailer()
+	h, _, store := newHandlerWithMailer()
 
-	sendBody, _ := json.Marshal(map[string]string{"email": "u@x.com"})
-	sendReq := httptest.NewRequest(http.MethodPost, "/auth/magic-link", bytes.NewReader(sendBody))
-	sendReq.Header.Set("Content-Type", "application/json")
-	h.Send(httptest.NewRecorder(), sendReq)
-
-	rawToken := mailer.capturedToken()
+	const rawToken = "deadbeef1234567890abcdef1234567890abcdef1234567890abcdef12345678"
+	seedToken(store, rawToken, "u@x.com", "")
 	require.NotEmpty(t, rawToken)
 
 	// First use: succeeds.

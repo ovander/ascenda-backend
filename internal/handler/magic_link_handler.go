@@ -8,7 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/service"
 )
 

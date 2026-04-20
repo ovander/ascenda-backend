@@ -13,21 +13,29 @@ package handler
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/service"
 )
 
 // AIHandler handles all AI-powered narration requests.
 type AIHandler struct {
-	narration *service.AINarrationService
-	logger    *logrus.Entry
+	narration    *service.AINarrationService
+	sensEngine   *service.SensitivityEngine
+	logger       *logrus.Entry
 }
 
 // NewAIHandler creates a new AIHandler.
-func NewAIHandler(narration *service.AINarrationService, logger *logrus.Entry) *AIHandler {
+func NewAIHandler(
+	narration *service.AINarrationService,
+	sensEngine *service.SensitivityEngine,
+	logger *logrus.Entry,
+) *AIHandler {
 	return &AIHandler{
-		narration: narration,
-		logger:    logger,
+		narration:  narration,
+		sensEngine: sensEngine,
+		logger:     logger,
 	}
 }
 
@@ -44,6 +52,18 @@ type AIFeatureRequest struct {
 // AIFeatureResponse wraps the narration output returned to the client.
 type AIFeatureResponse struct {
 	Narration *service.NarrationOutput `json:"narration"`
+}
+
+// respondAINarration writes a JSON response for an AI narration result.
+// When the output is a deterministic fallback (IsAIGenerated = false) it sets
+// the X-AI-Generated: false response header so that AIUsageRecorder can skip
+// quota consumption — a failed AI call should not count against the user's
+// daily/weekly/monthly limit.
+func respondAINarration(w http.ResponseWriter, out *service.NarrationOutput) {
+	if out != nil && !out.IsAIGenerated {
+		w.Header().Set("X-AI-Generated", "false")
+	}
+	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
 }
 
 // ============================================================================
@@ -66,7 +86,7 @@ func (h *AIHandler) Narrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }
 
 // ============================================================================
@@ -89,7 +109,7 @@ func (h *AIHandler) UnitEconomics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }
 
 // AssumptionReview handles POST /ai/assumption-review.
@@ -108,7 +128,7 @@ func (h *AIHandler) AssumptionReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }
 
 // BenchmarkCommentary handles POST /ai/benchmark-commentary.
@@ -127,7 +147,7 @@ func (h *AIHandler) BenchmarkCommentary(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }
 
 // PortfolioMix handles POST /ai/portfolio-mix.
@@ -146,7 +166,7 @@ func (h *AIHandler) PortfolioMix(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }
 
 // DriverAdvisor handles POST /ai/driver-advisor.
@@ -166,7 +186,7 @@ func (h *AIHandler) DriverAdvisor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }
 
 // ScenarioSuggestion handles POST /ai/scenario-suggestion.
@@ -187,16 +207,35 @@ func (h *AIHandler) ScenarioSuggestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }
 
 // SensitivityNarrative handles POST /ai/sensitivity-narrative.
-// Expects sensitivity_levers (pre-computed) in the context.
+// Computes sensitivity levers server-side by perturbing the financial model,
+// then passes them to the AI narration service.
 func (h *AIHandler) SensitivityNarrative(w http.ResponseWriter, r *http.Request) {
 	var req AIFeatureRequest
 	if err := decodeAndValidate(r, &req); err != nil {
 		handleError(w, r, err)
 		return
+	}
+
+	// Compute sensitivity levers from the live financial model — the backend
+	// owns this calculation; the frontend does not need to send lever data.
+	if h.sensEngine != nil {
+		scenarioID, err := parseUUIDParam(chi.URLParam(r, "scenarioId"))
+		if err != nil {
+			handleError(w, r, err)
+			return
+		}
+		tenantID := ctxutil.GetTenantID(r.Context())
+		levers, err := h.sensEngine.ComputeSensitivityLevers(r.Context(), tenantID, scenarioID)
+		if err != nil {
+			// Non-fatal: proceed without lever data rather than failing the whole request.
+			h.logger.WithError(err).Warn("failed to compute sensitivity levers — proceeding without them")
+		} else {
+			req.Context.SensitivityLevers = levers
+		}
 	}
 
 	req.Context.NarrationType = service.NarrationTypeSensitivityNarrative
@@ -206,7 +245,7 @@ func (h *AIHandler) SensitivityNarrative(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }
 
 // ============================================================================
@@ -229,5 +268,5 @@ func (h *AIHandler) InvestorMemo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, AIFeatureResponse{Narration: out})
+	respondAINarration(w, out)
 }

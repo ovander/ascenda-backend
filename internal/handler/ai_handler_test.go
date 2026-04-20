@@ -30,7 +30,9 @@ import (
 // service (no AI API key → always returns deterministic fallback).
 func newTestAIHandler() *AIHandler {
 	svc := service.NewAINarrationService(config.AIConfig{}, logrus.NewEntry(logrus.New()))
-	return NewAIHandler(svc, logrus.NewEntry(logrus.New()))
+	// nil SensitivityEngine: no DB is available in unit tests; the handler
+	// gracefully logs a warning and proceeds without lever data.
+	return NewAIHandler(svc, nil, logrus.NewEntry(logrus.New()))
 }
 
 // minimalAIRequest builds a minimal valid AIFeatureRequest JSON body.

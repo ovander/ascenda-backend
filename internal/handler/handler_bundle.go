@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/ovander/backendkit/buildinfo"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"ascenda/internal/config"
@@ -18,18 +19,21 @@ type AdminHandlers struct {
 	Metadata   *MetadataHandler
 	AdminStats          *AdminStatsHandler
 	AdminUser           *AdminUserHandler
+	AdminOrg            *AdminOrgHandler
 	AdminCountryConfig  *AdminCountryConfigHandler
+	FeaturePolicy       *FeaturePolicyHandler
 	Metrics             *MetricsHandler
 }
 
 // PlanHandlers groups plan lifecycle handlers.
 type PlanHandlers struct {
-	Plan       *PlanHandler
-	Scenario   *ScenarioHandler
-	Settings   *SettingsHandler
-	Snapshot   *SnapshotHandler
-	PlanMember *PlanMemberHandler
-	Audit      *AuditHandler
+	Plan             *PlanHandler
+	Scenario         *ScenarioHandler
+	ScenarioAnalysis *ScenarioAnalysisHandler
+	Settings         *SettingsHandler
+	Snapshot         *SnapshotHandler
+	PlanMember       *PlanMemberHandler
+	Audit            *AuditHandler
 }
 
 // FinanceHandlers groups financial data and report handlers.
@@ -71,23 +75,26 @@ func NewHandlerBundle(services *service.ServiceBundle, repos *repo.RepoBundle, d
 	return &HandlerBundle{
 		Admin: AdminHandlers{
 			Health:     NewHealthHandler(db, logger),
-			Auth:       NewAuthHandler(cfg, services.Registration, logger),
+			Auth:       NewAuthHandler(cfg, services.Registration, repos.User, logger),
 			MagicLink:  NewMagicLinkHandler(services.MagicLink, cfg, logger),
 			User:       NewUserHandler(services.User, logger),
 			Tenant:     NewTenantHandler(services.Tenant, logger),
-			Metadata:   NewMetadataHandler(cfg.Version, cfg.BuildTime, cfg.GitCommit, logger),
+			Metadata:   NewMetadataHandler(buildinfo.Version, buildinfo.BuildTime, buildinfo.GitCommit, logger),
 			AdminStats:         NewAdminStatsHandler(services.Admin, logger),
 			AdminUser:          NewAdminUserHandler(services.AdminUser, logger),
+			AdminOrg:           NewAdminOrgHandler(services.Organization, logger),
 			AdminCountryConfig: NewAdminCountryConfigHandler(services.CountryRateConfig, logger),
+			FeaturePolicy:      NewFeaturePolicyHandler(services.FeaturePolicy, logger),
 			Metrics:    NewMetricsHandler(),
 		},
 		Plans: PlanHandlers{
-			Plan:       NewPlanHandler(services.Plan, services.Seed, logger),
-			Scenario:   NewScenarioHandler(services.Plan, logger),
-			Settings:   NewSettingsHandler(services.Settings, logger),
-			Snapshot:   NewSnapshotHandler(services.Snapshot, logger),
-			PlanMember: NewPlanMemberHandler(repos.PlanMember, logger),
-			Audit:      NewAuditHandler(repos.Audit, services.Snapshot, logger),
+			Plan:             NewPlanHandler(services.Plan, services.Seed, logger),
+			Scenario:         NewScenarioHandler(services.Plan, logger),
+			ScenarioAnalysis: NewScenarioAnalysisHandler(services.ScenarioAnalysis, logger),
+			Settings:         NewSettingsHandler(services.Settings, logger),
+			Snapshot:         NewSnapshotHandler(services.Snapshot, logger),
+			PlanMember:       NewPlanMemberHandler(repos.PlanMember, logger),
+			Audit:            NewAuditHandler(repos.Audit, services.Snapshot, logger),
 		},
 		Finance: FinanceHandlers{
 			Product:  NewProductHandler(services.Product, logger),
@@ -109,7 +116,11 @@ func NewHandlerBundle(services *service.ServiceBundle, repos *repo.RepoBundle, d
 		BEP:          NewBEPHandler(services.BEP, logger),
 		},
 		AI: AIHandlers{
-			AI: NewAIHandler(services.AINarration, logger),
+			AI: NewAIHandler(
+				services.AINarration,
+				service.NewSensitivityEngine(services.PlanOrchestrator, logger),
+				logger,
+			),
 		},
 	}
 }

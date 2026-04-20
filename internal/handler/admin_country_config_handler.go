@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/service"
 )
 
@@ -16,6 +16,7 @@ import (
 type CountryRateConfigSvc interface {
 	List() ([]*model.CountryRateConfig, error)
 	GetByCode(code string) (*model.CountryRateConfig, error)
+	Create(req service.CreateCountryRateConfigRequest) (*model.CountryRateConfig, error)
 	Update(code string, req service.UpdateCountryRateConfigRequest) (*model.CountryRateConfig, error)
 	ResetToDefault(code string) (*model.CountryRateConfig, error)
 }
@@ -53,6 +54,21 @@ func (h *AdminCountryConfigHandler) Get(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	respondJSON(w, http.StatusOK, cfg)
+}
+
+// Create handles POST /api/v1/admin/country-configs
+func (h *AdminCountryConfigHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req service.CreateCountryRateConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		handleError(w, r, apierror.BadRequest("invalid request body"))
+		return
+	}
+	cfg, err := h.svc.Create(req)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+	respondJSON(w, http.StatusCreated, cfg)
 }
 
 // Update handles PUT /api/v1/admin/country-configs/{code}

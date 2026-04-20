@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // PnLServicer interface for dependency injection.

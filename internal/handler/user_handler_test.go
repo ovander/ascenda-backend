@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // mockUserService is a test double for UserServiceIface.
@@ -108,24 +108,8 @@ func TestUserHandlerGetMeDefaultsToEditor(t *testing.T) {
 
 	var user UserDTO
 	json.Unmarshal(w.Body.Bytes(), &user)
-	assert.Equal(t, "user", user.Role)
+	assert.Equal(t, "editor", user.Role)
 	assert.Equal(t, uuid.Nil.String(), user.ID)
-}
-
-func TestUserHandlerGetMeWithMissingContext(t *testing.T) {
-	handler := newTestUserHandler()
-
-	r := httptest.NewRequest("GET", "/me", nil)
-	w := httptest.NewRecorder()
-
-	handler.GetMe(w, r)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var user UserDTO
-	err := json.Unmarshal(w.Body.Bytes(), &user)
-	assert.NoError(t, err)
-	assert.Equal(t, "00000000-0000-0000-0000-000000000000", user.ID)
 }
 
 func TestUserHandlerListAllowsAdmin(t *testing.T) {

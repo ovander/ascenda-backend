@@ -22,7 +22,7 @@ func newTestAuthHandler() *AuthHandler {
 		},
 	}
 	logger := logrus.NewEntry(logrus.New())
-	return NewAuthHandler(cfg, nil, logger)
+	return NewAuthHandler(cfg, nil, nil, logger)
 }
 
 func TestAuthHandlerLogin(t *testing.T) {

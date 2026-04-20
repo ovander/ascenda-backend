@@ -9,8 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/repo"
 )
 
@@ -87,6 +87,12 @@ func (h *PlanMemberHandler) Grant(w http.ResponseWriter, r *http.Request) {
 
 	if req.Role != "editor" && req.Role != "viewer" {
 		handleError(w, r, apierror.BadRequest("role must be editor or viewer"))
+		return
+	}
+
+	// Freemium users cannot share plans — only the plan owner has access.
+	if ctxutil.GetUserPlan(r.Context()) == "freemium" {
+		handleError(w, r, apierror.Forbidden("freemium plan does not support plan sharing — upgrade to invite collaborators"))
 		return
 	}
 

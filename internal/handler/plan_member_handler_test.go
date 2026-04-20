@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,6 +90,8 @@ func planMemberReq(method, path string, body interface{}, planID, tenantID uuid.
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
 	ctx := ctxutil.WithTenantID(req.Context(), tenantID)
+	// Set a non-freemium plan so the handler's plan-sharing guard doesn't block.
+	ctx = ctxutil.WithUserPlan(ctx, "pro")
 
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("planId", planID.String())
@@ -193,6 +195,24 @@ func TestPlanMember_Grant_InvalidRole(t *testing.T) {
 	h.Grant(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPlanMember_Grant_FreemiumBlocked(t *testing.T) {
+	tenantID := uuid.New()
+	planID := uuid.New()
+
+	h := newPlanMemberHandler(&mockPlanMemberRepo{})
+	body := map[string]interface{}{
+		"userId": uuid.New().String(),
+		"role":   "editor",
+	}
+	// Override the default "pro" plan set by planMemberReq with freemium.
+	req := planMemberReq(http.MethodPost, "/members", body, planID, tenantID)
+	req = req.WithContext(ctxutil.WithUserPlan(req.Context(), "freemium"))
+	w := httptest.NewRecorder()
+	h.Grant(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
 func TestPlanMember_Grant_AlreadyMember(t *testing.T) {

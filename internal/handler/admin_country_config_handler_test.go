@@ -12,16 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/apierror"
+	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/service"
 )
 
 // ── stub service ─────────────────────────────────────────────────────────────
 
 type stubCountryConfigSvc struct {
-	listFn          func() ([]*model.CountryRateConfig, error)
-	getByCodeFn     func(code string) (*model.CountryRateConfig, error)
-	updateFn        func(code string, req service.UpdateCountryRateConfigRequest) (*model.CountryRateConfig, error)
+	listFn           func() ([]*model.CountryRateConfig, error)
+	getByCodeFn      func(code string) (*model.CountryRateConfig, error)
+	createFn         func(req service.CreateCountryRateConfigRequest) (*model.CountryRateConfig, error)
+	updateFn         func(code string, req service.UpdateCountryRateConfigRequest) (*model.CountryRateConfig, error)
 	resetToDefaultFn func(code string) (*model.CountryRateConfig, error)
 }
 
@@ -37,6 +38,13 @@ func (s *stubCountryConfigSvc) GetByCode(code string) (*model.CountryRateConfig,
 		return s.getByCodeFn(code)
 	}
 	return nil, apierror.Internal("getByCode not implemented")
+}
+
+func (s *stubCountryConfigSvc) Create(req service.CreateCountryRateConfigRequest) (*model.CountryRateConfig, error) {
+	if s.createFn != nil {
+		return s.createFn(req)
+	}
+	return nil, apierror.Internal("create not implemented")
 }
 
 func (s *stubCountryConfigSvc) Update(code string, req service.UpdateCountryRateConfigRequest) (*model.CountryRateConfig, error) {
@@ -268,4 +276,117 @@ func TestAdminCountryConfig_Reset_NotFound(t *testing.T) {
 	h.Reset(w, r)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// ── Create ────────────────────────────────────────────────────────────────────
+
+func jpConfig() *model.CountryRateConfig {
+	return &model.CountryRateConfig{
+		CountryCode:      "JP",
+		CountryName:      "Japan",
+		CorporateTaxRate: decimal.NewFromFloat(0.2366),
+		VATRate:          decimal.NewFromFloat(0.10),
+		EmployerTaxRate:  decimal.NewFromFloat(0.1455),
+		MLTInterestRate:  decimal.NewFromFloat(0.005),
+		Language:         "ja",
+		CurrencySymbol:   "¥",
+	}
+}
+
+func TestAdminCountryConfig_Create_Success(t *testing.T) {
+	var gotReq service.CreateCountryRateConfigRequest
+	svc := &stubCountryConfigSvc{
+		createFn: func(req service.CreateCountryRateConfigRequest) (*model.CountryRateConfig, error) {
+			gotReq = req
+			return jpConfig(), nil
+		},
+	}
+	h := newCountryConfigHandler(svc)
+
+	body, _ := json.Marshal(map[string]any{
+		"countryCode":      "JP",
+		"countryName":      "Japan",
+		"corporateTaxRate": "0.2366",
+		"vatRate":          "0.10",
+		"employerTaxRate":  "0.1455",
+		"mltInterestRate":  "0.005",
+		"language":         "ja",
+		"currencySymbol":   "¥",
+	})
+	r := httptest.NewRequest(http.MethodPost, "/admin/country-configs", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, r)
+
+	require.Equal(t, http.StatusCreated, w.Code)
+	assert.Equal(t, "JP", gotReq.CountryCode)
+	assert.Equal(t, "Japan", gotReq.CountryName)
+
+	var resp model.CountryRateConfig
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.Equal(t, "JP", resp.CountryCode)
+	assert.Equal(t, "Japan", resp.CountryName)
+}
+
+func TestAdminCountryConfig_Create_InvalidJSON(t *testing.T) {
+	svc := &stubCountryConfigSvc{}
+	h := newCountryConfigHandler(svc)
+
+	r := httptest.NewRequest(http.MethodPost, "/admin/country-configs", bytes.NewReader([]byte("not-json")))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestAdminCountryConfig_Create_ServiceValidationError(t *testing.T) {
+	svc := &stubCountryConfigSvc{
+		createFn: func(req service.CreateCountryRateConfigRequest) (*model.CountryRateConfig, error) {
+			return nil, apierror.BadRequest("country code must be exactly 2 characters (ISO 3166-1 alpha-2)")
+		},
+	}
+	h := newCountryConfigHandler(svc)
+
+	body, _ := json.Marshal(map[string]any{"countryCode": "X", "countryName": "Xanadu"})
+	r := httptest.NewRequest(http.MethodPost, "/admin/country-configs", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestAdminCountryConfig_Create_Conflict(t *testing.T) {
+	svc := &stubCountryConfigSvc{
+		createFn: func(req service.CreateCountryRateConfigRequest) (*model.CountryRateConfig, error) {
+			return nil, apierror.Conflict("a country config with code FR already exists")
+		},
+	}
+	h := newCountryConfigHandler(svc)
+
+	body, _ := json.Marshal(map[string]any{"countryCode": "FR", "countryName": "France"})
+	r := httptest.NewRequest(http.MethodPost, "/admin/country-configs", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, r)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+func TestAdminCountryConfig_Create_ServiceError(t *testing.T) {
+	svc := &stubCountryConfigSvc{
+		createFn: func(req service.CreateCountryRateConfigRequest) (*model.CountryRateConfig, error) {
+			return nil, apierror.Internal("db down")
+		},
+	}
+	h := newCountryConfigHandler(svc)
+
+	body, _ := json.Marshal(map[string]any{"countryCode": "JP", "countryName": "Japan"})
+	r := httptest.NewRequest(http.MethodPost, "/admin/country-configs", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, r)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
