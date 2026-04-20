@@ -10,9 +10,6 @@ import (
 // Config holds all application configuration loaded from environment variables.
 type Config struct {
 	Env            string
-	Version        string
-	BuildTime      string
-	GitCommit      string
 	Port           int
 	LogLevel       string
 	DatabaseURL    string
@@ -35,13 +32,16 @@ type Config struct {
 	Socrate SocrateConfig
 	AI      AIConfig
 	DBPool  DBPoolConfig
+	Sentry  SentryConfig
 }
 
 // SocrateConfig holds OAuth2 server configuration.
 type SocrateConfig struct {
 	BaseURL      string
+	AdminBaseURL string // admin port (default :8081) — used for service-account user creation
 	ClientID     string
 	ClientSecret string
+	AppID        string // numeric app ID from Socrate admin console (avoids admin API call)
 	JWKSURL      string
 	RedirectURL  string
 }
@@ -64,6 +64,12 @@ type DBPoolConfig struct {
 	MaxIdleConns    int
 	ConnMaxLifetime int // in seconds
 	ConnMaxIdleTime int // in seconds
+}
+
+// SentryConfig holds Sentry error monitoring configuration.
+// Set SENTRY_DSN to enable; leave empty to disable silently.
+type SentryConfig struct {
+	DSN string
 }
 
 // Load reads configuration from environment variables.
@@ -105,10 +111,9 @@ func load() *Config {
 
 	return &Config{
 		Env:                 env,
-		Version:             envOrDefault("APP_VERSION", "0.1.0"),
 		Port:                envOrDefaultInt("PORT", 8080),
 		LogLevel:            envOrDefault("LOG_LEVEL", ""),
-		DatabaseURL:         envOrDefault("DATABASE_URL", "postgres://kerplan:kerplan@localhost:5432/kerplan?sslmode=disable"),
+		DatabaseURL:         envOrDefault("DATABASE_URL", "postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable"),
 		AllowedOrigins:      origins,
 		AppBaseURL:          envOrDefault("APP_BASE_URL", "http://localhost:8080"),
 		AutoMigrate:         autoMigrate,
@@ -117,8 +122,10 @@ func load() *Config {
 
 		Socrate: SocrateConfig{
 			BaseURL:      envOrDefault("SOCRATE_BASE_URL", ""),
+			AdminBaseURL: envOrDefault("SOCRATE_ADMIN_URL", ""),
 			ClientID:     envOrDefault("SOCRATE_CLIENT_ID", ""),
 			ClientSecret: envOrDefault("SOCRATE_CLIENT_SECRET", ""),
+			AppID:        envOrDefault("SOCRATE_APP_ID", ""),
 			JWKSURL:      envOrDefault("SOCRATE_JWKS_URL", ""),
 			RedirectURL:  envOrDefault("SOCRATE_REDIRECT_URL", ""),
 		},
@@ -130,7 +137,7 @@ func load() *Config {
 			AllowedModels: allowedModels,
 			MaxTokens:     envOrDefaultInt("AI_MAX_TOKENS", 4096),
 			Temperature:   envOrDefaultFloat("AI_TEMPERATURE", 0.3),
-			Timeout:       envOrDefaultInt("AI_TIMEOUT_SECONDS", 30),
+			Timeout:       envOrDefaultInt("AI_TIMEOUT_SECONDS", 90),
 			EnableCache:   envOrDefault("AI_CACHE_ENABLED", "true") == "true",
 		},
 
@@ -139,6 +146,10 @@ func load() *Config {
 			MaxIdleConns:    envOrDefaultInt("DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: envOrDefaultInt("DB_CONN_MAX_LIFETIME", 3600),
 			ConnMaxIdleTime: envOrDefaultInt("DB_CONN_MAX_IDLE_TIME", 300),
+		},
+
+		Sentry: SentryConfig{
+			DSN: envOrDefault("SENTRY_DSN", ""),
 		},
 	}
 }

@@ -8,7 +8,7 @@ GIT_COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown"
 GO           := go
 GOFLAGS      := -ldflags "-X github.com/ovander/backendkit/buildinfo.Version=$(VERSION) -X github.com/ovander/backendkit/buildinfo.BuildTime=$(BUILD_TIME) -X github.com/ovander/backendkit/buildinfo.GitCommit=$(GIT_COMMIT)"
 
-DATABASE_URL ?= postgres://kerplan:kerplan@localhost:5432/kerplan?sslmode=disable
+DATABASE_URL ?= postgres://kerplan:kerplan@10.10.5.13:5432/kerplan?sslmode=disable
 
 # golang-migrate CLI — used for local dev (make migrate-*).
 # Install via: make tools
