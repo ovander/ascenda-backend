@@ -1,0 +1,2 @@
+-- No rollback: year_index columns were orphaned GORM artefacts; restoring them
+-- would re-introduce the NOT NULL constraint violations that caused data loss.

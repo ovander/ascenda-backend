@@ -1,0 +1,1 @@
+-- No rollback: same as 000002 — orphaned column, restoring breaks INSERTs.

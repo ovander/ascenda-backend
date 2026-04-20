@@ -1,0 +1,2 @@
+-- No rollback: cannot distinguish which 'editor' rows were originally 'user'.
+-- Re-running would incorrectly revert intentionally-set editor roles.

@@ -1,0 +1,2 @@
+-- ⚠️  IRREVERSIBLE — do not roll back.
+-- Dividing amounts by 1000 would corrupt any data entered after this migration.
