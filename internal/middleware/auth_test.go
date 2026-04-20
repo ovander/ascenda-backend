@@ -64,50 +64,6 @@ func TestAuthMiddlewareInvalidTokenFormat(t *testing.T) {
 	}
 }
 
-func TestAuthMiddlewareExtractBearerToken(t *testing.T) {
-	logger := logrus.NewEntry(logrus.New())
-	auth := NewAuthMiddleware("http://example.com/.well-known/jwks.json", "test-secret", logger)
-
-	tests := []struct {
-		name                  string
-		authorizationHeader   string
-		expectedError         bool
-	}{
-		{
-			name:                  "valid Bearer token",
-			authorizationHeader:   "Bearer valid.jwt.token",
-			expectedError:         false,
-		},
-		{
-			name:                  "empty Authorization header",
-			authorizationHeader:   "",
-			expectedError:         true,
-		},
-		{
-			name:                  "invalid format",
-			authorizationHeader:   "InvalidFormat",
-			expectedError:         true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/api/test", nil)
-			if tt.authorizationHeader != "" {
-				req.Header.Set("Authorization", tt.authorizationHeader)
-			}
-
-			token, err := auth.extractBearerToken(req)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.NotEmpty(t, token)
-			}
-		})
-	}
-}
 
 func TestAuthMiddlewareInvalidToken(t *testing.T) {
 	logger := logrus.NewEntry(logrus.New())

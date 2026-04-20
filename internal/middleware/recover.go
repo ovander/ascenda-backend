@@ -2,36 +2,24 @@ package middleware
 
 import (
 	"net/http"
-	"runtime/debug"
 
+	"github.com/ovander/backendkit/httpware"
 	"github.com/sirupsen/logrus"
 )
 
-// RecoverMiddleware recovers from panics and logs them.
+// RecoverMiddleware wraps httpware.Recover for backwards compatibility with
+// the struct+Handler pattern used in router.go.
+// Note: backendkit's Recover takes a *logrus.Entry; we create one from the Logger.
 type RecoverMiddleware struct {
-	logger *logrus.Logger
+	fn func(http.Handler) http.Handler
 }
 
-// NewRecoverMiddleware creates a new RecoverMiddleware.
+// NewRecoverMiddleware creates a RecoverMiddleware backed by backendkit.
 func NewRecoverMiddleware(logger *logrus.Logger) *RecoverMiddleware {
-	return &RecoverMiddleware{
-		logger: logger,
-	}
+	return &RecoverMiddleware{fn: httpware.Recover(logrus.NewEntry(logger))}
 }
 
 // Handler wraps an HTTP handler with panic recovery.
 func (m *RecoverMiddleware) Handler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				m.logger.WithField("panic", err).
-					WithField("stack", string(debug.Stack())).
-					Error("panic recovered")
-
-				http.Error(w, "internal server error", http.StatusInternalServerError)
-			}
-		}()
-
-		next.ServeHTTP(w, r)
-	})
+	return m.fn(next)
 }

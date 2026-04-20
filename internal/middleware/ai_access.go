@@ -12,7 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/service"
 )
 
@@ -141,6 +141,15 @@ func (m *AIAccessMiddleware) AIUsageRecorder(feature model.AIFeatureType) func(h
 			next.ServeHTTP(rw, r)
 
 			if rw.statusCode >= 200 && rw.statusCode < 300 {
+				// Do not consume quota for deterministic fallback responses.
+				// When the AI call fails (timeout, API error, parse failure) the
+				// handler returns HTTP 200 with a fallback narration and sets the
+				// X-AI-Generated: false header.  Counting these as successful
+				// quota uses would exhaust the user's limit on failed attempts.
+				if rw.Header().Get("X-AI-Generated") == "false" {
+					return
+				}
+
 				ctx := r.Context()
 				tenantID := ctxutil.GetTenantID(ctx)
 				userID := ctxutil.GetUserID(ctx)
@@ -206,17 +215,19 @@ func quotaRemaining(limit *int, used int) *int {
 	return &r
 }
 
-// tenantTierToAITier maps the tenant subscription tier ("free", "pro", "enterprise")
-// to the AI usage-policy tier ("standard", "pro", "enterprise").
-// "free" and unrecognised values both map to "standard" (the AI baseline tier).
-func tenantTierToAITier(tenantTier string) string {
-	switch tenantTier {
+// tenantTierToAITier maps the user's commercial plan ("freemium", "pro", "enterprise")
+// to the AI usage-policy tier ("freemium", "standard", "pro", "enterprise").
+// Unrecognised values default to "freemium" (most restrictive) for safety.
+func tenantTierToAITier(userPlan string) string {
+	switch userPlan {
 	case TierPro:
 		return model.AITierPro
 	case TierEnterprise:
 		return model.AITierEnterprise
-	default: // "free", "" or any unknown value
+	case "standard":
 		return model.AITierStandard
+	default: // "freemium", "" or any unknown value → no AI access
+		return model.AITierFreemium
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ── Mock PlanMemberRepo ───────────────────────────────────────────

@@ -9,47 +9,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
-// Tests for the modified auth middleware:
-// - Optional tenant_id (Socrate tokens may not include it)
-// - UUID v5 fallback for non-UUID user IDs
-// - Email/name context injection
-
-func TestExtractBearerTokenValid(t *testing.T) {
-	logger := logrus.NewEntry(logrus.New())
-	auth := NewAuthMiddleware("", "", logger)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer my-jwt-token")
-
-	token, err := auth.extractBearerToken(req)
-	assert.NoError(t, err)
-	assert.Equal(t, "my-jwt-token", token)
-}
-
-func TestExtractBearerTokenMissing(t *testing.T) {
-	logger := logrus.NewEntry(logrus.New())
-	auth := NewAuthMiddleware("", "", logger)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	_, err := auth.extractBearerToken(req)
-	assert.Error(t, err)
-}
-
-func TestExtractBearerTokenInvalidFormat(t *testing.T) {
-	logger := logrus.NewEntry(logrus.New())
-	auth := NewAuthMiddleware("", "", logger)
-
-	tests := []string{"Token abc", "Bearer", "abc", "Bearer a b"}
-	for _, header := range tests {
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", header)
-		_, err := auth.extractBearerToken(req)
-		assert.Error(t, err, "should reject: %q", header)
-	}
-}
+// Integration-level tests for the auth middleware shim.
+// Unit tests for the internal bearer-token extraction logic live in
+// github.com/ovander/backendkit/jwtauth.
 
 func TestUUIDv5FallbackDeterministic(t *testing.T) {
 	// When Socrate sub is not a UUID, we use uuid.NewSHA1 to generate a deterministic UUID
@@ -84,7 +49,6 @@ func TestContextEmailNameInjection(t *testing.T) {
 
 func TestOptionalTenantIDSkipsWhenEmpty(t *testing.T) {
 	// When claims.TenantID is empty, the middleware should not set tenant_id in context
-	// This simulates the Socrate token flow
 	ctx := context.Background()
 
 	tenantID := ctxutil.GetTenantID(ctx)
@@ -138,15 +102,13 @@ func TestMiddlewareRejects401WithoutToken(t *testing.T) {
 func TestSocrateClaimsStructure(t *testing.T) {
 	// Verify the SocrateClaims struct has the right JSON tags
 	claims := SocrateClaims{
-		TenantID: "",     // Empty for Socrate
-		UserID:   "",     // Empty, will fallback to Subject
+		TenantID: "",  // Empty for Socrate — user JWT carries "sub" via RegisteredClaims
 		Email:    "user@socrate.com",
 		Name:     "User Name",
-		Role:     "",     // Empty, will default to "editor"
+		Role:     "",  // Empty, will default to "editor"
 	}
 
 	assert.Empty(t, claims.TenantID)
-	assert.Empty(t, claims.UserID)
 	assert.Equal(t, "user@socrate.com", claims.Email)
 	assert.Equal(t, "User Name", claims.Name)
 }

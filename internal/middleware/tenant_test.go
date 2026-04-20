@@ -1,13 +1,14 @@
 package middleware
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 func TestTenantMiddlewareMissingTenant(t *testing.T) {
@@ -66,6 +67,73 @@ func TestTenantIDFromContextWithValue(t *testing.T) {
 
 func TestNewTenantMiddlewareCreation(t *testing.T) {
 	logger := logrus.NewEntry(logrus.New())
-	mw := NewTenantMiddleware(nil, nil, logger)
+	mw := NewTenantMiddleware(nil, nil, nil, logger, nil)
 	assert.NotNil(t, mw)
+}
+
+// ── Platform-admin fast-path tests (no DB required) ───────────────────────────
+
+// TestPlatformAdminFastPath verifies that a request with role="admin" in context
+// bypasses the tenant middleware entirely (no DB call, role preserved).
+func TestPlatformAdminFastPath(t *testing.T) {
+	logger := logrus.NewEntry(logrus.New())
+	mw := NewTenantMiddleware(nil, nil, nil, logger, nil) // nil db/repo — would panic if reached
+
+	var seenRole string
+	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenRole = ctxutil.GetUserRole(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+	req = req.WithContext(ctxutil.WithUserRole(req.Context(), "admin"))
+	w := httptest.NewRecorder()
+
+	// Must not panic (nil db would panic if the regular path executed)
+	assert.NotPanics(t, func() { handler.ServeHTTP(w, req) })
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "admin", seenRole, "platform admin role must be preserved through the middleware")
+}
+
+// TestPlatformAdminFastPath_DoesNotProvision ensures the DB is never touched for admin users.
+func TestPlatformAdminFastPath_DoesNotProvision(t *testing.T) {
+	logger := logrus.NewEntry(logrus.New())
+	// nil db + nil userRepo: if the regular path ran it would panic/nil-deref.
+	mw := NewTenantMiddleware(nil, nil, nil, logger, nil)
+
+	called := false
+	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/stats", nil)
+	req = req.WithContext(ctxutil.WithUserRole(req.Context(), "admin"))
+	w := httptest.NewRecorder()
+
+	assert.NotPanics(t, func() { handler.ServeHTTP(w, req) })
+	assert.True(t, called)
+}
+
+// TestNonAdminPassesThroughRegularPath ensures non-admin roles still go through the
+// tenant middleware. We don't set up a real DB, so we expect the middleware to attempt
+// the RLS set_config call — which will panic on a nil db. We verify the fast-path is
+// NOT taken (i.e., the panic comes from the regular path, not admin bypass).
+func TestNonAdminRoleNotBypassed(t *testing.T) {
+	logger := logrus.NewEntry(logrus.New())
+	mw := NewTenantMiddleware(nil, nil, nil, logger, nil)
+
+	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for _, role := range []string{"owner", "user", ""} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/plans", nil)
+		req = req.WithContext(ctxutil.WithUserRole(req.Context(), role))
+		w := httptest.NewRecorder()
+
+		// Regular path will attempt db.Exec on a nil db → panic → fast-path was NOT taken
+		assert.Panics(t, func() { handler.ServeHTTP(w, req) },
+			"role=%q should NOT be bypassed by the platform-admin fast-path", role)
+	}
 }

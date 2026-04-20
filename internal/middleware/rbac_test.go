@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 func TestRBACMiddlewarePermissions(t *testing.T) {
@@ -20,11 +20,20 @@ func TestRBACMiddlewarePermissions(t *testing.T) {
 		requiredPerm   Permission
 		expectedStatus int
 	}{
-		// user: only self:service
-		{name: "user can self-service", role: "user", requiredPerm: PermSelfService, expectedStatus: http.StatusOK},
-		{name: "user cannot view plans (global)", role: "user", requiredPerm: PermViewPlan, expectedStatus: http.StatusForbidden},
-		{name: "user cannot edit plans (global)", role: "user", requiredPerm: PermEditPlan, expectedStatus: http.StatusForbidden},
-		{name: "user cannot manage users", role: "user", requiredPerm: PermManageUsers, expectedStatus: http.StatusForbidden},
+		// editor: full plan access (operate + analyse), no admin menus
+		{name: "editor can view plans", role: "editor", requiredPerm: PermViewPlan, expectedStatus: http.StatusOK},
+		{name: "editor can edit plans", role: "editor", requiredPerm: PermEditPlan, expectedStatus: http.StatusOK},
+		{name: "editor can self-service", role: "editor", requiredPerm: PermSelfService, expectedStatus: http.StatusOK},
+		{name: "editor cannot manage users", role: "editor", requiredPerm: PermManageUsers, expectedStatus: http.StatusForbidden},
+		{name: "editor cannot manage tenant", role: "editor", requiredPerm: PermManageTenant, expectedStatus: http.StatusForbidden},
+		{name: "editor cannot manage plans (lifecycle)", role: "editor", requiredPerm: PermManagePlan, expectedStatus: http.StatusForbidden},
+
+		// reader: read-only plan access (analyse only), no operate or admin menus
+		{name: "reader can view plans", role: "reader", requiredPerm: PermViewPlan, expectedStatus: http.StatusOK},
+		{name: "reader can self-service", role: "reader", requiredPerm: PermSelfService, expectedStatus: http.StatusOK},
+		{name: "reader cannot edit plans", role: "reader", requiredPerm: PermEditPlan, expectedStatus: http.StatusForbidden},
+		{name: "reader cannot manage users", role: "reader", requiredPerm: PermManageUsers, expectedStatus: http.StatusForbidden},
+		{name: "reader cannot manage tenant", role: "reader", requiredPerm: PermManageTenant, expectedStatus: http.StatusForbidden},
 
 		// admin: platform:admin + self:service only — NO tenant or business data access
 		{name: "admin has platform:admin", role: "admin", requiredPerm: PermPlatformAdmin, expectedStatus: http.StatusOK},
@@ -43,9 +52,7 @@ func TestRBACMiddlewarePermissions(t *testing.T) {
 		{name: "owner can manage tenant", role: "owner", requiredPerm: PermManageTenant, expectedStatus: http.StatusOK},
 		{name: "owner can self-service", role: "owner", requiredPerm: PermSelfService, expectedStatus: http.StatusOK},
 
-		// Plan-level roles used inside plan routes (set by PlanAccessMiddleware)
-		// Note: editor/viewer are NOT in global RolePermissions - they're injected per-plan
-		{name: "editor role (plan-level) has no global perms", role: "editor", requiredPerm: PermManageUsers, expectedStatus: http.StatusForbidden},
+		// viewer is plan-level only (set by PlanAccessMiddleware) — not a global role
 		{name: "viewer role (plan-level) has no global perms", role: "viewer", requiredPerm: PermManageUsers, expectedStatus: http.StatusForbidden},
 
 		// Unknown role: nothing
@@ -100,8 +107,11 @@ func TestRBACHasPermission(t *testing.T) {
 		permission     Permission
 		expectedResult bool
 	}{
-		{name: "user has self-service", role: "user", permission: PermSelfService, expectedResult: true},
-		{name: "user no view plan", role: "user", permission: PermViewPlan, expectedResult: false},
+		{name: "editor has view plan", role: "editor", permission: PermViewPlan, expectedResult: true},
+		{name: "editor has edit plan", role: "editor", permission: PermEditPlan, expectedResult: true},
+		{name: "editor no manage users", role: "editor", permission: PermManageUsers, expectedResult: false},
+		{name: "reader has view plan", role: "reader", permission: PermViewPlan, expectedResult: true},
+		{name: "reader no edit plan", role: "reader", permission: PermEditPlan, expectedResult: false},
 		{name: "admin has platform:admin", role: "admin", permission: PermPlatformAdmin, expectedResult: true},
 		{name: "admin no manage users (tenant-scoped)", role: "admin", permission: PermManageUsers, expectedResult: false},
 		{name: "admin no view plan", role: "admin", permission: PermViewPlan, expectedResult: false},
@@ -126,18 +136,18 @@ func TestRBACRolePermissionMapping(t *testing.T) {
 		}
 	}
 
-	// Verify expected tenant-level roles exist
-	expectedRoles := []string{"user", "admin", "owner"}
+	// Verify all expected Ascenda tenant-level roles exist.
+	// Note: Socrate's "user" JWT role is intentionally absent — the tenant
+	// middleware always replaces it with the DB role before RBAC runs.
+	expectedRoles := []string{"editor", "reader", "owner", "admin"}
 	for _, role := range expectedRoles {
 		_, exists := RolePermissions[role]
 		assert.True(t, exists, "Expected role %s not found", role)
 	}
 
-	// editor and viewer are plan-level, NOT in global map
-	_, editorExists := RolePermissions["editor"]
+	// viewer is plan-level only — NOT in the global map
 	_, viewerExists := RolePermissions["viewer"]
-	assert.False(t, editorExists, "editor should not be a global role")
-	assert.False(t, viewerExists, "viewer should not be a global role")
+	assert.False(t, viewerExists, "viewer should not be a global role — it is plan-level only")
 
 	// admin (platform-level) has NO tenant or plan permissions — only platform:admin + self:service
 	for _, perm := range RolePermissions["admin"] {

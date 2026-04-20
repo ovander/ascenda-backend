@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"ascenda/internal/model"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/service"
 )
 
@@ -52,8 +52,9 @@ func newAIAccessRequest(tenantID, userID uuid.UUID, role, tier string) *http.Req
 // tenantTierToAITier — pure mapping function
 // ─────────────────────────────────────────────────────────────────────────────
 
-func TestTenantTierToAITier_Free_MapsToStandard(t *testing.T) {
-	assert.Equal(t, model.AITierStandard, tenantTierToAITier(TierFree))
+func TestTenantTierToAITier_Free_MapsToFreemium(t *testing.T) {
+	// Freemium commercial plan maps to the freemium AI tier (no AI access).
+	assert.Equal(t, model.AITierFreemium, tenantTierToAITier(TierFree))
 }
 
 func TestTenantTierToAITier_Pro_MapsToPro(t *testing.T) {
@@ -64,16 +65,15 @@ func TestTenantTierToAITier_Enterprise_MapsToEnterprise(t *testing.T) {
 	assert.Equal(t, model.AITierEnterprise, tenantTierToAITier(TierEnterprise))
 }
 
-func TestTenantTierToAITier_EmptyString_MapsToStandard(t *testing.T) {
-	// Routes without TierGateMiddleware have no tier in context; they must
-	// default to "standard" so free/unverified users are correctly baselined.
-	assert.Equal(t, model.AITierStandard, tenantTierToAITier(""))
+func TestTenantTierToAITier_EmptyString_MapsToFreemium(t *testing.T) {
+	// Unrecognised or missing plan defaults to freemium (most restrictive).
+	assert.Equal(t, model.AITierFreemium, tenantTierToAITier(""))
 }
 
-func TestTenantTierToAITier_Unknown_MapsToStandard(t *testing.T) {
-	assert.Equal(t, model.AITierStandard, tenantTierToAITier("gold"))
-	assert.Equal(t, model.AITierStandard, tenantTierToAITier("premium"))
-	assert.Equal(t, model.AITierStandard, tenantTierToAITier("ENTERPRISE")) // case-sensitive
+func TestTenantTierToAITier_Unknown_MapsToFreemium(t *testing.T) {
+	assert.Equal(t, model.AITierFreemium, tenantTierToAITier("gold"))
+	assert.Equal(t, model.AITierFreemium, tenantTierToAITier("premium"))
+	assert.Equal(t, model.AITierFreemium, tenantTierToAITier("ENTERPRISE")) // case-sensitive
 }
 
 func TestTenantTierToAITier_AllCanonicalValues(t *testing.T) {
@@ -81,10 +81,10 @@ func TestTenantTierToAITier_AllCanonicalValues(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{TierFree, model.AITierStandard},
+		{TierFree, model.AITierFreemium},
 		{TierPro, model.AITierPro},
 		{TierEnterprise, model.AITierEnterprise},
-		{"", model.AITierStandard},
+		{"", model.AITierFreemium},
 	}
 	for _, tc := range cases {
 		t.Run(tc.input, func(t *testing.T) {

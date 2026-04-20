@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/sirupsen/logrus"
-	"ascenda/internal/pkg/ctxutil"
+	"github.com/ovander/backendkit/ctxutil"
 )
 
 // Permission represents an action permission.
@@ -20,16 +20,27 @@ const (
 	PermSelfService   Permission = "self:service"   // all authenticated users can access /users/me
 )
 
-// RolePermissions maps roles to their permissions.
+// RolePermissions maps Ascenda tenant roles to their permissions.
 //
-// Roles:
-//   - user   — regular business user; accesses plans via plan memberships
-//   - owner  — tenant owner; manages their workspace (users, tenant settings) + creates plans
-//   - admin  — platform-wide Ascenda operator; sees all tenants; not tied to any tenant
+// Socrate issues only "user" or "admin" in the JWT. The tenant middleware
+// enriches "user" into one of the three Ascenda roles below via a DB lookup.
 //
-// Plan-level roles (editor|viewer) are handled via the plan_members table.
+//   - editor  — full plan access (operate + analyse); no admin menus
+//   - reader  — read-only plan access (analyse only); no operate or admin menus
+//   - owner   — manages workspace (users, tenant settings) + full plan access
+//   - admin   — platform-wide Ascenda operator; JWT role preserved as-is (no DB lookup)
+//
+// Plan-level roles (editor|viewer) are handled separately via the plan_members table.
 var RolePermissions = map[string][]Permission{
-	"user": {
+	// editor: full plan access (operate + analyse), no admin menus
+	"editor": {
+		PermViewPlan,
+		PermEditPlan,
+		PermSelfService,
+	},
+	// reader: read-only plan access (analyse only), no operate or admin menus
+	"reader": {
+		PermViewPlan,
 		PermSelfService,
 	},
 	"owner": {

@@ -2,61 +2,23 @@ package middleware
 
 import (
 	"net/http"
-	"time"
 
+	"github.com/ovander/backendkit/httpware"
 	"github.com/sirupsen/logrus"
-	"ascenda/internal/pkg/ctxutil"
 )
 
-// statusWriter wraps http.ResponseWriter to capture status code.
-type statusWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (w *statusWriter) WriteHeader(code int) {
-	w.statusCode = code
-	w.ResponseWriter.WriteHeader(code)
-}
-
-// LoggerMiddleware creates request-scoped logging.
+// LoggerMiddleware wraps httpware.Logger for backwards compatibility with the
+// struct+Handler pattern used in router.go.
 type LoggerMiddleware struct {
-	logger *logrus.Logger
+	fn func(http.Handler) http.Handler
 }
 
-// NewLoggerMiddleware creates a new LoggerMiddleware.
+// NewLoggerMiddleware creates a LoggerMiddleware backed by backendkit.
 func NewLoggerMiddleware(logger *logrus.Logger) *LoggerMiddleware {
-	return &LoggerMiddleware{
-		logger: logger,
-	}
+	return &LoggerMiddleware{fn: httpware.Logger(logger)}
 }
 
 // Handler wraps an HTTP handler with request-scoped logging.
 func (m *LoggerMiddleware) Handler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := ctxutil.GetRequestID(r.Context())
-
-		// Create request-scoped logger entry
-		entry := m.logger.WithField("request_id", requestID).
-			WithField("method", r.Method).
-			WithField("path", r.URL.Path)
-
-		// Wrap response writer to capture status code
-		wrapped := &statusWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
-		// Inject logger into context
-		ctx := ctxutil.WithLogger(r.Context(), entry)
-
-		start := time.Now()
-
-		// Call next handler
-		next.ServeHTTP(wrapped, r.WithContext(ctx))
-
-		// Log request completion
-		duration := time.Since(start)
-		entry.WithField("status", wrapped.statusCode).
-			WithField("duration_ms", duration.Milliseconds()).
-			WithField("tenant_id", ctxutil.GetTenantIDStr(r.Context())).
-			Info("request completed")
-	})
+	return m.fn(next)
 }

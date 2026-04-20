@@ -5,55 +5,58 @@ import (
 	"net/http"
 
 	"github.com/sirupsen/logrus"
-	"ascenda/internal/pkg/ctxutil"
-	"ascenda/internal/repo"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/ovander/backendkit/tiering"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tier constants
+// Plan constants — forwarded from backendkit/tiering.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const (
-	TierFree       = "free"
-	TierPro        = "pro"
-	TierEnterprise = "enterprise"
+	TierFree       = tiering.PlanFreemium
+	TierPro        = tiering.PlanPro
+	TierEnterprise = tiering.PlanEnterprise
+
+	PlanFreemium   = tiering.PlanFreemium
+	PlanPro        = tiering.PlanPro
+	PlanEnterprise = tiering.PlanEnterprise
 )
 
-// AllTiers returns the ordered list of canonical subscription tiers.
-func AllTiers() []string {
-	return []string{TierFree, TierPro, TierEnterprise}
-}
+// defaultRegistry is the shared plan ordering for Ascenda: freemium < pro < enterprise.
+var defaultRegistry = tiering.DefaultRegistry()
 
-// TierAtLeast returns true when current tier >= required tier.
+// AllTiers returns the ordered list of canonical plan values (lowest → highest).
+func AllTiers() []string { return defaultRegistry.Plans() }
+
+// TierAtLeast returns true when current plan >= required plan.
 func TierAtLeast(current, required string) bool {
-	order := map[string]int{TierFree: 0, TierPro: 1, TierEnterprise: 2}
-	cur, ok1 := order[current]
-	req, ok2 := order[required]
-	if !ok1 || !ok2 {
-		return false
-	}
-	return cur >= req
+	return defaultRegistry.TierAtLeast(current, required)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TierGateMiddleware
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TierGateMiddleware enforces subscription-tier requirements on route groups.
+// TierGateMiddleware enforces plan requirements on route groups.
+// Plan comparison is delegated to backendkit's tiering.PlanRegistry.
 type TierGateMiddleware struct {
-	tenantRepo repo.TenantRepository
+	registry   *tiering.PlanRegistry
 	logger     *logrus.Entry
+	upgradeURL string
 }
 
-// NewTierGateMiddleware creates a TierGateMiddleware backed by the tenant repo.
-func NewTierGateMiddleware(tenantRepo repo.TenantRepository, logger *logrus.Entry) *TierGateMiddleware {
+// NewTierGateMiddleware creates a TierGateMiddleware backed by the default plan registry.
+func NewTierGateMiddleware(logger *logrus.Entry) *TierGateMiddleware {
 	return &TierGateMiddleware{
-		tenantRepo: tenantRepo,
+		registry:   tiering.DefaultRegistry(),
 		logger:     logger,
+		upgradeURL: "/settings/billing",
 	}
 }
 
-// tierGateErrorResponse is the JSON body returned when tier access is denied.
+// tierGateErrorResponse is the JSON body returned when plan access is denied.
+// Field names match what the Ascenda frontend expects.
 type tierGateErrorResponse struct {
 	Error        string `json:"error"`
 	Message      string `json:"message"`
@@ -62,97 +65,44 @@ type tierGateErrorResponse struct {
 	UpgradeURL   string `json:"upgradeUrl"`
 }
 
-// Resolve returns an HTTP middleware that enriches the request context with the
-// tenant's subscription tier without blocking any requests.  Apply it to route
-// groups that are accessible to all tiers but need accurate tier attribution
-// for quota recording or usage analytics.
-//
-// When a Require() gate follows on a sub-group it reuses the tier already
-// stored in context, so no extra DB round-trip occurs.
-//
-//	r.Route("/ai", func(r chi.Router) {
-//	    r.Use(tierGateMW.Resolve())           // enriches, never blocks
-//	    r.Post("/narrate", ...)               // standard — tier now correct
-//	    r.Group(func(r chi.Router) {
-//	        r.Use(tierGateMW.Require(TierPro)) // gates + reuses resolved tier
-//	        r.Post("/unit-economics", ...)
-//	    })
-//	})
+// Resolve is a no-op pass-through middleware. The user's plan is already stored
+// in context by TenantMiddleware; this method exists for composability with
+// route groups that mix Resolve + Require.
 func (m *TierGateMiddleware) Resolve() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			tenantID := ctxutil.GetTenantID(ctx)
-
-			if tenant, err := m.tenantRepo.GetByID(tenantID); err == nil && tenant != nil {
-				ctx = ctxutil.WithTenantTier(ctx, tenant.Tier)
-				r = r.WithContext(ctx)
-			}
-			// Never block — always forward, even on lookup failure.
 			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-// Require returns an HTTP middleware that allows only tenants whose tier is >=
-// minTier. Unknown tier values are treated as TierFree.
-//
-// If Resolve() already ran for this request the tier is read directly from
-// context, avoiding a second DB round-trip.
-//
-//	r.Group(func(r chi.Router) {
-//	    r.Use(tierGate.Require(middleware.TierEnterprise))
-//	    r.Mount("/captable", captableRouter)
-//	})
-func (m *TierGateMiddleware) Require(minTier string) func(http.Handler) http.Handler {
+// Require returns an HTTP middleware that allows only users whose plan is >=
+// minPlan. Unknown / missing plan values are normalised to the lowest tier
+// (freemium) by the registry.
+func (m *TierGateMiddleware) Require(minPlan string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			tenantID := ctxutil.GetTenantID(ctx)
+			userPlan := m.registry.Normalise(ctxutil.GetUserPlan(ctx))
 
-			// Reuse tier already resolved by Resolve() to avoid a second DB
-			// lookup when both middlewares apply to the same request.
-			tenantTier := ctxutil.GetTenantTier(ctx)
-			if tenantTier == "" {
-				tenant, err := m.tenantRepo.GetByID(tenantID)
-				if err != nil || tenant == nil {
-					m.logger.WithField("tenant_id", tenantID).Warn("tier gate: tenant lookup failed")
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusForbidden)
-					json.NewEncoder(w).Encode(tierGateErrorResponse{ //nolint:errcheck
-						Error:        "forbidden",
-						Message:      "tenant not found",
-						Tier:         "",
-						RequiredTier: minTier,
-						UpgradeURL:   "/settings/billing",
-					})
-					return
-				}
-				tenantTier = tenant.Tier
-				ctx = ctxutil.WithTenantTier(ctx, tenantTier)
-				r = r.WithContext(ctx)
-			}
-
-			if !TierAtLeast(tenantTier, minTier) {
+			if !m.registry.TierAtLeast(userPlan, minPlan) {
 				m.logger.WithFields(logrus.Fields{
-					"tenant_id":     tenantID,
-					"tenant_tier":   tenantTier,
-					"required_tier": minTier,
-				}).Warn("tier gate: upgrade required")
+					"user_plan":     userPlan,
+					"required_plan": minPlan,
+				}).Warn("plan gate: upgrade required")
 
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)
 				json.NewEncoder(w).Encode(tierGateErrorResponse{ //nolint:errcheck
 					Error:        "upgrade_required",
-					Message:      "This feature requires the " + minTier + " plan or above",
-					Tier:         tenantTier,
-					RequiredTier: minTier,
-					UpgradeURL:   "/settings/billing",
+					Message:      "This feature requires the " + minPlan + " plan or above",
+					Tier:         userPlan,
+					RequiredTier: minPlan,
+					UpgradeURL:   m.upgradeURL,
 				})
 				return
 			}
 
-			// Tier is already in context (set above or by a prior Resolve()).
 			next.ServeHTTP(w, r)
 		})
 	}
