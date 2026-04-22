@@ -71,6 +71,10 @@ echo "Checksum: ${CHECKSUM}"
 # ==============================
 # UPLOAD BINARY
 # ==============================
+
+# Ensure remote temp dir exists
+ssh -p ${SSH_PORT} ${REMOTE} "mkdir -p /tmp/ascenda"
+
 echo "📤 Uploading binary..."
 
 scp -P ${SSH_PORT} "${LOCAL_BIN}" "${REMOTE}:${REMOTE_BIN}"
