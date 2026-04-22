@@ -1,25 +1,34 @@
--- Migration: normalize all monetary amounts to base €
--- Background: the backend previously stored opex/capex entries in k€ and
--- used per-capita settings values also in k€.  The compute layer now
--- expects all amounts in base € and the frontend applies the ÷1 000
--- (or ÷1 000 000) conversion for display only.
---
--- This migration multiplies all affected columns by 1 000.
---
--- ⚠️  Run once.  Running again will multiply by 1 000 a second time.
--- ─────────────────────────────────────────────────────────────────────────────
+-- Migration: normalize all monetary amounts to base € (SAFE + IDEMPOTENT)
 
--- 1. Opex manual entries (stored in k€ → base €)
-UPDATE opex_manual_entries
-SET    amount = amount * 1000;
+-- 1. Ensure flag table exists (IMPORTANT: outside DO)
+CREATE TABLE IF NOT EXISTS migration_flags (
+                                               name TEXT PRIMARY KEY,
+                                               created_at TIMESTAMPTZ DEFAULT now()
+    );
 
--- 2. Capex entries (stored in k€ → base €)
-UPDATE capex_entries
-SET    amount = amount * 1000;
+DO $$
+BEGIN
+    -- Prevent double execution
+    IF EXISTS (
+        SELECT 1 FROM migration_flags
+        WHERE name = 'normalize_amounts_done'
+    ) THEN
+        RAISE NOTICE 'Normalization already applied — skipping';
+        RETURN;
+END IF;
 
--- 3. OpexPerHire per-capita annual amounts (k€/person/year → €/person/year)
---    Percentage fields (insurance_costs_pct_sales, royalty_payments_pct_sales,
---    recruit_training_pct_payroll) are left unchanged — they are dimensionless.
+    -- 1. Opex manual entries
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'opex_manual_entries') THEN
+UPDATE opex_manual_entries SET amount = amount * 1000;
+END IF;
+
+    -- 2. Capex entries
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'capex_entries') THEN
+UPDATE capex_entries SET amount = amount * 1000;
+END IF;
+
+    -- 3. Opex per hire
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'opex_per_hire') THEN
 UPDATE opex_per_hire
 SET
     property_rentals       = property_rentals       * 1000,
@@ -28,22 +37,26 @@ SET
     studies_documentation  = studies_documentation  * 1000,
     travel_transportation  = travel_transportation  * 1000,
     mission_representation = mission_representation * 1000;
+END IF;
 
--- 4. CapexPerHire per-hire amounts (k€/hire → €/hire)
+    -- 4. Capex per hire
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'capex_per_hire') THEN
 UPDATE capex_per_hire
 SET
     furniture_per_hire = furniture_per_hire * 1000,
     it_equip_per_hire  = it_equip_per_hire  * 1000;
+END IF;
 
--- 5. MultiYearAdjustment amounts (k€ → €)
---    These rows are seeded as zero in existing demos; included for completeness.
+    -- 5. Multi year adjustments
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'multi_year_adjustments') THEN
 UPDATE multi_year_adjustments
 SET
     previous_depreciation = previous_depreciation * 1000,
-    potential_tax_credits  = potential_tax_credits  * 1000;
+    potential_tax_credits = potential_tax_credits * 1000;
+END IF;
 
--- 6. Opening balances (amounts entered by users — assumed k€ in legacy UI)
---    NB: If any scenario was already entered in base €, adjust accordingly.
+    -- 6. Opening balances
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'opening_balances') THEN
 UPDATE opening_balances
 SET
     noncurrent_assets    = noncurrent_assets    * 1000,
@@ -55,19 +68,18 @@ SET
     loans_and_debt       = loans_and_debt       * 1000,
     supplier_payables    = supplier_payables    * 1000,
     social_and_tax_debts = social_and_tax_debts * 1000;
+END IF;
 
--- 7. Plan config — prior-year turnover was entered in k€ on the old settings form
+    -- 7. Plan config
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'plan_configs') THEN
 UPDATE plan_configs
-SET    prior_year_turnover = prior_year_turnover * 1000
-WHERE  prior_year_turnover > 0;
+SET prior_year_turnover = prior_year_turnover * 1000
+WHERE prior_year_turnover > 0;
+END IF;
 
--- ─────────────────────────────────────────────────────────────────────────────
--- Fields intentionally NOT migrated (already in base € or dimensionless):
---   • product_assumptions.base_unit_price          (€/unit — already base €)
---   • product_assumptions.raw_material_cost etc.   (€/unit — already base €)
---   • staff_entries.monthly_salary                 (€/month — already base €)
---   • staff_incentives.specific_incentives         (€/year — already base €)
---   • plan_configs.*_rate (VAT, corporate tax …)   (dimensionless percentages)
---   • captable.*                                   (uses explicit K suffixes)
---   • fiplan_lines.amount                          (already base €)
--- ─────────────────────────────────────────────────────────────────────────────
+    -- Mark migration as done
+INSERT INTO migration_flags(name)
+VALUES ('normalize_amounts_done')
+    ON CONFLICT DO NOTHING;
+
+END $$;

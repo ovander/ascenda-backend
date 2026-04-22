@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -30,7 +31,18 @@ func runSQLMigrations(databaseURL string, log *logrus.Entry) error {
 		return fmt.Errorf("load migration sources: %w", err)
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", src, databaseURL)
+	url := databaseURL
+
+	if !strings.Contains(url, "search_path=") {
+		url += "&search_path=public"
+	}
+
+	if !strings.Contains(url, "x-migrations-table=") {
+		url += "&x-migrations-table=public.schema_migrations"
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", src, url)
+
 	if err != nil {
 		return fmt.Errorf("initialise migrator: %w", err)
 	}

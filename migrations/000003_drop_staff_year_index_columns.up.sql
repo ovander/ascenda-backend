@@ -1,11 +1,25 @@
--- Migration: drop orphaned year_index columns from staff tables
--- Background: GORM originally mapped YearIndex → year_index for the three staff
--- tables, but the DB schema uses "year" as the column name. After adding
--- gorm:"column:year" to the StaffHeadcount/StaffSalary/StaffIncentive models,
--- AutoMigrate left the old year_index columns in place (NOT NULL, no default),
--- causing every INSERT to fail with a not-null constraint violation.
--- This migration removes the orphaned columns.
+-- Migration: drop orphaned year_index columns from staff tables (SAFE VERSION)
 
-ALTER TABLE staff_headcounts  DROP COLUMN IF EXISTS year_index;
-ALTER TABLE staff_salaries    DROP COLUMN IF EXISTS year_index;
-ALTER TABLE staff_incentives  DROP COLUMN IF EXISTS year_index;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'staff_headcounts'
+    ) THEN
+ALTER TABLE staff_headcounts DROP COLUMN IF EXISTS year_index;
+END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'staff_salaries'
+    ) THEN
+ALTER TABLE staff_salaries DROP COLUMN IF EXISTS year_index;
+END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'staff_incentives'
+    ) THEN
+ALTER TABLE staff_incentives DROP COLUMN IF EXISTS year_index;
+END IF;
+END $$;

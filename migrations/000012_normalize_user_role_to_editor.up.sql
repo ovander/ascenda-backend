@@ -1,13 +1,19 @@
--- Normalize legacy "user" role to "editor".
---
--- The "user" role was a backward-compatibility alias for "editor" that was
--- assigned to auto-provisioned members. The frontend does not recognise "user"
--- as a display label, so those users saw an empty role in the top bar.
--- This migration rewrites every non-owner, non-admin occurrence of "user" to
--- "editor", which is the canonical role going forward.
---
--- Safe to re-run (idempotent): rows already set to "editor" are unaffected.
+-- Migration: normalize legacy "user" role to "editor" (SAFE VERSION)
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'users'
+    )
+    AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users'
+        AND column_name = 'role'
+    )
+    THEN
 UPDATE users
-SET    role = 'editor'
-WHERE  role = 'user';
+SET role = 'editor'
+WHERE role = 'user';
+END IF;
+END $$;

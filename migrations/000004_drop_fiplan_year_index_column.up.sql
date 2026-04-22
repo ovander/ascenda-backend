@@ -1,6 +1,12 @@
--- Migration: drop orphaned year_index column from fiplan_entries
--- Background: GORM originally mapped YearIndex → year_index, but the DB schema
--- uses "year" as the column name. After adding gorm:"column:year" to FiplanEntry,
--- AutoMigrate left the old year_index column in place (NOT NULL, no default),
--- causing inserts to fail with "null value in column year_index".
+-- Migration: drop orphaned year_index column from fiplan_entries (SAFE VERSION)
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_name = 'fiplan_entries'
+    ) THEN
 ALTER TABLE fiplan_entries DROP COLUMN IF EXISTS year_index;
+END IF;
+END $$;

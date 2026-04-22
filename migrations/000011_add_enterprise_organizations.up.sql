@@ -1,47 +1,73 @@
--- Migration: enterprise organization support
---
--- An Organization is the billing/administrative umbrella for enterprise clients.
--- One org contains N tenants (departments). Workspace tenants have no org.
---
--- Changes:
---   1. Create `organizations` table.
---   2. Add `organization_id` FK to `tenants` (nullable — workspace tenants have no org).
---   3. Add `type`  column to tenants: "workspace" (default) | "enterprise".
---   4. Add `plan`  column to tenants: effective commercial plan for tier gating.
---      For enterprise tenants this overrides individual user.plan values.
---      For workspace tenants this column is unused (user.plan governs).
+-- Migration: enterprise organization support (SAFE VERSION)
 
--- ── 1. Organizations ─────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    -- Ensure pgcrypto for UUID generation
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS organizations (
-    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    name          VARCHAR(255) NOT NULL,
-    slug          VARCHAR(100) NOT NULL UNIQUE,
-    plan          VARCHAR(50)  NOT NULL DEFAULT 'enterprise',
-    max_users     INT          NOT NULL DEFAULT 0,  -- 0 = unlimited
-    billing_email VARCHAR(255),
-    domain        VARCHAR(255),                     -- future: auto-join by email domain
-    is_active     BOOL         NOT NULL DEFAULT true,
-    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+    -- ── 1. Organizations ─────────────────────────────────────────────
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'organizations'
+    ) THEN
+CREATE TABLE organizations (
+                               id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                               name          VARCHAR(255) NOT NULL,
+                               slug          VARCHAR(100) NOT NULL UNIQUE,
+                               plan          VARCHAR(50)  NOT NULL DEFAULT 'enterprise',
+                               max_users     INT          NOT NULL DEFAULT 0,
+                               billing_email VARCHAR(255),
+                               domain        VARCHAR(255),
+                               is_active     BOOL         NOT NULL DEFAULT true,
+                               created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+                               updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+END IF;
 
--- ── 2. Tenants: organization FK ───────────────────────────────────────────────
+    -- ── 2. Tenants: organization FK ─────────────────────────────────
 
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'tenants'
+    ) THEN
 ALTER TABLE tenants
-    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS organization_id UUID;
 
-CREATE INDEX IF NOT EXISTS idx_tenants_organization_id ON tenants(organization_id);
+-- Add FK safely
+IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'fk_tenants_organization'
+        ) THEN
+ALTER TABLE tenants
+    ADD CONSTRAINT fk_tenants_organization
+        FOREIGN KEY (organization_id)
+            REFERENCES organizations(id)
+            ON DELETE SET NULL;
+END IF;
 
--- ── 3. Tenants: type (workspace | enterprise) ────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_tenants_organization_id
+    ON tenants(organization_id);
+END IF;
 
+    -- ── 3. Tenants: type ─────────────────────────────────────────────
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'tenants'
+    ) THEN
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS type VARCHAR(50) NOT NULL DEFAULT 'workspace';
+END IF;
 
--- ── 4. Tenants: effective plan for tier gating ───────────────────────────────
---
--- For enterprise tenants this is set to the org's plan at provisioning time
--- and updated when the org plan changes.  For workspace tenants it is unused.
+    -- ── 4. Tenants: plan ─────────────────────────────────────────────
 
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'tenants'
+    ) THEN
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS plan VARCHAR(50) NOT NULL DEFAULT 'freemium';
+END IF;
+
+END $$;
