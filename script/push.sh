@@ -18,8 +18,9 @@ BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 BIN_NAME="${APP_NAME}-${VERSION}"
 LOCAL_BIN="/tmp/${BIN_NAME}"
 
-REMOTE_BIN="/tmp/ascenda-app"
-REMOTE_MIGRATIONS="/tmp/ascenda-migrations"
+REMOTE_TMP_DIR="/tmp/ascenda"
+REMOTE_BIN="${REMOTE_TMP_DIR}/app"
+REMOTE_MIGRATIONS="${REMOTE_TMP_DIR}/migrations"
 
 # ==============================
 # GUARD: prevent dirty release
