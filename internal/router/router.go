@@ -198,11 +198,11 @@ func NewRouter(
 				r.Post("/{userId}/reactivate", handlers.Admin.User.Reactivate)
 			})
 
-			// Tenant management routes (require manage:tenant permission)
+			// Tenant routes — GET is readable by all authenticated users (needed for tier gating);
+			// PUT requires manage:tenant (owner only).
 			r.Route("/tenant", func(r chi.Router) {
-				r.Use(rbacMW.RequirePermission(middleware.PermManageTenant))
 				r.Get("/", handlers.Admin.Tenant.Get)
-				r.Put("/", handlers.Admin.Tenant.Update)
+				r.With(rbacMW.RequirePermission(middleware.PermManageTenant)).Put("/", handlers.Admin.Tenant.Update)
 			})
 
 		// Audit trail — tenant-scoped, all authenticated users can read.

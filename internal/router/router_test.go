@@ -104,11 +104,10 @@ func buildTestRouter(planMemberRepo repo.PlanMemberRepository) *chi.Mux {
 				r.Post("/invite", stubHandler("InviteUser"))
 			})
 
-			// Tenant management (requires manage:tenant)
+			// Tenant routes — GET open to all authenticated users, PUT requires manage:tenant
 			r.Route("/tenant", func(r chi.Router) {
-				r.Use(rbacMW.RequirePermission(middleware.PermManageTenant))
 				r.Get("/", stubHandler("GetTenant"))
-				r.Put("/", stubHandler("UpdateTenant"))
+				r.With(rbacMW.RequirePermission(middleware.PermManageTenant)).Put("/", stubHandler("UpdateTenant"))
 			})
 
 			// Plan routes
@@ -197,23 +196,31 @@ func TestRouterUserManagementRBAC(t *testing.T) {
 func TestRouterTenantRBAC(t *testing.T) {
 	r := buildTestRouter(newMockPlanMemberRepo())
 
-	t.Run("owner can access tenant", func(t *testing.T) {
+	// GET /tenant/ — readable by all authenticated users (needed for tier gating).
+	for _, role := range []string{"owner", "editor", "reader", "admin", "user"} {
+		role := role
+		t.Run("GET tenant accessible by "+role, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, newReq("GET", "/api/v1/tenant/", role))
+			assert.Equal(t, 200, w.Code)
+		})
+	}
+
+	// PUT /tenant/ — requires manage:tenant (owner only).
+	t.Run("owner can PUT tenant", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, newReq("GET", "/api/v1/tenant/", "owner"))
+		r.ServeHTTP(w, newReq("PUT", "/api/v1/tenant/", "owner"))
 		assert.Equal(t, 200, w.Code)
 	})
 
-	t.Run("admin CANNOT access tenant", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, newReq("GET", "/api/v1/tenant/", "admin"))
-		assert.Equal(t, 403, w.Code)
-	})
-
-	t.Run("user CANNOT access tenant", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, newReq("GET", "/api/v1/tenant/", "user"))
-		assert.Equal(t, 403, w.Code)
-	})
+	for _, role := range []string{"editor", "reader", "admin", "user"} {
+		role := role
+		t.Run(role+" CANNOT PUT tenant", func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, newReq("PUT", "/api/v1/tenant/", role))
+			assert.Equal(t, 403, w.Code)
+		})
+	}
 }
 
 func TestRouterPlanListAccessible(t *testing.T) {
