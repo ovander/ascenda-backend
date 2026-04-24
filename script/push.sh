@@ -18,7 +18,7 @@ BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 BIN_NAME="${APP_NAME}-${VERSION}"
 LOCAL_BIN="/tmp/${BIN_NAME}"
 
-REMOTE_TMP_DIR="/tmp/ascenda"
+REMOTE_TMP_DIR="/tmp/ascenda-backend"
 REMOTE_BIN="${REMOTE_TMP_DIR}/app"
 REMOTE_MIGRATIONS="${REMOTE_TMP_DIR}/migrations"
 
@@ -35,9 +35,9 @@ fi
 # ==============================
 echo "=============================="
 echo "🔨 Building ${BIN_NAME}"
-echo "Version: ${VERSION}"
-echo "Commit: ${COMMIT}"
-echo "Time: ${BUILD_TIME}"
+echo "Version:  ${VERSION}"
+echo "Commit:   ${COMMIT}"
+echo "Time:     ${BUILD_TIME}"
 echo "=============================="
 
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
@@ -71,30 +71,22 @@ echo "Checksum: ${CHECKSUM}"
 # ==============================
 # UPLOAD BINARY
 # ==============================
-
-# Ensure remote temp dir exists
-ssh -p ${SSH_PORT} ${REMOTE} "mkdir -p /tmp/ascenda"
+echo "📁 Preparing remote tmp..."
+ssh -p ${SSH_PORT} ${REMOTE} "rm -rf ${REMOTE_TMP_DIR} && mkdir -p ${REMOTE_TMP_DIR}"
 
 echo "📤 Uploading binary..."
-
 scp -P ${SSH_PORT} "${LOCAL_BIN}" "${REMOTE}:${REMOTE_BIN}"
 
 # ==============================
 # VERIFY REMOTE
 # ==============================
 echo "🔍 Verifying remote binary..."
-
-ssh -p ${SSH_PORT} ${REMOTE} "
-ls -lh ${REMOTE_BIN}
-"
+ssh -p ${SSH_PORT} ${REMOTE} "ls -lh ${REMOTE_BIN}"
 
 # ==============================
 # UPLOAD MIGRATIONS
 # ==============================
 echo "📁 Uploading migrations..."
-
-ssh -p ${SSH_PORT} ${REMOTE} "rm -rf ${REMOTE_MIGRATIONS} && mkdir -p ${REMOTE_MIGRATIONS}"
-
 rsync -az --delete -e "ssh -p ${SSH_PORT}" \
   migrations/ "${REMOTE}:${REMOTE_MIGRATIONS}/"
 
@@ -112,13 +104,10 @@ echo "=============================="
 echo "✅ PUSH COMPLETE"
 echo "=============================="
 echo ""
-echo "➡️ Next steps on VPS:"
+echo "➡️  Next steps on VPS:"
 echo ""
-echo "ssh -p ${SSH_PORT} ${REMOTE}"
+echo "    ssh -p ${SSH_PORT} ${REMOTE}"
 echo ""
-echo "cd /opt/ascenda/backend"
-echo ""
-echo "# Deploy version"
-echo "sudo ./deploy.sh ${VERSION}"
+echo "    sudo /opt/apps/${APP_NAME}/deploy-backend.sh ${VERSION}"
 echo ""
 echo "=============================="
