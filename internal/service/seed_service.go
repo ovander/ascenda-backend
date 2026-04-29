@@ -170,9 +170,9 @@ type demoFiplan struct {
 	amounts [5]decimal.Decimal // Y1..Y5
 }
 
-// demoPlanDefs returns the three archetype plan definitions.
+// demoPlanDefs returns the four archetype plan definitions.
 func demoPlanDefs() []demoPlanDef {
-	return []demoPlanDef{saasDemo(), hardwareDemo(), consultingDemo()}
+	return []demoPlanDef{saasDemo(), hardwareDemo(), consultingDemo(), golfDemo()}
 }
 
 // ── 1. SaaS ──────────────────────────────────────────────────────────────────
@@ -447,6 +447,115 @@ func consultingDemo() demoPlanDef {
 	wcCustomer60Pct: d(1),
 	wcSupplier30Pct: d(0.5),
 	wcSupplier60Pct: d(0.5),
+	}
+}
+
+// ── 4. Pro Tour Golfer ────────────────────────────────────────────────────────
+
+func golfDemo() demoPlanDef {
+	// Individual professional golfer — French, competing on the Challenge Tour
+	// in Y1 and graduating to the DP World Tour from Y2.
+	//
+	// Revenue model: three streams —
+	//   Prize Money   : 1 unit = 1 tournament played; price = average net prize.
+	//                   COGS = caddie fee (~15 % of prize per event).
+	//   Sponsorship   : 1 unit = annual contract bundle; price = total value.
+	//                   Agent commission (10 %) carried in professional_fees opex.
+	//   Appearances   : 1 unit = 1 pro-am / corporate day; price = appearance fee.
+	//
+	// Staff: caddie is costed via COGS (not headcount) to avoid double-counting.
+	//   Headcount covers fixed overhead only: swing coach (from Y2), fitness
+	//   trainer (from Y4), agent/manager (throughout), PA (from Y4).
+	//
+	// Travel is by far the largest opex — DP World Tour events span 4 continents.
+	// Goal: reach Top-50 ranking and ~€1.7M total revenue by Year 5.
+	return demoPlanDef{
+		name:        "Pro Tour Golfer — Ascenda Demo",
+		description: "Individual professional golfer transitioning from the Challenge Tour (Y1) to an established DP World Tour career (Y5). Three revenue streams: tournament prize money, brand sponsorships, and corporate appearance fees. Caddie costs are modelled as COGS; travel is the dominant opex driver (~€60K–€250K/year). Demonstrates athlete business economics with ~85 % gross margin on prize money and rapid revenue growth tied to world-ranking progression.",
+		scenarioDescription: "Base-case: gradual ascent from Challenge Tour rookie (€65K revenue Y1) to Top-50 DP World Tour player (€1.7M Y5). Agent secured from day 1; swing coach added in Y2; fitness trainer + PA from Y4 as profile and commercial schedule grows. Travel doubles as the player joins the global DP World Tour circuit from Y2. First sponsorship endorsements signed mid-Y2; major equipment brand deal from Y3.",
+		companyName: "ProGolf SAS",
+		country:     "FR",
+		products: []demoProduct{
+			{
+				// 1 unit = 1 tournament played; price = average net prize per event.
+				// COGS = caddie fee per tournament (base + % of winnings ≈ 15 %).
+				name:  "Tournament Prize Money",
+				pType: model.ProductTypeService,
+				// Y1: Challenge Tour (20 events, avg €2 000 prize)
+				// Y2: DP World Tour rookie (25 events, avg €4 800)
+				// Y3: Established tour player (25 events, avg €11 200)
+				// Y4: Top-100 ranking (22 events, avg €22 700)
+				// Y5: Top-50 / Ryder Cup candidate (22 events, avg €40 900)
+				prices: [5]decimal.Decimal{d(2000), d(4800), d(11200), d(22700), d(40900)},
+				cogs:   [5]decimal.Decimal{d(300), d(720), d(1680), d(3400), d(6100)},
+				units:  [5]int64{20, 25, 25, 22, 22},
+			},
+			{
+				// 1 unit = 1 annual sponsorship/endorsement contract bundle.
+				// Agent commission (~10 %) carried in professional_fees opex.
+				name:  "Sponsorship & Endorsements",
+				pType: model.ProductTypeService,
+				prices: [5]decimal.Decimal{d(15000), d(40000), d(120000), d(300000), d(600000)},
+				cogs:   [5]decimal.Decimal{d(0), d(0), d(0), d(0), d(0)},
+				units:  [5]int64{1, 1, 1, 1, 1},
+			},
+			{
+				// 1 unit = 1 corporate pro-am or appearance day.
+				// Travel/prep cost per appearance carried in COGS.
+				name:  "Appearance Fees & Pro-Ams",
+				pType: model.ProductTypeService,
+				prices: [5]decimal.Decimal{d(2000), d(2500), d(4000), d(6000), d(8000)},
+				cogs:   [5]decimal.Decimal{d(200), d(250), d(400), d(500), d(600)},
+				units:  [5]int64{5, 10, 15, 20, 25},
+			},
+		},
+		// Caddie costed via COGS above — headcount = fixed overhead only.
+		headcounts: map[model.StaffCategory][5]decimal.Decimal{
+			// Swing coach: hired full-time from Y2 as prize money justifies the spend.
+			model.CategoryProdTechnicians: {d(0), d(1), d(1), d(2), d(2)},
+			// Agent / manager: present from day 1 to negotiate sponsorship deals.
+			model.CategoryAdminManagers: {d(1), d(1), d(1), d(1), d(1)},
+			// PA / personal assistant: hired from Y4 as commercial schedule intensifies.
+			model.CategoryAdminAssistants: {d(0), d(0), d(0), d(1), d(1)},
+		},
+		// Monthly gross salary (€) — coaching staff below top-tier agency rates
+		// because caddie cost is already in COGS.
+		salaries: map[model.StaffCategory][5]decimal.Decimal{
+			model.CategoryProdTechnicians: {d(3500), d(3700), d(3900), d(4200), d(4500)},
+			model.CategoryAdminManagers:   {d(5000), d(5500), d(6000), d(6500), d(7000)},
+			model.CategoryAdminAssistants: {d(3000), d(3200), d(3400), d(3600), d(3800)},
+		},
+		capex: []demoCapex{
+			// Golf equipment, launch monitors (TrackMan), GPS devices, club fitting.
+			{model.AssetEquipmentTools, 3, [5]decimal.Decimal{d(20000), d(8000), d(8000), d(15000), d(15000)}},
+			// Vehicle — long-distance driving to European events.
+			{model.AssetVehicles, 5, [5]decimal.Decimal{d(30000), d(0), d(0), d(35000), d(0)}},
+		},
+		opex: []demoOpex{
+			// Tour travel: flights, hotels, car hire across 4 continents from Y2.
+			{model.LineTravelTransport, [5]decimal.Decimal{d(60000), d(100000), d(150000), d(200000), d(250000)}},
+			// Agent commission on sponsorship + legal/contract fees.
+			{model.LineProfessionalFees, [5]decimal.Decimal{d(5000), d(12000), d(30000), d(60000), d(100000)}},
+			// Coaching clinics, training camps, tour entry and qualifying fees.
+			{model.LineRecruitmentTraining, [5]decimal.Decimal{d(8000), d(15000), d(22000), d(30000), d(40000)}},
+			// Event hospitality, sponsor entertainment, image/PR costs.
+			{model.LineMissionRepresentation, [5]decimal.Decimal{d(5000), d(10000), d(18000), d(30000), d(50000)}},
+			// Equipment maintenance, miscellaneous operational costs.
+			{model.LineOtherExpenses, [5]decimal.Decimal{d(4000), d(6000), d(9000), d(14000), d(20000)}},
+		},
+		// Founding capital (personal savings) + working-capital loan in Y1.
+		// Dividends start from Y3 once prize money covers operating costs.
+		fiplanEntries: []demoFiplan{
+			{model.FiplanCapitalIncrease, [5]decimal.Decimal{d(50000), d(0), d(0), d(0), d(0)}},
+			{model.FiplanLTLoans,         [5]decimal.Decimal{d(30000), d(0), d(0), d(0), d(0)}},
+			{model.FiplanDividends,       [5]decimal.Decimal{d(0), d(0), d(15000), d(60000), d(120000)}},
+		},
+		// Prize money and appearance fees are paid within ~30 days of the event.
+		// Operating expenses (travel, entry fees) are settled on delivery.
+		wcCustomer30Pct: d(1),
+		wcCustomer60Pct: d(0),
+		wcSupplier30Pct: d(1),
+		wcSupplier60Pct: d(0),
 	}
 }
 
