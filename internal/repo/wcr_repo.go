@@ -21,7 +21,7 @@ func NewWCRRepo(db *gorm.DB) *WCRRepo {
 func (r *WCRRepo) ListByScenario(tenantID, scenarioID uuid.UUID) ([]*model.WCREntry, error) {
 	var entries []*model.WCREntry
 	err := r.db.Where("tenant_id = ? AND scenario_id = ?", tenantID, scenarioID).
-		Order("line_id, year").
+		Order("line_id, year_index").
 		Find(&entries).Error
 	return entries, err
 }
