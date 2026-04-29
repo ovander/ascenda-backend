@@ -12,12 +12,14 @@ import (
 
 // PlanAccessMiddleware checks plan-level permissions via plan_members table.
 type PlanAccessMiddleware struct {
+	planRepo       repo.PlanRepository
 	planMemberRepo repo.PlanMemberRepository
 	logger         *logrus.Entry
 }
 
-func NewPlanAccessMiddleware(planMemberRepo repo.PlanMemberRepository, logger *logrus.Entry) *PlanAccessMiddleware {
+func NewPlanAccessMiddleware(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository, logger *logrus.Entry) *PlanAccessMiddleware {
 	return &PlanAccessMiddleware{
+		planRepo:       planRepo,
 		planMemberRepo: planMemberRepo,
 		logger:         logger,
 	}
@@ -64,6 +66,12 @@ func (m *PlanAccessMiddleware) RequirePlanAccess(next http.Handler) http.Handler
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(`{"error":{"code":"bad_request","message":"invalid plan ID"}}`))
+			return
+		}
+
+		// Demo plans are read-accessible to all authenticated users — no membership required.
+		if plan, err := m.planRepo.GetByID(tenantID, planID); err == nil && plan != nil && plan.IsDemo {
+			next.ServeHTTP(w, r)
 			return
 		}
 

@@ -144,7 +144,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	authMW := middleware.NewAuthMiddleware(cfg.Socrate.JWKSURL, cfg.Socrate.BaseURL, log)
 	tenantMW := middleware.NewTenantMiddleware(db, repos.User, repos.Tenant, log, newSocrateProfiler(services.SocrateClient))
 	rbacMW := middleware.NewRBACMiddleware(log)
-	planAccessMW := middleware.NewPlanAccessMiddleware(repos.PlanMember, log)
+	planAccessMW := middleware.NewPlanAccessMiddleware(repos.Plan, repos.PlanMember, log)
 	tierGateMW := middleware.NewTierGateMiddleware(log)
 	aiAccessMW := middleware.NewAIAccessMiddleware(services.AIUsagePolicy, log)
 	loggerMW := middleware.NewLoggerMiddleware(log.Logger)

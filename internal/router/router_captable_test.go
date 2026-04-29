@@ -29,10 +29,10 @@ import (
 //	POST /api/v1/plans/{planId}/cap-table/shareholders
 //	PUT  /api/v1/plans/{planId}/cap-table/shareholders/{id}
 //	DELETE /api/v1/plans/{planId}/cap-table/shareholders/{id}
-func buildTierGatedRouter(planMemberRepo repo.PlanMemberRepository) *chi.Mux {
+func buildTierGatedRouter(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository) *chi.Mux {
 	logger := logrus.NewEntry(logrus.New())
 	rbacMW := middleware.NewRBACMiddleware(logger)
-	planAccessMW := middleware.NewPlanAccessMiddleware(planMemberRepo, logger)
+	planAccessMW := middleware.NewPlanAccessMiddleware(planRepo, planMemberRepo, logger)
 	tierGateMW := middleware.NewTierGateMiddleware(logger)
 
 	r := chi.NewRouter()
@@ -79,8 +79,7 @@ func newTierReq(method, path, role, plan string) *http.Request {
 func TestCapTableRoute_FreemiumPlan_Blocked(t *testing.T) {
 	planID := uuid.New()
 
-	planRepo := newMockPlanMemberRepo()
-	r := buildTierGatedRouter(planRepo)
+	r := buildTierGatedRouter(newMockPlanRepo(), newMockPlanMemberRepo())
 
 	path := "/api/v1/plans/" + planID.String() + "/cap-table/"
 	w := httptest.NewRecorder()
@@ -92,8 +91,7 @@ func TestCapTableRoute_FreemiumPlan_Blocked(t *testing.T) {
 func TestCapTableRoute_ProPlan_Allowed(t *testing.T) {
 	planID := uuid.New()
 
-	planRepo := newMockPlanMemberRepo()
-	r := buildTierGatedRouter(planRepo)
+	r := buildTierGatedRouter(newMockPlanRepo(), newMockPlanMemberRepo())
 
 	path := "/api/v1/plans/" + planID.String() + "/cap-table/"
 	w := httptest.NewRecorder()
@@ -106,8 +104,7 @@ func TestCapTableRoute_ProPlan_Allowed(t *testing.T) {
 func TestCapTableRoute_EnterprisePlan_PassesProGate(t *testing.T) {
 	planID := uuid.New()
 
-	planRepo := newMockPlanMemberRepo()
-	r := buildTierGatedRouter(planRepo)
+	r := buildTierGatedRouter(newMockPlanRepo(), newMockPlanMemberRepo())
 
 	path := "/api/v1/plans/" + planID.String() + "/cap-table/"
 	w := httptest.NewRecorder()
@@ -121,8 +118,7 @@ func TestCapTableRoute_NotUnderScenarios(t *testing.T) {
 	planID := uuid.New()
 	scenarioID := uuid.New()
 
-	planRepo := newMockPlanMemberRepo()
-	r := buildTierGatedRouter(planRepo)
+	r := buildTierGatedRouter(newMockPlanRepo(), newMockPlanMemberRepo())
 
 	// The OLD (wrong) path — must return 404, not 200.
 	wrongPath := "/api/v1/plans/" + planID.String() + "/scenarios/" + scenarioID.String() + "/cap-table/"
@@ -138,14 +134,14 @@ func TestCapTableRoute_ViewerCanGET_ButCannotPOST(t *testing.T) {
 	tenantID := uuid.New()
 	planID := uuid.New()
 
-	planRepo := newMockPlanMemberRepo()
-	planRepo.Create(&model.PlanMember{
+	memberRepo := newMockPlanMemberRepo()
+	memberRepo.Create(&model.PlanMember{
 		TenantID: tenantID,
 		PlanID:   planID,
 		UserID:   userID,
 		Role:     "viewer",
 	})
-	r := buildTierGatedRouter(planRepo)
+	r := buildTierGatedRouter(newMockPlanRepo(), memberRepo)
 
 	base := "/api/v1/plans/" + planID.String()
 
@@ -172,14 +168,14 @@ func TestCapTableRoute_EditorCanPOST(t *testing.T) {
 	tenantID := uuid.New()
 	planID := uuid.New()
 
-	planRepo := newMockPlanMemberRepo()
-	planRepo.Create(&model.PlanMember{
+	memberRepo := newMockPlanMemberRepo()
+	memberRepo.Create(&model.PlanMember{
 		TenantID: tenantID,
 		PlanID:   planID,
 		UserID:   userID,
 		Role:     "editor",
 	})
-	r := buildTierGatedRouter(planRepo)
+	r := buildTierGatedRouter(newMockPlanRepo(), memberRepo)
 
 	req := newTierReq("POST", "/api/v1/plans/"+planID.String()+"/cap-table/shareholders", "user", middleware.TierPro)
 	ctx := ctxutil.WithTenantID(req.Context(), tenantID)
@@ -195,8 +191,7 @@ func TestCapTableRoute_EditorCanPOST(t *testing.T) {
 func TestCapTableRoute_FreemiumPlan_ForbiddenBodyContainsUpgradeRequired(t *testing.T) {
 	planID := uuid.New()
 
-	planRepo := newMockPlanMemberRepo()
-	r := buildTierGatedRouter(planRepo)
+	r := buildTierGatedRouter(newMockPlanRepo(), newMockPlanMemberRepo())
 
 	path := "/api/v1/plans/" + planID.String() + "/cap-table/"
 	w := httptest.NewRecorder()
