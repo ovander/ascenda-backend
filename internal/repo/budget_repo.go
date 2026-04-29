@@ -20,7 +20,7 @@ func NewBudgetRepo(db *gorm.DB) *BudgetRepo {
 // ListByScenario retrieves all budget overrides for a scenario and year
 func (r *BudgetRepo) ListByScenario(tenantID, scenarioID uuid.UUID, year int) ([]*model.BudgetMonthlyOverride, error) {
 	var entries []*model.BudgetMonthlyOverride
-	err := r.db.Where("tenant_id = ? AND scenario_id = ? AND year = ?", tenantID, scenarioID, year).
+	err := r.db.Where("tenant_id = ? AND scenario_id = ? AND year_index = ?", tenantID, scenarioID, year).
 		Order("month").
 		Find(&entries).Error
 	return entries, err
@@ -30,7 +30,7 @@ func (r *BudgetRepo) ListByScenario(tenantID, scenarioID uuid.UUID, year int) ([
 func (r *BudgetRepo) ListAllByScenario(tenantID, scenarioID uuid.UUID) ([]*model.BudgetMonthlyOverride, error) {
 	var entries []*model.BudgetMonthlyOverride
 	err := r.db.Where("tenant_id = ? AND scenario_id = ?", tenantID, scenarioID).
-		Order("year, month").
+		Order("year_index, month").
 		Find(&entries).Error
 	return entries, err
 }
