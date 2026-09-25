@@ -19,10 +19,14 @@ import (
 //	                + OrdinaryCuts × PrizePerCut + OtherPrizeMoney
 //	Volume[y]       = Events[y]                (1 when no event but other prize money)
 //	UnitPrice[y]    = Gains[y] / Volume[y]
-//	UnitCost[y]     = EntryFee + Travel + CaddieFee + CoachFee   (per event)
-//	                + (CaddieShare + CoachShare) × UnitPrice
+//	DirectCost[y]   = Events × (EntryFee + Travel + CaddieFee)   (per event)
+//	                + CoachAnnualFee                             (per year)
+//	                + (CaddieShare + CoachShare) × Gains
+//	UnitCost[y]     = DirectCost[y] / Volume[y]
 //
 // Top10s excludes wins. Shares are fractions of total gains (0.07 = 7 %).
+// The caddie is paid per event; the coach is paid a fixed fee per year;
+// both also take a share of winnings.
 type CompetitionParams struct {
 	// Circuit[0..4] names the tour played that year (informational; the UI
 	// uses it to pre-fill the prize economics).
@@ -42,8 +46,20 @@ type CompetitionParams struct {
 	TravelPerEvent    [5]decimal.Decimal `json:"travelPerEvent"`
 	CaddieFeePerEvent [5]decimal.Decimal `json:"caddieFeePerEvent"`
 	CaddieShare       [5]decimal.Decimal `json:"caddieShare"`
-	CoachFeePerEvent  [5]decimal.Decimal `json:"coachFeePerEvent"`
+	CoachAnnualFee    [5]decimal.Decimal `json:"coachAnnualFee"`
 	CoachShare        [5]decimal.Decimal `json:"coachShare"`
+
+	// CoachFeePerEvent is the coach's fixed fee per event from the first
+	// version of the driver, before the coach fee became annual. It is
+	// still read so that parameters saved then keep their cost
+	// (fee × events, added to the annual fee); the forms no longer write it.
+	CoachFeePerEvent [5]decimal.Decimal `json:"coachFeePerEvent,omitempty"`
+}
+
+// CoachFixed returns the coach's fixed cost for year index y: the annual fee
+// plus any legacy per-event fee times the events played.
+func (p CompetitionParams) CoachFixed(y int) decimal.Decimal {
+	return p.CoachAnnualFee[y].Add(p.CoachFeePerEvent[y].Mul(decimal.NewFromInt(int64(p.Events[y]))))
 }
 
 // ContractLine is one sponsorship or image-rights contract.
@@ -91,7 +107,7 @@ func (p CompetitionParams) Validate() error {
 			"prizePerWin": p.PrizePerWin[y], "prizePerTop10": p.PrizePerTop10[y], "prizePerCut": p.PrizePerCut[y],
 			"otherPrizeMoney": p.OtherPrizeMoney[y], "entryFeePerEvent": p.EntryFeePerEvent[y],
 			"travelPerEvent": p.TravelPerEvent[y], "caddieFeePerEvent": p.CaddieFeePerEvent[y],
-			"coachFeePerEvent": p.CoachFeePerEvent[y],
+			"coachAnnualFee": p.CoachAnnualFee[y], "coachFeePerEvent": p.CoachFeePerEvent[y],
 		}
 		for name, v := range amounts {
 			if v.IsNegative() {

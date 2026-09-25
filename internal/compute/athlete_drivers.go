@@ -60,25 +60,28 @@ func applyCompetitionDriver(p model.CompetitionParams, bundle ProductInputBundle
 
 	for y := 0; y < MaxYears; y++ {
 		gains := competitionGains(p, y)
-		share := p.CaddieShare[y].Add(p.CoachShare[y])
-		perEvent := p.EntryFeePerEvent[y].
+		events := int64(p.Events[y])
+		directCost := p.EntryFeePerEvent[y].
 			Add(p.TravelPerEvent[y]).
 			Add(p.CaddieFeePerEvent[y]).
-			Add(p.CoachFeePerEvent[y])
+			Mul(decimal.NewFromInt(events)).
+			Add(p.CoachFixed(y)).
+			Add(p.CaddieShare[y].Add(p.CoachShare[y]).Mul(gains))
 
 		var volume int64
 		unitPrice, unitCost := decimal.Zero, decimal.Zero
-		switch events := int64(p.Events[y]); {
+		switch {
 		case events > 0:
 			volume = events
 			unitPrice = gains.DivRound(decimal.NewFromInt(events), 10)
-			unitCost = perEvent.Add(share.Mul(unitPrice))
-		case gains.IsPositive():
-			// No event on the main circuit but prize money elsewhere: carry
-			// it as one unit so the revenue is not lost.
+			unitCost = directCost.DivRound(decimal.NewFromInt(events), 10)
+		case gains.IsPositive() || directCost.IsPositive():
+			// No event on the main circuit, but prize money elsewhere or a
+			// coach still under contract: carry the year as one unit so
+			// neither the revenue nor the cost is lost.
 			volume = 1
 			unitPrice = gains
-			unitCost = share.Mul(gains)
+			unitCost = directCost
 		}
 
 		newVolumes = append(newVolumes, model.ProductSalesVolume{
