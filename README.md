@@ -281,7 +281,20 @@ make test-cover      # coverage report → coverage.html
 make test-compute    # compute engine tests only
 ```
 
-Integration tests use [testcontainers-go](https://golang.testcontainers.org/) to spin up a real PostgreSQL instance — no manual setup required. They are skipped with `-short`.
+Integration tests live in `internal/repo` behind the `integration` build tag and use [testcontainers-go](https://golang.testcontainers.org/) to spin up a real PostgreSQL instance — no manual setup beyond a running Docker daemon. Run them with `make test-integration`; `make test` / `make test-short` do not include them.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and push to `main`:
+
+| Job | What it runs | Gate |
+|---|---|---|
+| Build, vet, unit tests | `go build`, `go vet`, `go test -short -race` | blocking |
+| golangci-lint | `.golangci.yml` (standard linters); pull requests fail only on **new** issues (`--new-from-rev`), pushes to `main` report the full backlog | blocking on PRs |
+| gofmt | changed `.go` files must be gofmt-clean; the tree-wide count is reported on `main` | blocking on PRs |
+| Integration tests | `go test -tags integration ./internal/repo/...` (testcontainers) | blocking |
+| govulncheck | reachable vulnerabilities in dependencies | blocking |
+| Docker image | `docker build` of the Dockerfile (no push) | blocking |
 
 Handler tests use hand-rolled mocks (no code-gen required) and `httptest.NewRecorder`. Each domain's handler test file defines a `Mock<Domain>Service` struct that satisfies the handler's service interface.
 

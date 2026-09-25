@@ -37,6 +37,9 @@ run-prod: ## Run with production settings
 test: ## Run all tests
 	$(GO) test -v -race -count=1 ./...
 
+test-integration: ## Run repository integration tests (testcontainers, needs Docker)
+	go test -tags integration -count=1 ./internal/repo/...
+
 test-short: ## Run tests without integration tests
 	$(GO) test -v -short -race ./...
 
@@ -133,7 +136,7 @@ deps-update: ## Update all dependencies
 # ── Tools ────────────────────────────
 
 tools: ## Install development tools
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
