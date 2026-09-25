@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/socrate"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // SocrateUserManager is the interface that must be satisfied by the Socrate client.
@@ -33,7 +33,7 @@ var socrateRoles = map[string]bool{"admin": true, "user": true}
 
 // AdminUserService handles platform-wide user and tenant management via Socrate proxy.
 type AdminUserService struct {
-	socrateClient SocrateUserManager    // nil if Socrate not configured
+	socrateClient SocrateUserManager // nil if Socrate not configured
 	userRepo      repo.UserRepository
 	tenantRepo    repo.AdminTenantRepository
 	logger        *logrus.Entry
@@ -67,7 +67,7 @@ type AdminUserDTO struct {
 	SocrateID   uint       `json:"socrateId"`
 	Email       string     `json:"email"`
 	Name        string     `json:"name"`
-	Role        string     `json:"role"`        // Socrate role: admin|user
+	Role        string     `json:"role"` // Socrate role: admin|user
 	Status      string     `json:"status"`
 	IsVerified  bool       `json:"isVerified"`
 	AscendaID   *string    `json:"ascendaId,omitempty"`
@@ -136,9 +136,9 @@ func (s *AdminUserService) GetUser(ctx context.Context, socrateID string) (*Admi
 
 // CreateUserRequest is the request to create a user via the platform admin API.
 type CreateUserRequest struct {
-	Email       string `json:"email" validate:"required,email"`
-	FullName    string `json:"fullName" validate:"required"`
-	Role        string `json:"role"`
+	Email    string `json:"email" validate:"required,email"`
+	FullName string `json:"fullName" validate:"required"`
+	Role     string `json:"role"`
 }
 
 // CreateUser creates a new user in Socrate (invite flow — no password required).

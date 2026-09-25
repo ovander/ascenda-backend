@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"ascenda/internal/model"
+	"ascenda/internal/service"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
 	"github.com/ovander/backendkit/pagination"
-	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 // NOTE: SnapshotHandler uses a concrete *service.SnapshotService type.
@@ -29,14 +29,14 @@ import (
 // This is a best-effort mock that may be incomplete; integration tests are preferred.
 
 type mockSnapshotService struct {
-	listFn         func(ctx context.Context, tenantID, scenarioID uuid.UUID, params pagination.Params) ([]model.PlanSnapshot, int64, error)
-	createFn       func(ctx context.Context, tenantID, scenarioID uuid.UUID, label, description string) (*model.PlanSnapshot, error)
-	getFn          func(ctx context.Context, tenantID, snapshotID uuid.UUID) (*model.PlanSnapshot, error)
-	getDataFn      func(ctx context.Context, tenantID, snapshotID uuid.UUID) (json.RawMessage, error)
-	restoreFn      func(ctx context.Context, tenantID, snapshotID uuid.UUID) error
-	cloneFn        func(ctx context.Context, tenantID, snapshotID, newScenarioID uuid.UUID) error
-	diffFn         func(ctx context.Context, tenantID, snapshot1ID, snapshot2ID uuid.UUID) (map[string]interface{}, error)
-	deleteFn       func(ctx context.Context, tenantID, snapshotID uuid.UUID) error
+	listFn    func(ctx context.Context, tenantID, scenarioID uuid.UUID, params pagination.Params) ([]model.PlanSnapshot, int64, error)
+	createFn  func(ctx context.Context, tenantID, scenarioID uuid.UUID, label, description string) (*model.PlanSnapshot, error)
+	getFn     func(ctx context.Context, tenantID, snapshotID uuid.UUID) (*model.PlanSnapshot, error)
+	getDataFn func(ctx context.Context, tenantID, snapshotID uuid.UUID) (json.RawMessage, error)
+	restoreFn func(ctx context.Context, tenantID, snapshotID uuid.UUID) error
+	cloneFn   func(ctx context.Context, tenantID, snapshotID, newScenarioID uuid.UUID) error
+	diffFn    func(ctx context.Context, tenantID, snapshot1ID, snapshot2ID uuid.UUID) (map[string]interface{}, error)
+	deleteFn  func(ctx context.Context, tenantID, snapshotID uuid.UUID) error
 }
 
 func (m *mockSnapshotService) List(ctx context.Context, tenantID, scenarioID uuid.UUID, params pagination.Params) ([]model.PlanSnapshot, int64, error) {

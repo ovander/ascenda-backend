@@ -14,9 +14,9 @@ package service
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1102,8 +1102,8 @@ func TestIdentifyDrivers_EfficientScenario_NoDrivers(t *testing.T) {
 		[5]float64{100, 120, 150, 180, 220},
 		[5]float64{20, 30, 45, 60, 80},
 		[5]float64{10, 15, 22, 30, 40},
-		[5]float64{25, 30, 37, 45, 55},   // payroll
-		[5]float64{40, 48, 60, 72, 88},   // COGS → margin ~60%
+		[5]float64{25, 30, 37, 45, 55}, // payroll
+		[5]float64{40, 48, 60, 72, 88}, // COGS → margin ~60%
 		[5]float64{-15, 5, 15, 25, 40},
 	)
 	drivers := identifyDrivers(makeOutput(pnl, model.CashReport{}))
@@ -1292,9 +1292,9 @@ func TestDriver_InefficientGrowthModel_IsNotRootCause(t *testing.T) {
 		[5]float64{100, 110, 0, 0, 0}, // growth = 10% < 20%
 		[5]float64{},
 		[5]float64{},
-		[5]float64{20, 22, 0, 0, 0},   // payroll — 20% of sales
-		[5]float64{20, 22, 0, 0, 0},   // COGS — margin 60%
-		[5]float64{-60, 0, 0, 0, 0},   // cashflow burn = -60% of sales
+		[5]float64{20, 22, 0, 0, 0}, // payroll — 20% of sales
+		[5]float64{20, 22, 0, 0, 0}, // COGS — margin 60%
+		[5]float64{-60, 0, 0, 0, 0}, // cashflow burn = -60% of sales
 	)
 	drivers := identifyDrivers(makeOutput(pnl, model.CashReport{}))
 	d := findDriver(drivers, "Inefficient growth model")
@@ -1602,10 +1602,10 @@ func TestTrendSignal_HighVolatility_OverridesImproving(t *testing.T) {
 	// Strong CAGR + InflectionMonth present → would otherwise be "improving".
 	// RevenueVolatility > 0.50 must override and return "volatile".
 	insights := TrendInsights{
-		RevenueCAGR:       dec(0.25),  // > cagrImprovingFloor (0.10) → improving signal
+		RevenueCAGR:       dec(0.25), // > cagrImprovingFloor (0.10) → improving signal
 		BurnRateMonthly:   dec(5_000),
-		RevenueVolatility: dec(0.65),  // > volatilityThreshold (0.50) → volatile override
-		InflectionMonth:   12,         // burn-decreasing proxy is true
+		RevenueVolatility: dec(0.65), // > volatilityThreshold (0.50) → volatile override
+		InflectionMonth:   12,        // burn-decreasing proxy is true
 		TimeToScale:       6,
 	}
 	assert.Equal(t, "volatile", computeTrendSignal(insights))

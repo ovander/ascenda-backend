@@ -9,35 +9,35 @@ import (
 type PnlLineID string
 
 const (
-	PnlSales                PnlLineID = "sales"
-	PnlExportSalesMemo      PnlLineID = "export_sales_memo"
-	PnlCapitalizedProd      PnlLineID = "capitalized_production"
-	PnlStoredProd           PnlLineID = "stored_production"
-	PnlTotalOperatingRev    PnlLineID = "total_operating_rev"
-	PnlCOGS                 PnlLineID = "cogs"
-	PnlInventoryChange      PnlLineID = "inventory_change"
-	PnlExternalExpenses     PnlLineID = "external_expenses"
-	PnlTotalConsumption     PnlLineID = "total_consumption"
-	PnlAddedValue           PnlLineID = "added_value"
-	PnlTaxesAndDuties       PnlLineID = "taxes_and_duties"
-	PnlPayrollExpenses      PnlLineID = "payroll_expenses"
-	PnlEBITDA               PnlLineID = "ebitda"
-	PnlDepreciation         PnlLineID = "depreciation"
-	PnlImpairment           PnlLineID = "impairment"
-	PnlGrantsOtherRevenue   PnlLineID = "grants_other_revenue"
-	PnlOtherOperatingExp    PnlLineID = "other_operating_exp"
-	PnlEBIT                 PnlLineID = "ebit"
-	PnlFinancialRevenues    PnlLineID = "financial_revenues"
-	PnlFinancialExpenses    PnlLineID = "financial_expenses"
-	PnlPreTaxEarnings       PnlLineID = "pre_tax_earnings"
-	PnlExtraordinaryIncome  PnlLineID = "extraordinary_income"
-	PnlExtraordinaryExpense PnlLineID = "extraordinary_expense"
+	PnlSales                 PnlLineID = "sales"
+	PnlExportSalesMemo       PnlLineID = "export_sales_memo"
+	PnlCapitalizedProd       PnlLineID = "capitalized_production"
+	PnlStoredProd            PnlLineID = "stored_production"
+	PnlTotalOperatingRev     PnlLineID = "total_operating_rev"
+	PnlCOGS                  PnlLineID = "cogs"
+	PnlInventoryChange       PnlLineID = "inventory_change"
+	PnlExternalExpenses      PnlLineID = "external_expenses"
+	PnlTotalConsumption      PnlLineID = "total_consumption"
+	PnlAddedValue            PnlLineID = "added_value"
+	PnlTaxesAndDuties        PnlLineID = "taxes_and_duties"
+	PnlPayrollExpenses       PnlLineID = "payroll_expenses"
+	PnlEBITDA                PnlLineID = "ebitda"
+	PnlDepreciation          PnlLineID = "depreciation"
+	PnlImpairment            PnlLineID = "impairment"
+	PnlGrantsOtherRevenue    PnlLineID = "grants_other_revenue"
+	PnlOtherOperatingExp     PnlLineID = "other_operating_exp"
+	PnlEBIT                  PnlLineID = "ebit"
+	PnlFinancialRevenues     PnlLineID = "financial_revenues"
+	PnlFinancialExpenses     PnlLineID = "financial_expenses"
+	PnlPreTaxEarnings        PnlLineID = "pre_tax_earnings"
+	PnlExtraordinaryIncome   PnlLineID = "extraordinary_income"
+	PnlExtraordinaryExpense  PnlLineID = "extraordinary_expense"
 	PnlEmployeeParticipation PnlLineID = "employee_participation"
-	PnlCorporateTax         PnlLineID = "corporate_tax"
-	PnlTaxCredits           PnlLineID = "tax_credits"
-	PnlNetProfit            PnlLineID = "net_profit"
-	PnlStaffHeadcount       PnlLineID = "staff_headcount"
-	PnlCashFlow             PnlLineID = "cash_flow"
+	PnlCorporateTax          PnlLineID = "corporate_tax"
+	PnlTaxCredits            PnlLineID = "tax_credits"
+	PnlNetProfit             PnlLineID = "net_profit"
+	PnlStaffHeadcount        PnlLineID = "staff_headcount"
+	PnlCashFlow              PnlLineID = "cash_flow"
 )
 
 // UserInputPnlLines defines the 6 lines that users can manually enter.
@@ -65,8 +65,8 @@ func (PnlManualEntry) TableName() string {
 
 // PnlReport is the computed French P&L output (not stored in DB).
 type PnlReport struct {
-	Years     [5]PnlYear     `json:"years"`
-	ChartData PnlChartData   `json:"chartData"`
+	Years     [5]PnlYear   `json:"years"`
+	ChartData PnlChartData `json:"chartData"`
 }
 
 type PnlYear struct {
@@ -102,13 +102,13 @@ type PnlYear struct {
 	StaffHeadcount        decimal.Decimal `json:"staffHeadcount"`
 	CashFlow              decimal.Decimal `json:"cashFlow"`
 	// Percentage column
-	PctOfSales            decimal.Decimal `json:"pctOfSales"`
+	PctOfSales decimal.Decimal `json:"pctOfSales"`
 }
 
 type PnlChartData struct {
-	Years          [5]int              `json:"years"`
-	EBITDAPositive [5]decimal.Decimal  `json:"ebitdaPositive"`
-	EBITDANegative [5]decimal.Decimal  `json:"ebitdaNegative"`
-	OtherOpex      [5]decimal.Decimal  `json:"otherOpex"`
+	Years           [5]int             `json:"years"`
+	EBITDAPositive  [5]decimal.Decimal `json:"ebitdaPositive"`
+	EBITDANegative  [5]decimal.Decimal `json:"ebitdaNegative"`
+	OtherOpex       [5]decimal.Decimal `json:"otherOpex"`
 	PayrollExpenses [5]decimal.Decimal `json:"payrollExpenses"`
 }

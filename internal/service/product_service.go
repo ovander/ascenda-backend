@@ -3,14 +3,14 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/compute"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // ProductService orchestrates product CRUD and computation.

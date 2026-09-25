@@ -32,30 +32,30 @@ type PnlCashReport struct {
 }
 
 type PnlCashYear struct {
-	Year              int             `json:"year"`
-	YearIndex         int             `json:"yearIndex"`
-	Sales             decimal.Decimal `json:"sales"`
-	CostOfSales       decimal.Decimal `json:"costOfSales"`
-	GrossMargin       decimal.Decimal `json:"grossMargin"`
-	RDPayroll         decimal.Decimal `json:"rdPayroll"`
-	OutsourcedRD      decimal.Decimal `json:"outsourcedRd"`
-	RoyaltiesMisc     decimal.Decimal `json:"royaltiesMisc"`
-	SalesPayroll      decimal.Decimal `json:"salesPayroll"`
-	AdvertisingPromo  decimal.Decimal `json:"advertisingPromo"`
-	MiscSalesCosts    decimal.Decimal `json:"miscSalesCosts"`
-	GAPayroll         decimal.Decimal `json:"gaPayroll"`
-	InsuranceRent     decimal.Decimal `json:"insuranceRent"`
-	LeasedEquip       decimal.Decimal `json:"leasedEquip"`
-	LegalConsulting   decimal.Decimal `json:"legalConsulting"`
-	TravelMisc        decimal.Decimal `json:"travelMisc"`
-	Depreciation      decimal.Decimal `json:"depreciation"`
-	EBIT              decimal.Decimal `json:"ebit"`
-	InterestExpense   decimal.Decimal `json:"interestExpense"`
-	Subsidies         decimal.Decimal `json:"subsidies"`
-	TaxesIncurred     decimal.Decimal `json:"taxesIncurred"`
-	NetProfit         decimal.Decimal `json:"netProfit"`
+	Year             int             `json:"year"`
+	YearIndex        int             `json:"yearIndex"`
+	Sales            decimal.Decimal `json:"sales"`
+	CostOfSales      decimal.Decimal `json:"costOfSales"`
+	GrossMargin      decimal.Decimal `json:"grossMargin"`
+	RDPayroll        decimal.Decimal `json:"rdPayroll"`
+	OutsourcedRD     decimal.Decimal `json:"outsourcedRd"`
+	RoyaltiesMisc    decimal.Decimal `json:"royaltiesMisc"`
+	SalesPayroll     decimal.Decimal `json:"salesPayroll"`
+	AdvertisingPromo decimal.Decimal `json:"advertisingPromo"`
+	MiscSalesCosts   decimal.Decimal `json:"miscSalesCosts"`
+	GAPayroll        decimal.Decimal `json:"gaPayroll"`
+	InsuranceRent    decimal.Decimal `json:"insuranceRent"`
+	LeasedEquip      decimal.Decimal `json:"leasedEquip"`
+	LegalConsulting  decimal.Decimal `json:"legalConsulting"`
+	TravelMisc       decimal.Decimal `json:"travelMisc"`
+	Depreciation     decimal.Decimal `json:"depreciation"`
+	EBIT             decimal.Decimal `json:"ebit"`
+	InterestExpense  decimal.Decimal `json:"interestExpense"`
+	Subsidies        decimal.Decimal `json:"subsidies"`
+	TaxesIncurred    decimal.Decimal `json:"taxesIncurred"`
+	NetProfit        decimal.Decimal `json:"netProfit"`
 	// Percentage columns
-	SalesPct          decimal.Decimal `json:"salesPct"`
+	SalesPct decimal.Decimal `json:"salesPct"`
 }
 
 type PnlCashChartData struct {

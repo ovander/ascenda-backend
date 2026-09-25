@@ -15,13 +15,13 @@ import (
 	"math"
 	"testing"
 
+	"ascenda/internal/compute"
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/compute"
-	"ascenda/internal/model"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────

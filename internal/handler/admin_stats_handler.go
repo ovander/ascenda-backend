@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
 )
 
 // AdminStatser interface for dependency injection.

@@ -9,13 +9,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // MockSettingsService is a mock implementation of SettingsServicer.
@@ -588,10 +588,10 @@ func TestGetOpexPerHire_Success(t *testing.T) {
 			assert.Equal(t, tenantID, tid)
 			assert.Equal(t, scenarioID, sid)
 			return &model.OpexPerHire{
-				TenantScoped:          model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
-				ScenarioID:            scenarioID,
-				PostageTelecom:        decimal.RequireFromString("1.5"),
-				TravelTransportation:  decimal.RequireFromString("3.0"),
+				TenantScoped:         model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+				ScenarioID:           scenarioID,
+				PostageTelecom:       decimal.RequireFromString("1.5"),
+				TravelTransportation: decimal.RequireFromString("3.0"),
 			}, nil
 		},
 	}

@@ -13,9 +13,9 @@ type CountryConfig struct {
 	EmployeeContributionRate decimal.Decimal   `json:"employeeContributionRate"`
 	VATPrimaryRate           decimal.Decimal   `json:"vatPrimaryRate"`
 	VATReducedRate           decimal.Decimal   `json:"vatReducedRate"`
-	Currency                 string            `json:"currency"`    // ISO 4217
+	Currency                 string            `json:"currency"` // ISO 4217
 	CurrencySymbol           string            `json:"currencySymbol"`
-	DateFormat               string            `json:"dateFormat"`  // "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD"
+	DateFormat               string            `json:"dateFormat"`      // "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD"
 	PrimaryLanguage          string            `json:"primaryLanguage"` // BCP-47 language tag
 }
 
@@ -203,7 +203,7 @@ var CountryConfigs = map[string]CountryConfig{
 		Name:                     "Canada",
 		Code:                     "CA",
 		CorporateTaxRates:        []decimal.Decimal{decimal.RequireFromString("0.265")}, // federal 15% + avg provincial
-		EmployerChargeRate:       decimal.RequireFromString("0.0595"), // EI + CPP employer
+		EmployerChargeRate:       decimal.RequireFromString("0.0595"),                   // EI + CPP employer
 		EmployeeContributionRate: decimal.RequireFromString("0.0595"),
 		VATPrimaryRate:           decimal.RequireFromString("0.05"), // federal GST only
 		VATReducedRate:           decimal.RequireFromString("0.00"),

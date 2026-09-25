@@ -160,10 +160,10 @@ func StaffPayrollSummaryFromModel(s *model.StaffPayrollSummary, scenarioID strin
 			Incentives:       year.SubtotalIncentives,
 			TotalStaffCost:   year.TotalPayroll,
 			ByFunction: map[string]decimal.Decimal{
-				"rnd":            fb.RnD,
-				"production":     fb.Production,
+				"rnd":             fb.RnD,
+				"production":      fb.Production,
 				"sales_marketing": fb.Sales,
-				"ga":             fb.GnA,
+				"ga":              fb.GnA,
 			},
 		}
 	}

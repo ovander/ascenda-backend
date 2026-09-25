@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/socrate"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/socrate"
 )
 
 // ── Mock Socrate client ───────────────────────────────────────────────────────
@@ -356,9 +356,9 @@ func TestAdminUserService_ListUsers_EnrichesWithAscendaData(t *testing.T) {
 	require.Len(t, result.Users, 1)
 
 	dto := result.Users[0]
-	assert.Equal(t, "user", dto.Role)           // Socrate role
+	assert.Equal(t, "user", dto.Role) // Socrate role
 	require.NotNil(t, dto.AscendaRole)
-	assert.Equal(t, "owner", *dto.AscendaRole)  // Ascenda local role
+	assert.Equal(t, "owner", *dto.AscendaRole) // Ascenda local role
 	require.NotNil(t, dto.TenantName)
 	assert.Equal(t, "Acme Corp", *dto.TenantName)
 }

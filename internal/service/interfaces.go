@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"ascenda/internal/model"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/pagination"
 )
 

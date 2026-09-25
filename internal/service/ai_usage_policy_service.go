@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"ascenda/internal/model"
+	"ascenda/internal/repo"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
-	"ascenda/internal/repo"
 )
 
 // ============================================================================
@@ -23,9 +23,9 @@ import (
 // AIUsagePolicyService enforces AI feature access based on user role and tier.
 // It maintains an in-memory policy cache (TTL 5 min) to minimise DB round-trips.
 type AIUsagePolicyService struct {
-	policyRepo     *repo.AIUsagePolicyRepo
-	usageRepo      *repo.AIUsageRecordRepo
-	log            *logrus.Entry
+	policyRepo *repo.AIUsagePolicyRepo
+	usageRepo  *repo.AIUsageRecordRepo
+	log        *logrus.Entry
 
 	// In-memory policy cache
 	mu              sync.RWMutex

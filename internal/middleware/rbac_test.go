@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 func TestRBACMiddlewarePermissions(t *testing.T) {

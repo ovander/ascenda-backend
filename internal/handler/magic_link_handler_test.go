@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/config"
+	"ascenda/internal/model"
+	"ascenda/internal/service"
 	"github.com/google/uuid"
 	"github.com/ovander/backendkit/socrate"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/config"
-	"ascenda/internal/model"
-	"ascenda/internal/service"
 )
 
 // ── in-memory token store (satisfies the private magicLinkTokenRepo interface

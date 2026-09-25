@@ -3,10 +3,10 @@ package event
 import (
 	"encoding/json"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
 	"ascenda/internal/repo"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // AuditSubscriber writes audit log entries to the database for every domain event.

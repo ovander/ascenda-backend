@@ -214,8 +214,8 @@ type AIUsagePolicy struct {
 	TenantScoped
 
 	// Policy identification
-	UserRole         string        `json:"user_role" gorm:"type:varchar(20);index;not null"`          // admin, owner, user, viewer
-	SubscriptionTier string        `json:"subscription_tier" gorm:"type:varchar(20);index;not null"`  // standard, pro, enterprise
+	UserRole         string        `json:"user_role" gorm:"type:varchar(20);index;not null"`         // admin, owner, user, viewer
+	SubscriptionTier string        `json:"subscription_tier" gorm:"type:varchar(20);index;not null"` // standard, pro, enterprise
 	FeatureType      AIFeatureType `json:"feature_type" gorm:"type:varchar(40);index;not null"`
 
 	// Access control
@@ -263,9 +263,9 @@ type AIUsageRecord struct {
 	EstimatedCostCents float64 `json:"estimated_cost_cents,omitempty"`
 
 	// Aggregation keys for efficient quota queries
-	DailyKey   string `json:"daily_key" gorm:"type:varchar(10);index;not null"`   // "2026-01-29"
-	WeeklyKey  string `json:"weekly_key" gorm:"type:varchar(10);index;not null"`  // "2026-W05"
-	MonthlyKey string `json:"monthly_key" gorm:"type:varchar(7);index;not null"`  // "2026-01"
+	DailyKey   string `json:"daily_key" gorm:"type:varchar(10);index;not null"`  // "2026-01-29"
+	WeeklyKey  string `json:"weekly_key" gorm:"type:varchar(10);index;not null"` // "2026-W05"
+	MonthlyKey string `json:"monthly_key" gorm:"type:varchar(7);index;not null"` // "2026-01"
 }
 
 // TableName specifies the table name for GORM.
@@ -331,12 +331,12 @@ type AIUsageStats struct {
 	PeriodStart time.Time `json:"period_start"`
 	PeriodEnd   time.Time `json:"period_end"`
 
-	UsageByFeature  map[AIFeatureType]int `json:"usage_by_feature"`
-	TotalCalls      int                   `json:"total_calls"`
-	SuccessfulCalls int                   `json:"successful_calls"`
-	FailedCalls     int                   `json:"failed_calls"`
-	TotalTokens     int                   `json:"total_tokens"`
-	EstimatedCostCents float64            `json:"estimated_cost_cents"`
+	UsageByFeature     map[AIFeatureType]int `json:"usage_by_feature"`
+	TotalCalls         int                   `json:"total_calls"`
+	SuccessfulCalls    int                   `json:"successful_calls"`
+	FailedCalls        int                   `json:"failed_calls"`
+	TotalTokens        int                   `json:"total_tokens"`
+	EstimatedCostCents float64               `json:"estimated_cost_cents"`
 }
 
 // ============================================================================
@@ -379,9 +379,9 @@ const (
 
 // Ascenda subscription tiers (infrastructure ready for billing).
 const (
-	AITierFreemium  = "freemium" // No AI access — base tier before any paid plan.
-	AITierStandard  = "standard"
-	AITierPro       = "pro"
+	AITierFreemium   = "freemium" // No AI access — base tier before any paid plan.
+	AITierStandard   = "standard"
+	AITierPro        = "pro"
 	AITierEnterprise = "enterprise"
 )
 
@@ -477,17 +477,17 @@ func DefaultAIUsagePolicies() []AIUsagePolicy {
 	for _, tier := range AllAISubscriptionTiers() {
 		switch tier {
 		case AITierStandard:
-			add(AIRoleOwner, tier, AIFeaturePlanNarration,     true, ptr(10), ptr(50), nil, 10)
-			add(AIRoleOwner, tier, AIFeatureVarianceAnalysis,  true, ptr(5),  ptr(25), nil, 10)
+			add(AIRoleOwner, tier, AIFeaturePlanNarration, true, ptr(10), ptr(50), nil, 10)
+			add(AIRoleOwner, tier, AIFeatureVarianceAnalysis, true, ptr(5), ptr(25), nil, 10)
 			add(AIRoleOwner, tier, AIFeatureScenarioComparison, false, nil, nil, nil, 10)
-			add(AIRoleOwner, tier, AIFeatureAnomalyDetection,  false, nil, nil, nil, 10)
-			add(AIRoleOwner, tier, AIFeatureCashRunway,        true, ptr(10), ptr(50), nil, 10)
+			add(AIRoleOwner, tier, AIFeatureAnomalyDetection, false, nil, nil, nil, 10)
+			add(AIRoleOwner, tier, AIFeatureCashRunway, true, ptr(10), ptr(50), nil, 10)
 		case AITierPro:
-			add(AIRoleOwner, tier, AIFeaturePlanNarration,     true, nil, nil, nil, 15)
-			add(AIRoleOwner, tier, AIFeatureVarianceAnalysis,  true, nil, nil, nil, 15)
+			add(AIRoleOwner, tier, AIFeaturePlanNarration, true, nil, nil, nil, 15)
+			add(AIRoleOwner, tier, AIFeatureVarianceAnalysis, true, nil, nil, nil, 15)
 			add(AIRoleOwner, tier, AIFeatureScenarioComparison, true, ptr(10), ptr(40), nil, 15)
-			add(AIRoleOwner, tier, AIFeatureAnomalyDetection,  true, ptr(5),  ptr(20), nil, 15)
-			add(AIRoleOwner, tier, AIFeatureCashRunway,        true, nil, nil, nil, 15)
+			add(AIRoleOwner, tier, AIFeatureAnomalyDetection, true, ptr(5), ptr(20), nil, 15)
+			add(AIRoleOwner, tier, AIFeatureCashRunway, true, nil, nil, nil, 15)
 		case AITierEnterprise:
 			// Only the 5 standard features here; Pro/Enterprise extended features
 			// are handled by the proDriverFeatures and InvestorMemo blocks below.
@@ -501,34 +501,34 @@ func DefaultAIUsagePolicies() []AIUsagePolicy {
 	for _, tier := range AllAISubscriptionTiers() {
 		switch tier {
 		case AITierStandard:
-			add(AIRoleUser, tier, AIFeaturePlanNarration,      true, ptr(5), ptr(20), nil, 5)
-			add(AIRoleUser, tier, AIFeatureVarianceAnalysis,   false, nil, nil, nil, 5)
+			add(AIRoleUser, tier, AIFeaturePlanNarration, true, ptr(5), ptr(20), nil, 5)
+			add(AIRoleUser, tier, AIFeatureVarianceAnalysis, false, nil, nil, nil, 5)
 			add(AIRoleUser, tier, AIFeatureScenarioComparison, false, nil, nil, nil, 5)
-			add(AIRoleUser, tier, AIFeatureAnomalyDetection,   false, nil, nil, nil, 5)
-			add(AIRoleUser, tier, AIFeatureCashRunway,         true, ptr(5), ptr(20), nil, 5)
+			add(AIRoleUser, tier, AIFeatureAnomalyDetection, false, nil, nil, nil, 5)
+			add(AIRoleUser, tier, AIFeatureCashRunway, true, ptr(5), ptr(20), nil, 5)
 		case AITierPro:
-			add(AIRoleUser, tier, AIFeaturePlanNarration,      true, ptr(10), ptr(40), nil, 8)
-			add(AIRoleUser, tier, AIFeatureVarianceAnalysis,   true, ptr(5),  ptr(20), nil, 8)
+			add(AIRoleUser, tier, AIFeaturePlanNarration, true, ptr(10), ptr(40), nil, 8)
+			add(AIRoleUser, tier, AIFeatureVarianceAnalysis, true, ptr(5), ptr(20), nil, 8)
 			add(AIRoleUser, tier, AIFeatureScenarioComparison, false, nil, nil, nil, 8)
-			add(AIRoleUser, tier, AIFeatureAnomalyDetection,   true, ptr(3),  ptr(15), nil, 8)
-			add(AIRoleUser, tier, AIFeatureCashRunway,         true, ptr(10), ptr(40), nil, 8)
+			add(AIRoleUser, tier, AIFeatureAnomalyDetection, true, ptr(3), ptr(15), nil, 8)
+			add(AIRoleUser, tier, AIFeatureCashRunway, true, ptr(10), ptr(40), nil, 8)
 		case AITierEnterprise:
-			add(AIRoleUser, tier, AIFeaturePlanNarration,      true, nil, nil, nil, 10)
-			add(AIRoleUser, tier, AIFeatureVarianceAnalysis,   true, nil, nil, nil, 10)
+			add(AIRoleUser, tier, AIFeaturePlanNarration, true, nil, nil, nil, 10)
+			add(AIRoleUser, tier, AIFeatureVarianceAnalysis, true, nil, nil, nil, 10)
 			add(AIRoleUser, tier, AIFeatureScenarioComparison, true, ptr(10), ptr(40), nil, 10)
-			add(AIRoleUser, tier, AIFeatureAnomalyDetection,   true, nil, nil, nil, 10)
-			add(AIRoleUser, tier, AIFeatureCashRunway,         true, nil, nil, nil, 10)
+			add(AIRoleUser, tier, AIFeatureAnomalyDetection, true, nil, nil, nil, 10)
+			add(AIRoleUser, tier, AIFeatureCashRunway, true, nil, nil, nil, 10)
 		}
 	}
 
 	// ── Viewer: plan narration only (read-only insight) ──────────────────────
 	// Freemium viewer entries are handled by the freemium block above.
 	for _, tier := range []string{AITierStandard, AITierPro, AITierEnterprise} {
-		add(AIRoleViewer, tier, AIFeaturePlanNarration,      true, ptr(3), ptr(10), nil, 2)
-		add(AIRoleViewer, tier, AIFeatureVarianceAnalysis,   false, nil, nil, nil, 2)
+		add(AIRoleViewer, tier, AIFeaturePlanNarration, true, ptr(3), ptr(10), nil, 2)
+		add(AIRoleViewer, tier, AIFeatureVarianceAnalysis, false, nil, nil, nil, 2)
 		add(AIRoleViewer, tier, AIFeatureScenarioComparison, false, nil, nil, nil, 2)
-		add(AIRoleViewer, tier, AIFeatureAnomalyDetection,   false, nil, nil, nil, 2)
-		add(AIRoleViewer, tier, AIFeatureCashRunway,         false, nil, nil, nil, 2)
+		add(AIRoleViewer, tier, AIFeatureAnomalyDetection, false, nil, nil, nil, 2)
+		add(AIRoleViewer, tier, AIFeatureCashRunway, false, nil, nil, nil, 2)
 	}
 
 	// ── Pro-tier driver-aware features (7) ───────────────────────────────────
@@ -545,28 +545,28 @@ func DefaultAIUsagePolicies() []AIUsagePolicy {
 		AIFeatureSensitivityNarrative,
 	}
 	for _, feat := range proDriverFeatures {
-		add(AIRoleOwner,  AITierStandard,   feat, false, nil,     nil,     nil, 10)
-		add(AIRoleUser,   AITierStandard,   feat, false, nil,     nil,     nil, 5)
-		add(AIRoleViewer, AITierStandard,   feat, false, nil,     nil,     nil, 2)
+		add(AIRoleOwner, AITierStandard, feat, false, nil, nil, nil, 10)
+		add(AIRoleUser, AITierStandard, feat, false, nil, nil, nil, 5)
+		add(AIRoleViewer, AITierStandard, feat, false, nil, nil, nil, 2)
 
-		add(AIRoleOwner,  AITierPro,        feat, true,  ptr(5),  ptr(20), nil, 15)
-		add(AIRoleUser,   AITierPro,        feat, true,  ptr(3),  ptr(15), nil, 8)
-		add(AIRoleViewer, AITierPro,        feat, false, nil,     nil,     nil, 2)
+		add(AIRoleOwner, AITierPro, feat, true, ptr(5), ptr(20), nil, 15)
+		add(AIRoleUser, AITierPro, feat, true, ptr(3), ptr(15), nil, 8)
+		add(AIRoleViewer, AITierPro, feat, false, nil, nil, nil, 2)
 
-		add(AIRoleOwner,  AITierEnterprise, feat, true,  nil,     nil,     nil, 20)
-		add(AIRoleUser,   AITierEnterprise, feat, true,  nil,     nil,     nil, 10)
-		add(AIRoleViewer, AITierEnterprise, feat, false, nil,     nil,     nil, 2)
+		add(AIRoleOwner, AITierEnterprise, feat, true, nil, nil, nil, 20)
+		add(AIRoleUser, AITierEnterprise, feat, true, nil, nil, nil, 10)
+		add(AIRoleViewer, AITierEnterprise, feat, false, nil, nil, nil, 2)
 	}
 
 	// ── InvestorMemo: Enterprise, plan owner only ─────────────────────────────
 	//   Standard/Pro: blocked for all roles.
 	//   Enterprise:   owner unlimited; user and viewer blocked.
-	add(AIRoleOwner,  AITierStandard,   AIFeatureInvestorMemo, false, nil, nil, nil, 10)
-	add(AIRoleOwner,  AITierPro,        AIFeatureInvestorMemo, false, nil, nil, nil, 10)
-	add(AIRoleOwner,  AITierEnterprise, AIFeatureInvestorMemo, true,  nil, nil, nil, 20)
+	add(AIRoleOwner, AITierStandard, AIFeatureInvestorMemo, false, nil, nil, nil, 10)
+	add(AIRoleOwner, AITierPro, AIFeatureInvestorMemo, false, nil, nil, nil, 10)
+	add(AIRoleOwner, AITierEnterprise, AIFeatureInvestorMemo, true, nil, nil, nil, 20)
 	// Freemium entries for user/viewer are handled by the freemium block above.
 	for _, tier := range []string{AITierStandard, AITierPro, AITierEnterprise} {
-		add(AIRoleUser,   tier, AIFeatureInvestorMemo, false, nil, nil, nil, 5)
+		add(AIRoleUser, tier, AIFeatureInvestorMemo, false, nil, nil, nil, 5)
 		add(AIRoleViewer, tier, AIFeatureInvestorMemo, false, nil, nil, nil, 2)
 	}
 

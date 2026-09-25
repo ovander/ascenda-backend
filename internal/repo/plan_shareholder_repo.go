@@ -1,9 +1,9 @@
 package repo
 
 import (
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
 )
 
 // PlanShareholderRepository defines the interface for plan-level shareholder data.

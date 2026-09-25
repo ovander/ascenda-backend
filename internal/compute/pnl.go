@@ -220,11 +220,11 @@ func ComputePnl(
 	}
 
 	result.ChartData = model.PnlChartData{
-		Years:              chartYears,
-		EBITDAPositive:     chartEBITDAPositive,
-		EBITDANegative:     chartEBITDANegative,
-		OtherOpex:          chartOtherOpex,
-		PayrollExpenses:    chartPayroll,
+		Years:           chartYears,
+		EBITDAPositive:  chartEBITDAPositive,
+		EBITDANegative:  chartEBITDANegative,
+		OtherOpex:       chartOtherOpex,
+		PayrollExpenses: chartPayroll,
 	}
 
 	return result

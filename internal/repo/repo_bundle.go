@@ -10,11 +10,11 @@ type RepoBundle struct {
 	// multi-step operations in a single transaction via DB.Transaction(fn).
 	DB *gorm.DB
 
-	Plan        *PlanRepo
-	Scenario    ScenarioRepository
-	Tenant      *TenantRepo
-	User        *UserRepo
-	AdminStats  *AdminStatsRepo
+	Plan       *PlanRepo
+	Scenario   ScenarioRepository
+	Tenant     *TenantRepo
+	User       *UserRepo
+	AdminStats *AdminStatsRepo
 	Settings   *SettingsRepo
 	Product    *ProductRepo
 	Staff      *StaffRepo
@@ -61,7 +61,7 @@ type RepoBundle struct {
 // These thin getters let *RepoBundle satisfy the PlanDeps interface, decoupling
 // PlanService from the concrete bundle type.
 
-func (r *RepoBundle) GetDB() *gorm.DB              { return r.DB }
+func (r *RepoBundle) GetDB() *gorm.DB                 { return r.DB }
 func (r *RepoBundle) GetScenario() ScenarioRepository { return r.Scenario }
 func (r *RepoBundle) GetProduct() ProductRepository   { return r.Product }
 func (r *RepoBundle) GetStaff() StaffRepository       { return r.Staff }
@@ -77,12 +77,12 @@ func (r *RepoBundle) GetBudget() BudgetRepository     { return r.Budget }
 // NewRepoBundle creates a new RepoBundle with all repositories initialized
 func NewRepoBundle(db *gorm.DB) *RepoBundle {
 	return &RepoBundle{
-		DB:          db,
-		Plan:        NewPlanRepo(db),
-		Scenario:    NewScenarioRepo(db),
-		Tenant:      NewTenantRepo(db),
-		User:        NewUserRepo(db),
-		AdminStats:  NewAdminStatsRepo(db),
+		DB:         db,
+		Plan:       NewPlanRepo(db),
+		Scenario:   NewScenarioRepo(db),
+		Tenant:     NewTenantRepo(db),
+		User:       NewUserRepo(db),
+		AdminStats: NewAdminStatsRepo(db),
 		Settings:   NewSettingsRepo(db),
 		Product:    NewProductRepo(db),
 		Staff:      NewStaffRepo(db),

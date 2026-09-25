@@ -4,13 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/event"
-	"ascenda/internal/model"
 )
 
 // newTestProductService wires up a ProductService backed by the in-memory mock.
@@ -25,10 +25,10 @@ func newTestProductService() (*ProductService, *MockProductRepo) {
 // seedProduct inserts a product and returns it.
 func seedProduct(repo *MockProductRepo, tenantID, scenarioID uuid.UUID, name string) *model.Product {
 	p := &model.Product{
-		TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
-		ScenarioID:   scenarioID,
-		Name:         name,
-		DriverType:   model.DriverGeneric,
+		TenantScoped:              model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+		ScenarioID:                scenarioID,
+		Name:                      name,
+		DriverType:                model.DriverGeneric,
 		DirectCostVariability:     decimal.NewFromFloat(1),
 		ExternalChargeVariability: decimal.Zero,
 		TaxVariability:            decimal.Zero,

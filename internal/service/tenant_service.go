@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/repo"
+	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/sirupsen/logrus"
 )
 
 // TenantServicer is the interface that TenantHandler depends on.

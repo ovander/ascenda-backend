@@ -3,10 +3,10 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,8 +18,8 @@ import (
 //   Avg order     = 15 000 €  → BEP Volume = 2 400 000 / 15 000 = 160 orders
 // ─────────────────────────────────────────────────────────────────────────────
 
-func progitopFixed() decimal.Decimal    { return decimal.NewFromInt(1_440_000) }
-func progitopMargin() decimal.Decimal   { return decimal.NewFromInt(60) }
+func progitopFixed() decimal.Decimal  { return decimal.NewFromInt(1_440_000) }
+func progitopMargin() decimal.Decimal { return decimal.NewFromInt(60) }
 func progitopAvgOrder() *decimal.Decimal {
 	v := decimal.NewFromInt(15_000)
 	return &v
@@ -389,9 +389,9 @@ func TestComputeOptimisedBEP_NoVarCostLines_MarginUnchanged(t *testing.T) {
 		decimal.NewFromInt(580_000),
 		baseMargin,
 		&avgOrder,
-		decimal.Zero,  // no fixed savings either
-		decimal.Zero,  // empty sum from no lines
-		false,         // ← no lines defined
+		decimal.Zero, // no fixed savings either
+		decimal.Zero, // empty sum from no lines
+		false,        // ← no lines defined
 	)
 
 	// Margin must equal baseline, not jump to 100%

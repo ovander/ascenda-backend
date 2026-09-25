@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
+	"github.com/sirupsen/logrus"
 )
 
 // RatiosService provides read-only financial ratios reporting.

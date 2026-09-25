@@ -4,15 +4,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shopspring/decimal"
 	"ascenda/internal/model"
+	"github.com/shopspring/decimal"
 )
 
 func TestComputePnl(t *testing.T) {
 	config := model.PlanConfig{
-		CorporateTaxRate:   decimal.NewFromFloat(0.25),
-		EmployerTaxRate: decimal.NewFromFloat(0.42),
-		IncentiveCap:       decimal.NewFromFloat(0.15),
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		EmployerTaxRate:  decimal.NewFromFloat(0.42),
+		IncentiveCap:     decimal.NewFromFloat(0.15),
 	}
 
 	tests := []struct {
@@ -38,8 +38,8 @@ func TestComputePnl(t *testing.T) {
 			revenue: model.ConsolidatedRevenue{
 				Totals: [5]model.ConsolidatedRevenueYear{
 					{
-						TotalTurnover:   decimal.NewFromInt(100000),
-						TotalCOGS:       decimal.NewFromInt(40000),
+						TotalTurnover:    decimal.NewFromInt(100000),
+						TotalCOGS:        decimal.NewFromInt(40000),
 						TotalGrossMargin: decimal.NewFromInt(60000),
 						GrossMarginPct:   decimal.NewFromFloat(0.6),
 					},
@@ -226,7 +226,7 @@ func TestComputePnl(t *testing.T) {
 			},
 		},
 		{
-			name: "all zero inputs",
+			name:       "all zero inputs",
 			pnlEntries: []model.PnlManualEntry{},
 			revenue: model.ConsolidatedRevenue{
 				Totals: [5]model.ConsolidatedRevenueYear{
@@ -351,8 +351,8 @@ func TestPnlGrantsOtherRevenueFromFiplan(t *testing.T) {
 	fiplan := model.FiplanReport{
 		Plan: model.FiplanPlan{
 			Resources: model.FiplanResources{
-				Subsidies:    [5]decimal.Decimal{decimal.NewFromInt(20_000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
-				OtherGrants:  [5]decimal.Decimal{decimal.NewFromInt(10_000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
+				Subsidies:   [5]decimal.Decimal{decimal.NewFromInt(20_000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
+				OtherGrants: [5]decimal.Decimal{decimal.NewFromInt(10_000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
 				// RepayableGrants must NOT appear in GrantsOtherRevenue
 				RepayableGrants: [5]decimal.Decimal{decimal.NewFromInt(50_000), decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
 			},

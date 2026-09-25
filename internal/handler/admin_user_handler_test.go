@@ -8,28 +8,28 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/service"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/ovander/backendkit/apierror"
-	"ascenda/internal/service"
 )
 
 // ── mockAdminUserService ──────────────────────────────────────────────────
 
 type mockAdminUserService struct {
-	listUsersFn           func(ctx context.Context, search string, page, pageSize int) (*service.AdminUserListResponse, error)
-	getUserFn             func(ctx context.Context, socrateID string) (*service.AdminUserDTO, error)
-	createUserFn          func(ctx context.Context, req service.CreateUserRequest) (*service.AdminUserDTO, error)
-	updateUserFn          func(ctx context.Context, socrateID string, req service.UpdateUserRequest) (*service.AdminUserDTO, error)
-	deleteUserFn          func(ctx context.Context, socrateID string) error
-	resendVerificationFn  func(ctx context.Context, socrateID string) error
-	resetPasswordFn       func(ctx context.Context, socrateID string) error
-	listTenantsFn         func(ctx context.Context, page, pageSize int) (*service.AdminTenantListResponse, error)
-	getTenantFn           func(ctx context.Context, id uuid.UUID) (*service.AdminTenantDTO, error)
-	createTenantFn        func(ctx context.Context, req service.CreateTenantRequest) (*service.AdminTenantDTO, error)
-	updateTenantFn        func(ctx context.Context, id uuid.UUID, req service.UpdateTenantRequest) (*service.AdminTenantDTO, error)
+	listUsersFn          func(ctx context.Context, search string, page, pageSize int) (*service.AdminUserListResponse, error)
+	getUserFn            func(ctx context.Context, socrateID string) (*service.AdminUserDTO, error)
+	createUserFn         func(ctx context.Context, req service.CreateUserRequest) (*service.AdminUserDTO, error)
+	updateUserFn         func(ctx context.Context, socrateID string, req service.UpdateUserRequest) (*service.AdminUserDTO, error)
+	deleteUserFn         func(ctx context.Context, socrateID string) error
+	resendVerificationFn func(ctx context.Context, socrateID string) error
+	resetPasswordFn      func(ctx context.Context, socrateID string) error
+	listTenantsFn        func(ctx context.Context, page, pageSize int) (*service.AdminTenantListResponse, error)
+	getTenantFn          func(ctx context.Context, id uuid.UUID) (*service.AdminTenantDTO, error)
+	createTenantFn       func(ctx context.Context, req service.CreateTenantRequest) (*service.AdminTenantDTO, error)
+	updateTenantFn       func(ctx context.Context, id uuid.UUID, req service.UpdateTenantRequest) (*service.AdminTenantDTO, error)
 }
 
 func (m *mockAdminUserService) ListUsers(ctx context.Context, search string, page, pageSize int) (*service.AdminUserListResponse, error) {

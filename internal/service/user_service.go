@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/socrate"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // SocrateInviter can invite a new user via the Socrate admin port using the

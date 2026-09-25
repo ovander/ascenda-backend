@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
-	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/repo"
 	"ascenda/internal/service"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/sirupsen/logrus"
 )
 
 // AuthHandler manages OAuth2 authentication flows and self-service registration.

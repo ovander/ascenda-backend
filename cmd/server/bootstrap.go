@@ -9,22 +9,22 @@ import (
 	"strings"
 	"time"
 
-	sentry "github.com/getsentry/sentry-go"
-	sentryhttp "github.com/getsentry/sentry-go/http"
-	"github.com/ovander/backendkit/buildinfo"
-	"github.com/sirupsen/logrus"
-	glogger "gorm.io/gorm/logger"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"ascenda/internal/config"
 	"ascenda/internal/event"
 	"ascenda/internal/handler"
 	"ascenda/internal/middleware"
-	logger "github.com/ovander/backendkit/gormlogger"
-	"github.com/ovander/backendkit/socrate"
 	"ascenda/internal/repo"
 	"ascenda/internal/router"
 	"ascenda/internal/service"
+	sentry "github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
+	"github.com/ovander/backendkit/buildinfo"
+	logger "github.com/ovander/backendkit/gormlogger"
+	"github.com/ovander/backendkit/socrate"
+	"github.com/sirupsen/logrus"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	glogger "gorm.io/gorm/logger"
 )
 
 // ── HTTP server timeout constants ────────────────────────────────────────────
@@ -47,11 +47,11 @@ const (
 // AppResources holds all resources created during bootstrap and needed for
 // graceful shutdown. Pattern ported from GPWA cmd/server/bootstrap.go.
 type AppResources struct {
-	Server      *http.Server
-	Logger      *logrus.Entry
-	DB          *gorm.DB                      // closed after all requests drain
-	Emitter     *event.Emitter                // drained after HTTP server stops accepting
-	AIAccessMW  *middleware.AIAccessMiddleware // drained alongside emitter (async usage goroutines)
+	Server     *http.Server
+	Logger     *logrus.Entry
+	DB         *gorm.DB                       // closed after all requests drain
+	Emitter    *event.Emitter                 // drained after HTTP server stops accepting
+	AIAccessMW *middleware.AIAccessMiddleware // drained alongside emitter (async usage goroutines)
 }
 
 // Bootstrap initialises the entire application in dependency order and returns
@@ -67,6 +67,7 @@ type AppResources struct {
 //  7. Services
 //  8. Handlers
 //  9. Middleware
+//
 // 10. Router
 // 11. HTTP Server
 func Bootstrap(cfg *config.Config) (*AppResources, error) {
@@ -214,8 +215,8 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 
 	// ── Bootstrap summary ─────────────────────────────────────────────────────
 	log.WithFields(logrus.Fields{
-		"phase":    "startup",
-		"elapsed":  fmt.Sprintf("%dms", time.Since(bootstrapStart).Milliseconds()),
+		"phase":   "startup",
+		"elapsed": fmt.Sprintf("%dms", time.Since(bootstrapStart).Milliseconds()),
 	}).Info("bootstrap completed")
 
 	return &AppResources{
@@ -337,10 +338,10 @@ func connectDatabase(cfg *config.Config, log *logrus.Entry) (*gorm.DB, error) {
 	sqlDB.SetConnMaxIdleTime(time.Duration(cfg.DBPool.ConnMaxIdleTime) * time.Second)
 
 	log.WithFields(logrus.Fields{
-		"max_open":          cfg.DBPool.MaxOpenConns,
-		"max_idle":          cfg.DBPool.MaxIdleConns,
-		"max_lifetime_s":    cfg.DBPool.ConnMaxLifetime,
-		"max_idle_time_s":   cfg.DBPool.ConnMaxIdleTime,
+		"max_open":        cfg.DBPool.MaxOpenConns,
+		"max_idle":        cfg.DBPool.MaxIdleConns,
+		"max_lifetime_s":  cfg.DBPool.ConnMaxLifetime,
+		"max_idle_time_s": cfg.DBPool.ConnMaxIdleTime,
 	}).Info("database connection established")
 	return db, nil
 }
@@ -372,11 +373,11 @@ func logStartupConfig(cfg *config.Config, log *logrus.Entry) {
 	}).Debug("database pool settings")
 
 	log.WithFields(logrus.Fields{
-		"provider":    cfg.AI.Provider,
-		"model":       cfg.AI.Model,
-		"max_tokens":  cfg.AI.MaxTokens,
-		"timeout_s":   cfg.AI.Timeout,
-		"cache":       cfg.AI.EnableCache,
+		"provider":   cfg.AI.Provider,
+		"model":      cfg.AI.Model,
+		"max_tokens": cfg.AI.MaxTokens,
+		"timeout_s":  cfg.AI.Timeout,
+		"cache":      cfg.AI.EnableCache,
 	}).Debug("AI settings")
 }
 

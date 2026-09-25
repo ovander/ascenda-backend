@@ -4,13 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/event"
-	"ascenda/internal/model"
 )
 
 // ExtendedMockSettingsRepo adds OpexPerHire and CapexPerHire support
@@ -205,9 +205,9 @@ func TestGetOpexPerHirePreservesNonZeroRow(t *testing.T) {
 	scenarioID := uuid.New()
 
 	customRow := &model.OpexPerHire{
-		TenantScoped:     model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
-		ScenarioID:       scenarioID,
-		PropertyRentals:  decimal.NewFromInt(99), // custom non-zero value
+		TenantScoped:    model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+		ScenarioID:      scenarioID,
+		PropertyRentals: decimal.NewFromInt(99), // custom non-zero value
 		// all others remain zero
 	}
 	require.NoError(t, repo.UpsertOpexPerHire(customRow))

@@ -21,7 +21,7 @@ type Organization struct {
 	Name         string    `gorm:"type:varchar(255);not null" json:"name"`
 	Slug         string    `gorm:"type:varchar(100);uniqueIndex" json:"slug"`
 	Plan         string    `gorm:"type:varchar(50);not null;default:'enterprise'" json:"plan"` // freemium|pro|enterprise
-	MaxUsers     int       `gorm:"not null;default:0" json:"maxUsers"`                          // 0 = unlimited
+	MaxUsers     int       `gorm:"not null;default:0" json:"maxUsers"`                         // 0 = unlimited
 	BillingEmail string    `gorm:"type:varchar(255)" json:"billingEmail,omitempty"`
 	Domain       string    `gorm:"type:varchar(255)" json:"domain,omitempty"` // future: auto-join by email domain
 	IsActive     bool      `gorm:"not null;default:true" json:"isActive"`

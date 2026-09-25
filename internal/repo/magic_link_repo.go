@@ -3,9 +3,9 @@ package repo
 import (
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
 )
 
 // MagicLinkRepo handles persistence for single-use sign-in tokens.

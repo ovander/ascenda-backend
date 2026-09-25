@@ -17,13 +17,13 @@ package model
 
 // EquityInstrumentDef describes one equity instrument available in a country.
 type EquityInstrumentDef struct {
-	Code           StockOptionInstrument `json:"code"`
-	LocalName      string                `json:"localName"`      // name in the local language
-	EnglishName    string                `json:"englishName"`
-	Description    string                `json:"description"`    // short plain-text note
-	EligibilityNote string               `json:"eligibilityNote,omitempty"` // legal constraints
-	IsTaxAdvantaged bool                 `json:"isTaxAdvantaged"`
-	MaxAgeLimitYears *int                `json:"maxAgeLimitYears,omitempty"` // e.g. BSPCE ≤ 15 yrs
+	Code             StockOptionInstrument `json:"code"`
+	LocalName        string                `json:"localName"` // name in the local language
+	EnglishName      string                `json:"englishName"`
+	Description      string                `json:"description"`               // short plain-text note
+	EligibilityNote  string                `json:"eligibilityNote,omitempty"` // legal constraints
+	IsTaxAdvantaged  bool                  `json:"isTaxAdvantaged"`
+	MaxAgeLimitYears *int                  `json:"maxAgeLimitYears,omitempty"` // e.g. BSPCE ≤ 15 yrs
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ type EquityInstrumentDef struct {
 
 // LegalFormDef describes one legal form available in a country.
 type LegalFormDef struct {
-	Code        string `json:"code"`        // e.g. "SAS", "Ltd", "GmbH"
+	Code        string `json:"code"` // e.g. "SAS", "Ltd", "GmbH"
 	LocalName   string `json:"localName"`
 	EnglishName string `json:"englishName"`
 	IsCommon    bool   `json:"isCommon"` // show first / pre-selected
@@ -110,7 +110,7 @@ var capTableCountryProfiles = map[string]CapTableCountryProfile{
 		CurrencySymbol:           "€",
 		DateFormat:               "DD/MM/YYYY",
 		PrimaryLanguage:          "fr",
-		DefaultNominalValueCents: 1,      // €0.01 — most common for SAS/SARL startups
+		DefaultNominalValueCents: 1, // €0.01 — most common for SAS/SARL startups
 		DefaultLegalForm:         "SAS",
 		BookEquityTerm:           "Capitaux propres",
 		ShareCapitalTerm:         "Capital social",
@@ -125,12 +125,12 @@ var capTableCountryProfiles = map[string]CapTableCountryProfile{
 		},
 		Instruments: []EquityInstrumentDef{
 			{
-				Code:            SOIBSPCE,
-				LocalName:       "BSPCE — Bons de Souscription de Parts de Créateur d'Entreprise",
-				EnglishName:     "Founder Warrant (BSPCE)",
-				Description:     "Tax-advantaged warrants for employees/managers of qualifying young companies.",
-				EligibilityNote: "Company < 15 years old, IS taxpayer, < 25% held by non-natural-person corps.",
-				IsTaxAdvantaged: true,
+				Code:             SOIBSPCE,
+				LocalName:        "BSPCE — Bons de Souscription de Parts de Créateur d'Entreprise",
+				EnglishName:      "Founder Warrant (BSPCE)",
+				Description:      "Tax-advantaged warrants for employees/managers of qualifying young companies.",
+				EligibilityNote:  "Company < 15 years old, IS taxpayer, < 25% held by non-natural-person corps.",
+				IsTaxAdvantaged:  true,
 				MaxAgeLimitYears: capTableIntPtr(15),
 			},
 			{
@@ -590,11 +590,11 @@ var capTableCountryProfiles = map[string]CapTableCountryProfile{
 		},
 		Instruments: []EquityInstrumentDef{
 			{
-				Code:            SOIStockOption,
-				LocalName:       "Kvalificerat personaloption (QESO)",
-				EnglishName:     "Qualified Employee Stock Option (QESO)",
-				Description:     "No income tax at grant or exercise; CGT only at sale. Requires < 150 employees, < 10 years old, < SEK 80M turnover.",
-				IsTaxAdvantaged: true,
+				Code:             SOIStockOption,
+				LocalName:        "Kvalificerat personaloption (QESO)",
+				EnglishName:      "Qualified Employee Stock Option (QESO)",
+				Description:      "No income tax at grant or exercise; CGT only at sale. Requires < 150 employees, < 10 years old, < SEK 80M turnover.",
+				IsTaxAdvantaged:  true,
 				MaxAgeLimitYears: capTableIntPtr(10),
 			},
 			{

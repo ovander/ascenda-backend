@@ -1,9 +1,9 @@
 package repo
 
 import (
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
 )
 
 // OrganizationRepository defines all persistence operations for organizations.

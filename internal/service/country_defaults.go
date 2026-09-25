@@ -3,9 +3,9 @@ package service
 import (
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"ascenda/internal/model"
 )
 
 // countryRates holds the statutory financial rates used to seed a new PlanConfig.
@@ -32,49 +32,49 @@ var ratesByCountry = map[string]countryRates{
 		CurrencySymbol:   "€",
 	},
 	"FR": {
-		CorporateTaxRate: decimal.NewFromFloat(0.25),   // 25 % standard rate
-		VATRate:          decimal.NewFromFloat(0.20),   // 20 % standard rate
-		EmployerTaxRate:  decimal.NewFromFloat(0.42),   // ~42 % all employer charges
+		CorporateTaxRate: decimal.NewFromFloat(0.25), // 25 % standard rate
+		VATRate:          decimal.NewFromFloat(0.20), // 20 % standard rate
+		EmployerTaxRate:  decimal.NewFromFloat(0.42), // ~42 % all employer charges
 		MLTInterestRate:  decimal.NewFromFloat(0.03),
 		Language:         "fr",
 		CurrencySymbol:   "€",
 	},
 	"LU": {
-		CorporateTaxRate: decimal.NewFromFloat(0.17),   // 17 % federal rate
-		VATRate:          decimal.NewFromFloat(0.17),   // 17 % standard rate
-		EmployerTaxRate:  decimal.NewFromFloat(0.12),   // ~12 % employer contributions
+		CorporateTaxRate: decimal.NewFromFloat(0.17), // 17 % federal rate
+		VATRate:          decimal.NewFromFloat(0.17), // 17 % standard rate
+		EmployerTaxRate:  decimal.NewFromFloat(0.12), // ~12 % employer contributions
 		MLTInterestRate:  decimal.NewFromFloat(0.03),
 		Language:         "fr",
 		CurrencySymbol:   "€",
 	},
 	"NL": {
-		CorporateTaxRate: decimal.NewFromFloat(0.258),  // 25.8 % above €200k
-		VATRate:          decimal.NewFromFloat(0.21),   // 21 % standard rate
-		EmployerTaxRate:  decimal.NewFromFloat(0.20),   // ~20 % social charges
+		CorporateTaxRate: decimal.NewFromFloat(0.258), // 25.8 % above €200k
+		VATRate:          decimal.NewFromFloat(0.21),  // 21 % standard rate
+		EmployerTaxRate:  decimal.NewFromFloat(0.20),  // ~20 % social charges
 		MLTInterestRate:  decimal.NewFromFloat(0.03),
 		Language:         "nl",
 		CurrencySymbol:   "€",
 	},
 	"DE": {
-		CorporateTaxRate: decimal.NewFromFloat(0.299),  // ~30 % (Körperschaftsteuer + trade tax)
-		VATRate:          decimal.NewFromFloat(0.19),   // 19 % standard rate
-		EmployerTaxRate:  decimal.NewFromFloat(0.20),   // ~20 % social charges
+		CorporateTaxRate: decimal.NewFromFloat(0.299), // ~30 % (Körperschaftsteuer + trade tax)
+		VATRate:          decimal.NewFromFloat(0.19),  // 19 % standard rate
+		EmployerTaxRate:  decimal.NewFromFloat(0.20),  // ~20 % social charges
 		MLTInterestRate:  decimal.NewFromFloat(0.035),
 		Language:         "de",
 		CurrencySymbol:   "€",
 	},
 	"ES": {
-		CorporateTaxRate: decimal.NewFromFloat(0.25),   // 25 % standard rate
-		VATRate:          decimal.NewFromFloat(0.21),   // 21 % standard rate
-		EmployerTaxRate:  decimal.NewFromFloat(0.30),   // ~30 % social charges
+		CorporateTaxRate: decimal.NewFromFloat(0.25), // 25 % standard rate
+		VATRate:          decimal.NewFromFloat(0.21), // 21 % standard rate
+		EmployerTaxRate:  decimal.NewFromFloat(0.30), // ~30 % social charges
 		MLTInterestRate:  decimal.NewFromFloat(0.035),
 		Language:         "es",
 		CurrencySymbol:   "€",
 	},
 	"IT": {
-		CorporateTaxRate: decimal.NewFromFloat(0.279),  // 24 % IRES + ~3.9 % IRAP
-		VATRate:          decimal.NewFromFloat(0.22),   // 22 % standard rate
-		EmployerTaxRate:  decimal.NewFromFloat(0.30),   // ~30 % social charges
+		CorporateTaxRate: decimal.NewFromFloat(0.279), // 24 % IRES + ~3.9 % IRAP
+		VATRate:          decimal.NewFromFloat(0.22),  // 22 % standard rate
+		EmployerTaxRate:  decimal.NewFromFloat(0.30),  // ~30 % social charges
 		MLTInterestRate:  decimal.NewFromFloat(0.035),
 		Language:         "it",
 		CurrencySymbol:   "€",
@@ -105,9 +105,9 @@ var ratesByCountry = map[string]countryRates{
 		CurrencySymbol:   "CHF",
 	},
 	"GB": {
-		CorporateTaxRate: decimal.NewFromFloat(0.25),   // 25 % from April 2023
-		VATRate:          decimal.NewFromFloat(0.20),   // 20 % standard rate
-		EmployerTaxRate:  decimal.NewFromFloat(0.138),  // 13.8 % National Insurance
+		CorporateTaxRate: decimal.NewFromFloat(0.25),  // 25 % from April 2023
+		VATRate:          decimal.NewFromFloat(0.20),  // 20 % standard rate
+		EmployerTaxRate:  decimal.NewFromFloat(0.138), // 13.8 % National Insurance
 		MLTInterestRate:  decimal.NewFromFloat(0.045),
 		Language:         "en",
 		CurrencySymbol:   "£",
@@ -122,9 +122,9 @@ var ratesByCountry = map[string]countryRates{
 		CurrencySymbol:   "$",
 	},
 	"CA": {
-		CorporateTaxRate: decimal.NewFromFloat(0.265),  // 15 % federal + ~11.5 % provincial avg
-		VATRate:          decimal.NewFromFloat(0.05),   // 5 % federal GST (+ provincial varies)
-		EmployerTaxRate:  decimal.NewFromFloat(0.076),  // ~7.6 % CPP + EI employer share
+		CorporateTaxRate: decimal.NewFromFloat(0.265), // 15 % federal + ~11.5 % provincial avg
+		VATRate:          decimal.NewFromFloat(0.05),  // 5 % federal GST (+ provincial varies)
+		EmployerTaxRate:  decimal.NewFromFloat(0.076), // ~7.6 % CPP + EI employer share
 		MLTInterestRate:  decimal.NewFromFloat(0.045),
 		Language:         "fr",
 		CurrencySymbol:   "CA$",

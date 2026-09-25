@@ -34,19 +34,19 @@ func TestAuthMiddlewareInvalidTokenFormat(t *testing.T) {
 	}))
 
 	tests := []struct {
-		name              string
+		name                string
 		authorizationHeader string
 	}{
 		{
-			name:              "missing Bearer prefix",
+			name:                "missing Bearer prefix",
 			authorizationHeader: "InvalidToken123",
 		},
 		{
-			name:              "only Bearer keyword",
+			name:                "only Bearer keyword",
 			authorizationHeader: "Bearer",
 		},
 		{
-			name:              "wrong prefix",
+			name:                "wrong prefix",
 			authorizationHeader: "Basic token123",
 		},
 	}
@@ -63,7 +63,6 @@ func TestAuthMiddlewareInvalidTokenFormat(t *testing.T) {
 		})
 	}
 }
-
 
 func TestAuthMiddlewareInvalidToken(t *testing.T) {
 	logger := logrus.NewEntry(logrus.New())

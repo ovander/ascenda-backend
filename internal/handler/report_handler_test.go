@@ -7,13 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ── mockReportService ─────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ func TestReportHandler_GetFullReport_InvalidUUIDFormat(t *testing.T) {
 		"12345",
 		"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
 		"not-uuid-at-all",
-		"00000000-0000-0000-0000-00000000000",  // too short
+		"00000000-0000-0000-0000-00000000000",   // too short
 		"00000000-0000-0000-0000-000000000000-", // trailing hyphen
 	}
 

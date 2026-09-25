@@ -137,9 +137,9 @@ func ComputeStaffPayroll(
 
 		// Build functional breakdown for this year
 		functionalYear := model.StaffFunctionalYear{
-			Year:      config.ForecastStart.Year() + yearIndex - 1,
-			YearIndex: yearIndex,
-			RnD:       functionalAmounts[model.FunctionRnD],
+			Year:       config.ForecastStart.Year() + yearIndex - 1,
+			YearIndex:  yearIndex,
+			RnD:        functionalAmounts[model.FunctionRnD],
 			Production: functionalAmounts[model.FunctionProduction],
 			Sales:      functionalAmounts[model.FunctionSales],
 			GnA:        functionalAmounts[model.FunctionGnA],

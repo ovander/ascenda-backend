@@ -3,9 +3,9 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestComputeCash(t *testing.T) {
@@ -33,34 +33,34 @@ func TestComputeCash(t *testing.T) {
 			pnl: model.PnlReport{
 				Years: [5]model.PnlYear{
 					{
-						Year:           1,
-						YearIndex:      0,
-						Sales:          decimal.NewFromInt(120000),
+						Year:             1,
+						YearIndex:        0,
+						Sales:            decimal.NewFromInt(120000),
 						ExternalExpenses: decimal.NewFromInt(60000),
-						PayrollExpenses: decimal.NewFromInt(34080),
-						Depreciation:   decimal.Zero,
-						CorporateTax:   decimal.Zero,
-						NetProfit:      decimal.NewFromInt(25920),
+						PayrollExpenses:  decimal.NewFromInt(34080),
+						Depreciation:     decimal.Zero,
+						CorporateTax:     decimal.Zero,
+						NetProfit:        decimal.NewFromInt(25920),
 					},
 					{
-						Year:           2,
-						YearIndex:      1,
-						Sales:          decimal.NewFromInt(144000),
+						Year:             2,
+						YearIndex:        1,
+						Sales:            decimal.NewFromInt(144000),
 						ExternalExpenses: decimal.NewFromInt(72000),
-						PayrollExpenses: decimal.NewFromInt(40896),
-						Depreciation:   decimal.Zero,
-						CorporateTax:   decimal.Zero,
-						NetProfit:      decimal.NewFromInt(31104),
+						PayrollExpenses:  decimal.NewFromInt(40896),
+						Depreciation:     decimal.Zero,
+						CorporateTax:     decimal.Zero,
+						NetProfit:        decimal.NewFromInt(31104),
 					},
 					{
-						Year:           3,
-						YearIndex:      2,
-						Sales:          decimal.NewFromInt(172800),
+						Year:             3,
+						YearIndex:        2,
+						Sales:            decimal.NewFromInt(172800),
 						ExternalExpenses: decimal.NewFromInt(86400),
-						PayrollExpenses: decimal.NewFromInt(49075),
-						Depreciation:   decimal.Zero,
-						CorporateTax:   decimal.Zero,
-						NetProfit:      decimal.NewFromInt(37325),
+						PayrollExpenses:  decimal.NewFromInt(49075),
+						Depreciation:     decimal.Zero,
+						CorporateTax:     decimal.Zero,
+						NetProfit:        decimal.NewFromInt(37325),
 					},
 					{},
 					{},
@@ -78,20 +78,20 @@ func TestComputeCash(t *testing.T) {
 			staff: model.StaffPayrollSummary{
 				Payroll: [5]model.StaffPayrollYear{
 					{
-						Year:           1,
-						YearIndex:      0,
+						Year:            1,
+						YearIndex:       0,
 						SubtotalPayroll: decimal.NewFromInt(24000),
 						TotalPayroll:    decimal.NewFromInt(34080),
 					},
 					{
-						Year:           2,
-						YearIndex:      1,
+						Year:            2,
+						YearIndex:       1,
 						SubtotalPayroll: decimal.NewFromInt(28800),
 						TotalPayroll:    decimal.NewFromInt(40896),
 					},
 					{
-						Year:           3,
-						YearIndex:      2,
+						Year:            3,
+						YearIndex:       2,
 						SubtotalPayroll: decimal.NewFromInt(34560),
 						TotalPayroll:    decimal.NewFromInt(49075),
 					},
@@ -150,12 +150,12 @@ func TestComputeCash(t *testing.T) {
 			pnl: model.PnlReport{
 				Years: [5]model.PnlYear{
 					{
-						Year:           1,
-						YearIndex:      0,
-						Sales:          decimal.NewFromInt(12000),
+						Year:             1,
+						YearIndex:        0,
+						Sales:            decimal.NewFromInt(12000),
 						ExternalExpenses: decimal.NewFromInt(6000),
-						PayrollExpenses: decimal.NewFromInt(3408),
-						NetProfit:       decimal.NewFromInt(2592),
+						PayrollExpenses:  decimal.NewFromInt(3408),
+						NetProfit:        decimal.NewFromInt(2592),
 					},
 					{}, {}, {}, {},
 				},
@@ -169,8 +169,8 @@ func TestComputeCash(t *testing.T) {
 			staff: model.StaffPayrollSummary{
 				Payroll: [5]model.StaffPayrollYear{
 					{
-						Year:           1,
-						YearIndex:      0,
+						Year:            1,
+						YearIndex:       0,
 						SubtotalPayroll: decimal.NewFromInt(2400),
 						TotalPayroll:    decimal.NewFromInt(3408),
 					},
@@ -215,12 +215,12 @@ func TestComputeCash(t *testing.T) {
 			pnl: model.PnlReport{
 				Years: [5]model.PnlYear{
 					{
-						Year:           1,
-						YearIndex:      0,
-						Sales:          decimal.NewFromInt(120000),
+						Year:             1,
+						YearIndex:        0,
+						Sales:            decimal.NewFromInt(120000),
 						ExternalExpenses: decimal.NewFromInt(60000),
-						PayrollExpenses: decimal.NewFromInt(3408),
-						NetProfit:       decimal.NewFromInt(56592),
+						PayrollExpenses:  decimal.NewFromInt(3408),
+						NetProfit:        decimal.NewFromInt(56592),
 					},
 					{}, {}, {}, {},
 				},
@@ -234,8 +234,8 @@ func TestComputeCash(t *testing.T) {
 			staff: model.StaffPayrollSummary{
 				Payroll: [5]model.StaffPayrollYear{
 					{
-						Year:           1,
-						YearIndex:      0,
+						Year:            1,
+						YearIndex:       0,
 						SubtotalPayroll: decimal.NewFromInt(2400),
 						TotalPayroll:    decimal.NewFromInt(3408),
 					},

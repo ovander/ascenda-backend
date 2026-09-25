@@ -61,32 +61,32 @@ func MarshalLimit(n int) json.RawMessage {
 
 const (
 	// Plans / scenarios
-	FeatureMaxPlans        = "max_plans"
-	FeatureMaxScenarios    = "max_scenarios"
-	FeaturePlanSharing     = "plan_sharing"
+	FeatureMaxPlans     = "max_plans"
+	FeatureMaxScenarios = "max_scenarios"
+	FeaturePlanSharing  = "plan_sharing"
 
 	// AI features
-	FeatureAIPlanNarration       = "ai_plan_narration"
-	FeatureAIUnitEconomics       = "ai_unit_economics"
-	FeatureAIAssumptionReview    = "ai_assumption_review"
-	FeatureAIBenchmarkCommentary = "ai_benchmark_commentary"
-	FeatureAIPortfolioMix        = "ai_portfolio_mix"
-	FeatureAIDriverAdvisor       = "ai_driver_advisor"
-	FeatureAIScenarioSuggestion  = "ai_scenario_suggestion"
+	FeatureAIPlanNarration        = "ai_plan_narration"
+	FeatureAIUnitEconomics        = "ai_unit_economics"
+	FeatureAIAssumptionReview     = "ai_assumption_review"
+	FeatureAIBenchmarkCommentary  = "ai_benchmark_commentary"
+	FeatureAIPortfolioMix         = "ai_portfolio_mix"
+	FeatureAIDriverAdvisor        = "ai_driver_advisor"
+	FeatureAIScenarioSuggestion   = "ai_scenario_suggestion"
 	FeatureAISensitivityNarrative = "ai_sensitivity_narrative"
-	FeatureAIInvestorMemo        = "ai_investor_memo"
+	FeatureAIInvestorMemo         = "ai_investor_memo"
 
 	// Advanced modules
-	FeatureBreakEven  = "break_even"
-	FeatureCapTable   = "cap_table"
+	FeatureBreakEven = "break_even"
+	FeatureCapTable  = "cap_table"
 )
 
 // DefaultFeaturePolicies returns the seed rows that represent the platform's
 // baseline rules.  These are inserted with ON CONFLICT DO NOTHING so that
 // admin overrides made at runtime are never overwritten on restart.
 func DefaultFeaturePolicies() []FeaturePolicy {
-	yes  := MarshalAccess(true)
-	no   := MarshalAccess(false)
+	yes := MarshalAccess(true)
+	no := MarshalAccess(false)
 	lim1 := MarshalLimit(1)
 	lim3 := MarshalLimit(3)
 	unlimited := MarshalLimit(-1)

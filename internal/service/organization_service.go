@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/socrate"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // ============================================================================
@@ -60,8 +60,8 @@ type OrgTenantDTO struct {
 type CreateOrganizationRequest struct {
 	Name         string `json:"name"         validate:"required"`
 	Slug         string `json:"slug"         validate:"required"`
-	Plan         string `json:"plan"`         // default: enterprise
-	MaxUsers     int    `json:"maxUsers"`     // 0 = unlimited
+	Plan         string `json:"plan"`     // default: enterprise
+	MaxUsers     int    `json:"maxUsers"` // 0 = unlimited
 	BillingEmail string `json:"billingEmail"`
 	Domain       string `json:"domain"`
 
@@ -98,11 +98,11 @@ type AddOrgTenantRequest struct {
 
 // OrganizationService handles enterprise organization lifecycle.
 type OrganizationService struct {
-	orgRepo     repo.OrganizationRepository
-	tenantRepo  repo.AdminTenantRepository
-	userRepo    repo.UserRepository
-	inviter     SocrateInviter // optional; nil if Socrate not configured
-	logger      *logrus.Entry
+	orgRepo    repo.OrganizationRepository
+	tenantRepo repo.AdminTenantRepository
+	userRepo   repo.UserRepository
+	inviter    SocrateInviter // optional; nil if Socrate not configured
+	logger     *logrus.Entry
 }
 
 // NewOrganizationService creates a new OrganizationService.

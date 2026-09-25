@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 // testRequest returns a minimal *http.Request with a no-op logrus logger in context,

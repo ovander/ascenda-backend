@@ -3,13 +3,13 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // StaffService orchestrates staff CRUD and computation.
@@ -38,7 +38,9 @@ func (s *StaffService) ListHeadcounts(ctx context.Context, tenantID, scenarioID 
 		return nil, apierror.Internal("failed to list headcounts")
 	}
 	headcounts := make([]model.StaffHeadcount, len(ptrHC))
-	for i, h := range ptrHC { headcounts[i] = *h }
+	for i, h := range ptrHC {
+		headcounts[i] = *h
+	}
 	return headcounts, nil
 }
 
@@ -50,7 +52,9 @@ func (s *StaffService) ListSalaries(ctx context.Context, tenantID, scenarioID uu
 		return nil, apierror.Internal("failed to list salaries")
 	}
 	salaries := make([]model.StaffSalary, len(ptrSal))
-	for i, s := range ptrSal { salaries[i] = *s }
+	for i, s := range ptrSal {
+		salaries[i] = *s
+	}
 	return salaries, nil
 }
 
@@ -62,7 +66,9 @@ func (s *StaffService) ListIncentives(ctx context.Context, tenantID, scenarioID 
 		return nil, apierror.Internal("failed to list incentives")
 	}
 	incentives := make([]model.StaffIncentive, len(ptrInc))
-	for i, inc := range ptrInc { incentives[i] = *inc }
+	for i, inc := range ptrInc {
+		incentives[i] = *inc
+	}
 	return incentives, nil
 }
 

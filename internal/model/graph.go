@@ -19,18 +19,18 @@ type GraphsReport struct {
 }
 
 type GraphSalesAnalysis struct {
-	DirectSales    [5]decimal.Decimal `json:"directSales"`
-	IndirectSales  [5]decimal.Decimal `json:"indirectSales"`
-	ExportSales    [5]decimal.Decimal `json:"exportSales"`
-	DomesticSales  [5]decimal.Decimal `json:"domesticSales"`
+	DirectSales   [5]decimal.Decimal `json:"directSales"`
+	IndirectSales [5]decimal.Decimal `json:"indirectSales"`
+	ExportSales   [5]decimal.Decimal `json:"exportSales"`
+	DomesticSales [5]decimal.Decimal `json:"domesticSales"`
 }
 
 type GraphCostStructure struct {
-	COGS           [5]decimal.Decimal `json:"cogs"`
-	ExternalExp    [5]decimal.Decimal `json:"externalExp"`
-	PayrollExp     [5]decimal.Decimal `json:"payrollExp"`
-	Depreciation   [5]decimal.Decimal `json:"depreciation"`
-	OtherOpex      [5]decimal.Decimal `json:"otherOpex"`
+	COGS         [5]decimal.Decimal `json:"cogs"`
+	ExternalExp  [5]decimal.Decimal `json:"externalExp"`
+	PayrollExp   [5]decimal.Decimal `json:"payrollExp"`
+	Depreciation [5]decimal.Decimal `json:"depreciation"`
+	OtherOpex    [5]decimal.Decimal `json:"otherOpex"`
 }
 
 type GraphRevProfitCash struct {
@@ -77,23 +77,23 @@ type GraphPnLCascade struct {
 
 // Graphs2Report is the computed monthly chart data (not stored in DB).
 type Graphs2Report struct {
-	Months          [36]string              `json:"months"`
-	CashEquityDebt  Graph2CashEquityDebt    `json:"cashEquityDebt"`
-	OperatingCash   Graph2OperatingCash     `json:"operatingCash"`
-	InvoicingEBITDA Graph2InvoicingEBITDA   `json:"invoicingEbitda"`
-	HeadcountByFunc Graph2HeadcountByFunc   `json:"headcountByFunc"`
+	Months          [36]string            `json:"months"`
+	CashEquityDebt  Graph2CashEquityDebt  `json:"cashEquityDebt"`
+	OperatingCash   Graph2OperatingCash   `json:"operatingCash"`
+	InvoicingEBITDA Graph2InvoicingEBITDA `json:"invoicingEbitda"`
+	HeadcountByFunc Graph2HeadcountByFunc `json:"headcountByFunc"`
 }
 
 type Graph2CashEquityDebt struct {
-	CashBalance    [36]decimal.Decimal `json:"cashBalance"`
-	Equity         [36]decimal.Decimal `json:"equity"`
-	TotalDebt      [36]decimal.Decimal `json:"totalDebt"`
+	CashBalance [36]decimal.Decimal `json:"cashBalance"`
+	Equity      [36]decimal.Decimal `json:"equity"`
+	TotalDebt   [36]decimal.Decimal `json:"totalDebt"`
 }
 
 type Graph2OperatingCash struct {
-	Inflows        [36]decimal.Decimal `json:"inflows"`
-	Outflows       [36]decimal.Decimal `json:"outflows"`
-	NetCash        [36]decimal.Decimal `json:"netCash"`
+	Inflows  [36]decimal.Decimal `json:"inflows"`
+	Outflows [36]decimal.Decimal `json:"outflows"`
+	NetCash  [36]decimal.Decimal `json:"netCash"`
 }
 
 type Graph2InvoicingEBITDA struct {
@@ -103,9 +103,9 @@ type Graph2InvoicingEBITDA struct {
 }
 
 type Graph2HeadcountByFunc struct {
-	RnD            [36]decimal.Decimal `json:"rnd"`
-	Production     [36]decimal.Decimal `json:"production"`
-	Sales          [36]decimal.Decimal `json:"sales"`
-	GnA            [36]decimal.Decimal `json:"gna"`
-	Total          [36]decimal.Decimal `json:"total"`
+	RnD        [36]decimal.Decimal `json:"rnd"`
+	Production [36]decimal.Decimal `json:"production"`
+	Sales      [36]decimal.Decimal `json:"sales"`
+	GnA        [36]decimal.Decimal `json:"gna"`
+	Total      [36]decimal.Decimal `json:"total"`
 }

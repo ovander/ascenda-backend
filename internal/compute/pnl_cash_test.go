@@ -4,29 +4,29 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestComputePnlCash(t *testing.T) {
 	config := model.PlanConfig{
-		DiscountRate:       decimal.NewFromFloat(0.1),
-		CorporateTaxRate:   decimal.NewFromFloat(0.25),
-		EmployerTaxRate:    decimal.NewFromFloat(0.42),
-		ForecastStart:      time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		PreviousStaff:      0,
+		DiscountRate:     decimal.NewFromFloat(0.1),
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		EmployerTaxRate:  decimal.NewFromFloat(0.42),
+		ForecastStart:    time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		PreviousStaff:    0,
 	}
 
 	tests := []struct {
-		name       string
-		entries    []model.PnlCashEntry
-		revenue    model.ConsolidatedRevenue
-		opex       model.OpexSummary
-		staff      model.StaffPayrollSummary
-		capex      model.CapexSummary
-		pnl        model.PnlReport
-		checkPnl   func(*testing.T, model.PnlCashReport)
+		name     string
+		entries  []model.PnlCashEntry
+		revenue  model.ConsolidatedRevenue
+		opex     model.OpexSummary
+		staff    model.StaffPayrollSummary
+		capex    model.CapexSummary
+		pnl      model.PnlReport
+		checkPnl func(*testing.T, model.PnlCashReport)
 	}{
 		{
 			name:    "basic simplified PnL with complete data",
@@ -71,9 +71,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubPremises,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineExternalStaffRnD,
+								LineID:      model.LineExternalStaffRnD,
 								IsUserInput: true,
-								CostDriver: "manual",
+								CostDriver:  "manual",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(5000),
 									decimal.NewFromInt(6000),
@@ -88,9 +88,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubMarketing,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineAdvertisingComms,
+								LineID:      model.LineAdvertisingComms,
 								IsUserInput: true,
-								CostDriver: "manual",
+								CostDriver:  "manual",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(3000),
 									decimal.NewFromInt(3600),
@@ -105,9 +105,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubHR,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineRecruitmentTraining,
+								LineID:      model.LineRecruitmentTraining,
 								IsUserInput: false,
-								CostDriver: "pct_of_payroll",
+								CostDriver:  "pct_of_payroll",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(2000),
 									decimal.NewFromInt(2400),
@@ -162,39 +162,39 @@ func TestComputePnlCash(t *testing.T) {
 				},
 				FunctionalBreakdown: [5]model.StaffFunctionalYear{
 					{
-						Year:       2025,
-						YearIndex:  0,
-						RnD:        decimal.NewFromInt(5000),
-						Sales:      decimal.NewFromInt(10000),
-						GnA:        decimal.NewFromInt(15000),
+						Year:      2025,
+						YearIndex: 0,
+						RnD:       decimal.NewFromInt(5000),
+						Sales:     decimal.NewFromInt(10000),
+						GnA:       decimal.NewFromInt(15000),
 					},
 					{
-						Year:       2026,
-						YearIndex:  1,
-						RnD:        decimal.NewFromInt(6000),
-						Sales:      decimal.NewFromInt(12000),
-						GnA:        decimal.NewFromInt(18000),
+						Year:      2026,
+						YearIndex: 1,
+						RnD:       decimal.NewFromInt(6000),
+						Sales:     decimal.NewFromInt(12000),
+						GnA:       decimal.NewFromInt(18000),
 					},
 					{
-						Year:       2027,
-						YearIndex:  2,
-						RnD:        decimal.NewFromInt(7200),
-						Sales:      decimal.NewFromInt(14400),
-						GnA:        decimal.NewFromInt(21600),
+						Year:      2027,
+						YearIndex: 2,
+						RnD:       decimal.NewFromInt(7200),
+						Sales:     decimal.NewFromInt(14400),
+						GnA:       decimal.NewFromInt(21600),
 					},
 					{
-						Year:       2028,
-						YearIndex:  3,
-						RnD:        decimal.NewFromInt(8640),
-						Sales:      decimal.NewFromInt(17280),
-						GnA:        decimal.NewFromInt(25920),
+						Year:      2028,
+						YearIndex: 3,
+						RnD:       decimal.NewFromInt(8640),
+						Sales:     decimal.NewFromInt(17280),
+						GnA:       decimal.NewFromInt(25920),
 					},
 					{
-						Year:       2029,
-						YearIndex:  4,
-						RnD:        decimal.NewFromInt(10368),
-						Sales:      decimal.NewFromInt(20736),
-						GnA:        decimal.NewFromInt(31104),
+						Year:      2029,
+						YearIndex: 4,
+						RnD:       decimal.NewFromInt(10368),
+						Sales:     decimal.NewFromInt(20736),
+						GnA:       decimal.NewFromInt(31104),
 					},
 				},
 			},
@@ -266,12 +266,12 @@ func TestComputePnlCash(t *testing.T) {
 				//              + LegalConsulting(0) + TravelMisc(2000) + Depreciation(0) = 40000
 				// EBIT = 40000 - 40000 = 0
 				expectedEBIT := decimal.NewFromInt(40000).
-					Sub(decimal.NewFromInt(5000)).    // RDPayroll
-					Sub(decimal.NewFromInt(5000)).    // OutsourcedRD
-					Sub(decimal.NewFromInt(10000)).   // SalesPayroll
-					Sub(decimal.NewFromInt(3000)).    // AdvertisingPromo
-					Sub(decimal.NewFromInt(15000)).   // GAPayroll
-					Sub(decimal.NewFromInt(2000))     // TravelMisc (recruitment_training)
+					Sub(decimal.NewFromInt(5000)).  // RDPayroll
+					Sub(decimal.NewFromInt(5000)).  // OutsourcedRD
+					Sub(decimal.NewFromInt(10000)). // SalesPayroll
+					Sub(decimal.NewFromInt(3000)).  // AdvertisingPromo
+					Sub(decimal.NewFromInt(15000)). // GAPayroll
+					Sub(decimal.NewFromInt(2000))   // TravelMisc (recruitment_training)
 				assertDecEq(t, expectedEBIT, result.Years[0].EBIT,
 					"EBIT calculation mismatch")
 
@@ -292,12 +292,12 @@ func TestComputePnlCash(t *testing.T) {
 				//              + LegalConsulting(0) + TravelMisc(2400) + Depreciation(0) = 48000
 				// EBIT = 48000 - 48000 = 0
 				expectedEBIT2 := decimal.NewFromInt(48000).
-					Sub(decimal.NewFromInt(6000)).    // RDPayroll
-					Sub(decimal.NewFromInt(6000)).    // OutsourcedRD
-					Sub(decimal.NewFromInt(12000)).   // SalesPayroll
-					Sub(decimal.NewFromInt(3600)).    // AdvertisingPromo
-					Sub(decimal.NewFromInt(18000)).   // GAPayroll
-					Sub(decimal.NewFromInt(2400))     // TravelMisc (recruitment_training)
+					Sub(decimal.NewFromInt(6000)).  // RDPayroll
+					Sub(decimal.NewFromInt(6000)).  // OutsourcedRD
+					Sub(decimal.NewFromInt(12000)). // SalesPayroll
+					Sub(decimal.NewFromInt(3600)).  // AdvertisingPromo
+					Sub(decimal.NewFromInt(18000)). // GAPayroll
+					Sub(decimal.NewFromInt(2400))   // TravelMisc (recruitment_training)
 				assertDecEq(t, expectedEBIT2, result.Years[1].EBIT,
 					"Year 2 EBIT calculation mismatch")
 			},
@@ -400,9 +400,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubProfessional,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineExternalStaffRnD,
+								LineID:      model.LineExternalStaffRnD,
 								IsUserInput: true,
-								CostDriver: "manual",
+								CostDriver:  "manual",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(15000),
 									decimal.NewFromInt(18000),
@@ -415,9 +415,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubMarketing,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineAdvertisingComms,
+								LineID:      model.LineAdvertisingComms,
 								IsUserInput: true,
-								CostDriver: "manual",
+								CostDriver:  "manual",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(8000),
 									decimal.NewFromInt(9600),
@@ -430,9 +430,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubHR,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineRecruitmentTraining,
+								LineID:      model.LineRecruitmentTraining,
 								IsUserInput: false,
-								CostDriver: "pct_of_payroll",
+								CostDriver:  "pct_of_payroll",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(12000),
 									decimal.NewFromInt(14400),
@@ -524,12 +524,12 @@ func TestComputePnlCash(t *testing.T) {
 				//              + LegalConsulting(0) + TravelMisc(12000) + Depreciation(0) = 75000
 				// EBIT = 100000 - 75000 = 25000
 				expectedEBIT := decimal.NewFromInt(100000).
-					Sub(decimal.NewFromInt(15000)).    // RDPayroll
-					Sub(decimal.NewFromInt(15000)).    // OutsourcedRD
-					Sub(decimal.NewFromInt(8000)).     // SalesPayroll
-					Sub(decimal.NewFromInt(8000)).     // AdvertisingPromo
-					Sub(decimal.NewFromInt(17000)).    // GAPayroll
-					Sub(decimal.NewFromInt(12000))     // TravelMisc (recruitment_training)
+					Sub(decimal.NewFromInt(15000)). // RDPayroll
+					Sub(decimal.NewFromInt(15000)). // OutsourcedRD
+					Sub(decimal.NewFromInt(8000)).  // SalesPayroll
+					Sub(decimal.NewFromInt(8000)).  // AdvertisingPromo
+					Sub(decimal.NewFromInt(17000)). // GAPayroll
+					Sub(decimal.NewFromInt(12000))  // TravelMisc (recruitment_training)
 				assertDecEq(t, expectedEBIT, result.Years[0].EBIT,
 					"EBIT should be GrossMargin - TotalExpenses")
 
@@ -544,12 +544,12 @@ func TestComputePnlCash(t *testing.T) {
 				//              + LegalConsulting(0) + TravelMisc(14400) + Depreciation(0) = 90000
 				// EBIT = 120000 - 90000 = 30000
 				expectedEBIT2 := decimal.NewFromInt(120000).
-					Sub(decimal.NewFromInt(18000)).    // RDPayroll
-					Sub(decimal.NewFromInt(18000)).    // OutsourcedRD
-					Sub(decimal.NewFromInt(9600)).     // SalesPayroll
-					Sub(decimal.NewFromInt(9600)).     // AdvertisingPromo
-					Sub(decimal.NewFromInt(20400)).    // GAPayroll
-					Sub(decimal.NewFromInt(14400))     // TravelMisc (recruitment_training)
+					Sub(decimal.NewFromInt(18000)). // RDPayroll
+					Sub(decimal.NewFromInt(18000)). // OutsourcedRD
+					Sub(decimal.NewFromInt(9600)).  // SalesPayroll
+					Sub(decimal.NewFromInt(9600)).  // AdvertisingPromo
+					Sub(decimal.NewFromInt(20400)). // GAPayroll
+					Sub(decimal.NewFromInt(14400))  // TravelMisc (recruitment_training)
 				assertDecEq(t, expectedEBIT2, result.Years[1].EBIT,
 					"Year 2 EBIT calculation mismatch")
 			},
@@ -587,9 +587,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubProfessional,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineExternalStaffRnD,
+								LineID:      model.LineExternalStaffRnD,
 								IsUserInput: true,
-								CostDriver: "manual",
+								CostDriver:  "manual",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(20000),
 									decimal.NewFromInt(24000),
@@ -603,9 +603,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubMarketing,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineAdvertisingComms,
+								LineID:      model.LineAdvertisingComms,
 								IsUserInput: true,
-								CostDriver: "manual",
+								CostDriver:  "manual",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(15000),
 									decimal.NewFromInt(18000),
@@ -619,9 +619,9 @@ func TestComputePnlCash(t *testing.T) {
 						Subcategory: model.OpexSubHR,
 						Lines: []model.OpexLineResult{
 							{
-								LineID:     model.LineRecruitmentTraining,
+								LineID:      model.LineRecruitmentTraining,
 								IsUserInput: false,
-								CostDriver: "pct_of_payroll",
+								CostDriver:  "pct_of_payroll",
 								Years: [5]decimal.Decimal{
 									decimal.NewFromInt(25000),
 									decimal.NewFromInt(30000),
@@ -713,12 +713,12 @@ func TestComputePnlCash(t *testing.T) {
 				//              + LegalConsulting(0) + TravelMisc(25000) + Depreciation(0) = 160000
 				// EBIT = 300000 - 160000 = 140000
 				expectedEBIT := decimal.NewFromInt(300000).
-					Sub(decimal.NewFromInt(20000)).    // RDPayroll
-					Sub(decimal.NewFromInt(20000)).    // OutsourcedRD
-					Sub(decimal.NewFromInt(15000)).    // SalesPayroll
-					Sub(decimal.NewFromInt(15000)).    // AdvertisingPromo
-					Sub(decimal.NewFromInt(65000)).    // GAPayroll
-					Sub(decimal.NewFromInt(25000))     // TravelMisc (recruitment_training)
+					Sub(decimal.NewFromInt(20000)). // RDPayroll
+					Sub(decimal.NewFromInt(20000)). // OutsourcedRD
+					Sub(decimal.NewFromInt(15000)). // SalesPayroll
+					Sub(decimal.NewFromInt(15000)). // AdvertisingPromo
+					Sub(decimal.NewFromInt(65000)). // GAPayroll
+					Sub(decimal.NewFromInt(25000))  // TravelMisc (recruitment_training)
 				assertDecEq(t, decimal.NewFromInt(140000), expectedEBIT,
 					"Manual calculation check")
 				assertDecEq(t, expectedEBIT, result.Years[0].EBIT,
@@ -732,12 +732,12 @@ func TestComputePnlCash(t *testing.T) {
 				//              + LegalConsulting(0) + TravelMisc(30000) + Depreciation(0) = 192000
 				// EBIT = 360000 - 192000 = 168000
 				expectedEBIT2 := decimal.NewFromInt(360000).
-					Sub(decimal.NewFromInt(24000)).    // RDPayroll
-					Sub(decimal.NewFromInt(24000)).    // OutsourcedRD
-					Sub(decimal.NewFromInt(18000)).    // SalesPayroll
-					Sub(decimal.NewFromInt(18000)).    // AdvertisingPromo
-					Sub(decimal.NewFromInt(78000)).    // GAPayroll
-					Sub(decimal.NewFromInt(30000))     // TravelMisc (recruitment_training)
+					Sub(decimal.NewFromInt(24000)). // RDPayroll
+					Sub(decimal.NewFromInt(24000)). // OutsourcedRD
+					Sub(decimal.NewFromInt(18000)). // SalesPayroll
+					Sub(decimal.NewFromInt(18000)). // AdvertisingPromo
+					Sub(decimal.NewFromInt(78000)). // GAPayroll
+					Sub(decimal.NewFromInt(30000))  // TravelMisc (recruitment_training)
 				assertDecEq(t, expectedEBIT2, result.Years[1].EBIT,
 					"Year 2 EBIT should be 168000")
 

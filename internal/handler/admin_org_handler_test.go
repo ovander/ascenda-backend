@@ -8,25 +8,25 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/ovander/backendkit/apierror"
-	"ascenda/internal/service"
 )
 
 // ── mockOrgService ─────────────────────────────────────────────────────────
 
 type mockOrgService struct {
-	listOrgsFn        func(ctx context.Context, page, pageSize int) (*service.OrgListResponse, error)
-	getOrgFn          func(ctx context.Context, id uuid.UUID) (*service.OrgDTO, error)
-	createOrgFn       func(ctx context.Context, req service.CreateOrganizationRequest) (*service.OrgDTO, error)
-	updateOrgFn       func(ctx context.Context, id uuid.UUID, req service.UpdateOrganizationRequest) (*service.OrgDTO, error)
-	deleteOrgFn       func(ctx context.Context, id uuid.UUID) error
-	addTenantFn       func(ctx context.Context, orgID uuid.UUID, req service.AddOrgTenantRequest) (*service.OrgTenantDTO, error)
-	listTenantsFn     func(ctx context.Context, orgID uuid.UUID) ([]service.OrgTenantDTO, error)
+	listOrgsFn    func(ctx context.Context, page, pageSize int) (*service.OrgListResponse, error)
+	getOrgFn      func(ctx context.Context, id uuid.UUID) (*service.OrgDTO, error)
+	createOrgFn   func(ctx context.Context, req service.CreateOrganizationRequest) (*service.OrgDTO, error)
+	updateOrgFn   func(ctx context.Context, id uuid.UUID, req service.UpdateOrganizationRequest) (*service.OrgDTO, error)
+	deleteOrgFn   func(ctx context.Context, id uuid.UUID) error
+	addTenantFn   func(ctx context.Context, orgID uuid.UUID, req service.AddOrgTenantRequest) (*service.OrgTenantDTO, error)
+	listTenantsFn func(ctx context.Context, orgID uuid.UUID) ([]service.OrgTenantDTO, error)
 }
 
 func (m *mockOrgService) ListOrganizations(ctx context.Context, page, pageSize int) (*service.OrgListResponse, error) {
@@ -86,15 +86,15 @@ func newAdminOrgHandler(svc *mockOrgService) *AdminOrgHandler {
 
 func orgFixture() service.OrgDTO {
 	return service.OrgDTO{
-		ID:          uuid.New().String(),
-		Name:        "Orange SA",
-		Slug:        "orange-sa",
-		Plan:        "enterprise",
-		MaxUsers:    1000,
+		ID:           uuid.New().String(),
+		Name:         "Orange SA",
+		Slug:         "orange-sa",
+		Plan:         "enterprise",
+		MaxUsers:     1000,
 		BillingEmail: "cfo@orange.fr",
-		IsActive:    true,
-		TenantCount: 22,
-		UserCount:   850,
+		IsActive:     true,
+		TenantCount:  22,
+		UserCount:    850,
 	}
 }
 

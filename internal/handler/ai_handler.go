@@ -4,26 +4,27 @@
 // the handler itself only validates the request and delegates to the narration service.
 //
 // Architecture note:
-//   The caller (frontend or integration) is responsible for building the
-//   NarrationContext from plan data before calling these endpoints.
-//   The handler does NOT re-fetch financial data from the database —
-//   this keeps the AI layer stateless and independently testable.
+//
+//	The caller (frontend or integration) is responsible for building the
+//	NarrationContext from plan data before calling these endpoints.
+//	The handler does NOT re-fetch financial data from the database —
+//	this keeps the AI layer stateless and independently testable.
 package handler
 
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/sirupsen/logrus"
-	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/service"
+	"github.com/go-chi/chi/v5"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
 )
 
 // AIHandler handles all AI-powered narration requests.
 type AIHandler struct {
-	narration    *service.AINarrationService
-	sensEngine   *service.SensitivityEngine
-	logger       *logrus.Entry
+	narration  *service.AINarrationService
+	sensEngine *service.SensitivityEngine
+	logger     *logrus.Entry
 }
 
 // NewAIHandler creates a new AIHandler.

@@ -16,11 +16,11 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,16 +28,16 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 var (
-	aliceID    = uuid.MustParse("aaaa0000-0000-0000-0000-000000000001")
-	bobID      = uuid.MustParse("bbbb0000-0000-0000-0000-000000000002")
-	seedVCID   = uuid.MustParse("cccc0000-0000-0000-0000-000000000003")
-	seriesAID  = uuid.MustParse("dddd0000-0000-0000-0000-000000000004")
-	seedRndID  = uuid.MustParse("eeee0000-0000-0000-0000-000000000005")
+	aliceID      = uuid.MustParse("aaaa0000-0000-0000-0000-000000000001")
+	bobID        = uuid.MustParse("bbbb0000-0000-0000-0000-000000000002")
+	seedVCID     = uuid.MustParse("cccc0000-0000-0000-0000-000000000003")
+	seriesAID    = uuid.MustParse("dddd0000-0000-0000-0000-000000000004")
+	seedRndID    = uuid.MustParse("eeee0000-0000-0000-0000-000000000005")
 	seriesARndID = uuid.MustParse("ffff0000-0000-0000-0000-000000000006")
-	planID     = uuid.MustParse("1111aaaa-0000-0000-0000-000000000007")
-	grantID1   = uuid.MustParse("2222bbbb-0000-0000-0000-000000000008")
-	valo1ID    = uuid.MustParse("3333cccc-0000-0000-0000-000000000009")
-	valo2ID    = uuid.MustParse("4444dddd-0000-0000-0000-000000000010")
+	planID       = uuid.MustParse("1111aaaa-0000-0000-0000-000000000007")
+	grantID1     = uuid.MustParse("2222bbbb-0000-0000-0000-000000000008")
+	valo1ID      = uuid.MustParse("3333cccc-0000-0000-0000-000000000009")
+	valo2ID      = uuid.MustParse("4444dddd-0000-0000-0000-000000000010")
 )
 
 func saascoCompany() model.CapTableCompany {
@@ -130,11 +130,11 @@ func saascoPlan() model.StockOptionPlan {
 func saascoGrants() []model.OptionGrant {
 	return []model.OptionGrant{
 		{
-			TenantScoped:  model.TenantScoped{ID: grantID1},
-			PlanID:        planID,
-			ShareholderID: aliceID,
-			RoundID:       seedRndID,
-			OptionsGranted: 150,
+			TenantScoped:     model.TenantScoped{ID: grantID1},
+			PlanID:           planID,
+			ShareholderID:    aliceID,
+			RoundID:          seedRndID,
+			OptionsGranted:   150,
 			OptionsExercised: 0,
 			OptionsCancelled: 0,
 		},
@@ -473,14 +473,14 @@ func TestNonRegression_AllValuationModesReturnResults(t *testing.T) {
 	discount := decimal.NewFromFloat(10.0)
 
 	tests := []struct {
-		name string
-		vs   model.ValuationScenario
+		name  string
+		vs    model.ValuationScenario
 		check func(t *testing.T, r model.ValuationScenarioResult)
 	}{
 		{
 			name: "Mode A: multiple→IRR",
 			vs: model.ValuationScenario{
-				CalcType: model.ValScenMultipleToIRR,
+				CalcType:      model.ValScenMultipleToIRR,
 				MoneyMultiple: &multiple, HorizonYears: &horizon,
 			},
 			check: func(t *testing.T, r model.ValuationScenarioResult) {
@@ -491,7 +491,7 @@ func TestNonRegression_AllValuationModesReturnResults(t *testing.T) {
 		{
 			name: "Mode B: investment→terminal",
 			vs: model.ValuationScenario{
-				CalcType: model.ValScenInvestmentToTerminal,
+				CalcType:    model.ValScenInvestmentToTerminal,
 				InvestmentK: &inv, AnnualYieldPct: &yield, HorizonYears: &horizon,
 			},
 			check: func(t *testing.T, r model.ValuationScenarioResult) {
@@ -502,7 +502,7 @@ func TestNonRegression_AllValuationModesReturnResults(t *testing.T) {
 		{
 			name: "Mode C: investment+pct→IRR+NPV",
 			vs: model.ValuationScenario{
-				CalcType: model.ValScenInvestmentPctToIRR,
+				CalcType:    model.ValScenInvestmentPctToIRR,
 				InvestmentK: &inv, FinalInvestorPct: &pct,
 				ExitCompanyValueK: &exitVal, HorizonYears: &horizon, DiscountRatePct: &discount,
 			},
@@ -515,7 +515,7 @@ func TestNonRegression_AllValuationModesReturnResults(t *testing.T) {
 		{
 			name: "Mode D: newmoney+pct→premoney",
 			vs: model.ValuationScenario{
-				CalcType: model.ValScenNewMoneyToPremoney,
+				CalcType:  model.ValScenNewMoneyToPremoney,
 				NewMoneyK: &newMoney, FinalInvestorPct: &pct,
 			},
 			check: func(t *testing.T, r model.ValuationScenarioResult) {

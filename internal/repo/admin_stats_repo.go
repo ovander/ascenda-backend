@@ -3,10 +3,9 @@ package repo
 import (
 	"time"
 
-	"gorm.io/gorm"
 	"ascenda/internal/model"
+	"gorm.io/gorm"
 )
-
 
 // ─── AI Usage result types ────────────────────────────────────────────────────
 

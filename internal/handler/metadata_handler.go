@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
+	"github.com/sirupsen/logrus"
 )
 
 // MetadataHandler serves enum lists and application info so the frontend
@@ -67,28 +67,28 @@ func (h *MetadataHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 
 // MetadataResponse is the JSON shape returned by GET /api/v1/metadata.
 type MetadataResponse struct {
-	AssetCategories  []AssetCategoryMeta  `json:"assetCategories"`
-	StaffCategories  []StaffCategoryMeta  `json:"staffCategories"`
-	StaffFunctions   []string             `json:"staffFunctions"`
-	OpexLines        []OpexLineMeta       `json:"opexLines"`
+	AssetCategories   []AssetCategoryMeta `json:"assetCategories"`
+	StaffCategories   []StaffCategoryMeta `json:"staffCategories"`
+	StaffFunctions    []string            `json:"staffFunctions"`
+	OpexLines         []OpexLineMeta      `json:"opexLines"`
 	OpexSubcategories []string            `json:"opexSubcategories"`
-	PnlLines         []PnlLineMeta        `json:"pnlLines"`
-	FiplanLines      []string             `json:"fiplanLines"`
-	WcrLines         []string             `json:"wcrLines"`
-	PnlCashLines     []string             `json:"pnlCashLines"`
-	CashLines        []string             `json:"cashLines"`
-	BudgetLines      []BudgetLineMeta     `json:"budgetLines"`
+	PnlLines          []PnlLineMeta       `json:"pnlLines"`
+	FiplanLines       []string            `json:"fiplanLines"`
+	WcrLines          []string            `json:"wcrLines"`
+	PnlCashLines      []string            `json:"pnlCashLines"`
+	CashLines         []string            `json:"cashLines"`
+	BudgetLines       []BudgetLineMeta    `json:"budgetLines"`
 	DistributionRules []string            `json:"distributionRules"`
-	SalesChannels    []string             `json:"salesChannels"`
-	GeoZones         []string             `json:"geoZones"`
+	SalesChannels     []string            `json:"salesChannels"`
+	GeoZones          []string            `json:"geoZones"`
 }
 
 // AssetCategoryMeta describes one capex asset category.
 type AssetCategoryMeta struct {
-	ID                  string `json:"id"`
-	IsDepreciable       bool   `json:"isDepreciable"`
-	IsStaffLinked       bool   `json:"isStaffLinked"`
-	DefaultDeprecYears  int    `json:"defaultDepreciationYears"`
+	ID                 string `json:"id"`
+	IsDepreciable      bool   `json:"isDepreciable"`
+	IsStaffLinked      bool   `json:"isStaffLinked"`
+	DefaultDeprecYears int    `json:"defaultDepreciationYears"`
 }
 
 // StaffCategoryMeta describes one staff category with its parent function.

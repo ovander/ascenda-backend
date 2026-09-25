@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 	"ascenda/internal/compute"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // fiplanSyncer abstracts the FiPlan operations needed by CapTableService,
@@ -77,9 +77,9 @@ func (s *CapTableService) UpsertCompany(ctx context.Context, company *model.CapT
 		return apierror.Internal("failed to save cap table company")
 	}
 	s.publishWithChanges(ctx, company.TenantID, company.ScenarioID, "cap_table_company", event.ActionUpdate, map[string]any{
-		"legalForm":  company.LegalForm,
-		"currency":   company.Currency,
-		"maxPhases":  company.MaxPhases,
+		"legalForm": company.LegalForm,
+		"currency":  company.Currency,
+		"maxPhases": company.MaxPhases,
 	})
 	return nil
 }
@@ -92,15 +92,15 @@ func (s *CapTableService) buildDefaultCompany(tenantID, scenarioID uuid.UUID) (*
 	}
 	profile := model.GetCapTableCountryProfile(cfg.Country)
 	c := &model.CapTableCompany{
-		ScenarioID:       scenarioID,
-		Currency:         profile.Currency,
-		CurrencySymbol:   profile.CurrencySymbol,
+		ScenarioID:        scenarioID,
+		Currency:          profile.Currency,
+		CurrencySymbol:    profile.CurrencySymbol,
 		NominalValueCents: int64(profile.DefaultNominalValueCents),
-		DisplayLanguage:  profile.PrimaryLanguage,
-		DateFormat:       profile.DateFormat,
-		BookEquityTerm:   profile.BookEquityTerm,
-		ShareCapitalTerm: profile.ShareCapitalTerm,
-		MaxPhases:        7,
+		DisplayLanguage:   profile.PrimaryLanguage,
+		DateFormat:        profile.DateFormat,
+		BookEquityTerm:    profile.BookEquityTerm,
+		ShareCapitalTerm:  profile.ShareCapitalTerm,
+		MaxPhases:         7,
 	}
 	c.TenantID = tenantID
 	if len(profile.LegalForms) > 0 {
@@ -549,10 +549,10 @@ func (s *CapTableService) SyncRoundToFiplan(ctx context.Context, tenantID uuid.U
 	}
 
 	s.publishWithChanges(ctx, tenantID, round.ScenarioID, "cap_table_round", event.ActionUpdate, map[string]any{
-		"roundId":              round.ID,
-		"fiscalYearIndex":      fiscalYearIndex,
-		"fiplanSynced":         true,
-		"fiplanSyncedAmountK":  round.AmountRaisedK,
+		"roundId":             round.ID,
+		"fiscalYearIndex":     fiscalYearIndex,
+		"fiplanSynced":        true,
+		"fiplanSyncedAmountK": round.AmountRaisedK,
 	})
 	return round, nil
 }
@@ -631,8 +631,8 @@ func (s *CapTableService) SyncRoundToOpeningBalance(ctx context.Context, tenantI
 	}
 
 	s.publishWithChanges(ctx, tenantID, round.ScenarioID, "cap_table_round", event.ActionUpdate, map[string]any{
-		"roundId":                    round.ID,
-		"openingBalanceSynced":       true,
+		"roundId":                     round.ID,
+		"openingBalanceSynced":        true,
 		"openingBalanceSyncedAmountK": round.AmountRaisedK,
 	})
 	return round, nil

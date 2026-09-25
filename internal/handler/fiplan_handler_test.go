@@ -8,15 +8,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/dto"
+	"ascenda/internal/model"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/dto"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ── mockFiplanService ─────────────────────────────────────────────────────
@@ -390,10 +390,10 @@ func TestFiplanHandler_CreateRoundFromCapitalIncrease_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]interface{}{
-		"label":           "Series A",
-		"shareClassType":  "preferred_a",
-		"phaseNumber":     1,
-		"sortOrder":       1,
+		"label":          "Series A",
+		"shareClassType": "preferred_a",
+		"phaseNumber":    1,
+		"sortOrder":      1,
 	})
 	r := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")

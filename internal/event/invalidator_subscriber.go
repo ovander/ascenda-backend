@@ -11,8 +11,8 @@ import (
 // cached reports. Any DataChanged event marks the affected scenario as
 // stale so that the next report request triggers a fresh computation.
 type ReportInvalidator struct {
-	mu    sync.RWMutex
-	stale map[uuid.UUID]bool // scenarioID -> true if stale
+	mu     sync.RWMutex
+	stale  map[uuid.UUID]bool // scenarioID -> true if stale
 	logger *logrus.Entry
 }
 

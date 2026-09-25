@@ -243,23 +243,23 @@ func TestLocaleVariations(t *testing.T) {
 	value := decimal.NewFromFloat(12345.67)
 
 	tests := []struct {
-		name     string
-		locale   string
+		name             string
+		locale           string
 		expectedContains string
 	}{
 		{
-			name:     "US uses comma",
-			locale:   "en_US",
+			name:             "US uses comma",
+			locale:           "en_US",
 			expectedContains: "12,345.67",
 		},
 		{
-			name:     "French uses space and comma",
-			locale:   "fr_FR",
+			name:             "French uses space and comma",
+			locale:           "fr_FR",
 			expectedContains: "12 345,67",
 		},
 		{
-			name:     "German uses space and comma",
-			locale:   "de_DE",
+			name:             "German uses space and comma",
+			locale:           "de_DE",
 			expectedContains: "12 345,67",
 		},
 	}

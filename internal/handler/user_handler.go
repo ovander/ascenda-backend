@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"strconv"
 
+	"ascenda/internal/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-	"ascenda/internal/model"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
 )
 
 // UserServiceIface defines the service methods used by UserHandler.
@@ -43,8 +43,8 @@ type UserDTO struct {
 	ID         string  `json:"id"`
 	Email      string  `json:"email"`
 	Name       string  `json:"name"`
-	Role       string  `json:"role"`        // Ascenda role: owner | editor | reader | admin
-	Plan       string  `json:"plan"`        // commercial plan: freemium | pro | enterprise
+	Role       string  `json:"role"` // Ascenda role: owner | editor | reader | admin
+	Plan       string  `json:"plan"` // commercial plan: freemium | pro | enterprise
 	IsActive   bool    `json:"isActive"`
 	JoinedAt   *string `json:"joinedAt,omitempty"`
 	InvitedBy  *string `json:"invitedBy,omitempty"`
@@ -291,13 +291,13 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // UserImpactDTO summarises the dependencies that would be affected by deleting a user.
 type UserImpactDTO struct {
-	UserID   string `json:"userId"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Role     string `json:"role"`
-	IsOwner  bool   `json:"isOwner"`
-	CanDelete bool  `json:"canDelete"`
-	Message  string `json:"message,omitempty"`
+	UserID    string `json:"userId"`
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	IsOwner   bool   `json:"isOwner"`
+	CanDelete bool   `json:"canDelete"`
+	Message   string `json:"message,omitempty"`
 }
 
 // GetImpact returns a dependency preview before deleting a user.

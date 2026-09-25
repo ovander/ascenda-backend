@@ -32,17 +32,17 @@ const (
 	CategoryProdTechnicians StaffCategory = "prod_technicians"
 
 	// Sales & Marketing (3 rows)
-	CategorySalesTeam           StaffCategory = "sales_team"
-	CategoryMarketingTeam       StaffCategory = "marketing_team"
-	CategoryCustomerSuccess     StaffCategory = "sales_customer_success" // Customer Success / Account Management
+	CategorySalesTeam       StaffCategory = "sales_team"
+	CategoryMarketingTeam   StaffCategory = "marketing_team"
+	CategoryCustomerSuccess StaffCategory = "sales_customer_success" // Customer Success / Account Management
 
 	// G&A (6 rows)
 	CategoryAdminManagers   StaffCategory = "admin_managers"
 	CategoryAdminAssistants StaffCategory = "admin_assistants"
 	CategoryExecutiveTeam   StaffCategory = "executive_team"
-	CategoryFinance         StaffCategory = "gna_finance"  // Finance & Accounting
-	CategoryHR              StaffCategory = "gna_hr"       // HR & People Ops
-	CategoryIT              StaffCategory = "gna_it"       // IT & Infrastructure
+	CategoryFinance         StaffCategory = "gna_finance" // Finance & Accounting
+	CategoryHR              StaffCategory = "gna_hr"      // HR & People Ops
+	CategoryIT              StaffCategory = "gna_it"      // IT & Infrastructure
 )
 
 // CategoryFunction maps each category to its parent function.
@@ -92,11 +92,11 @@ var AllCategories = []StaffCategory{
 // 8 categories × 5 years = 40 rows per scenario.
 type StaffHeadcount struct {
 	TenantScoped
-	ScenarioID   uuid.UUID     `gorm:"type:uuid;not null;uniqueIndex:uix_staff_headcounts" json:"scenarioId"`
-	Category     StaffCategory `gorm:"type:varchar(50);not null;uniqueIndex:uix_staff_headcounts" json:"category"`
-	YearIndex    int           `gorm:"column:year;not null;uniqueIndex:uix_staff_headcounts" json:"yearIndex"` // 1–5, DB column: year
+	ScenarioID   uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:uix_staff_headcounts" json:"scenarioId"`
+	Category     StaffCategory   `gorm:"type:varchar(50);not null;uniqueIndex:uix_staff_headcounts" json:"category"`
+	YearIndex    int             `gorm:"column:year;not null;uniqueIndex:uix_staff_headcounts" json:"yearIndex"` // 1–5, DB column: year
 	FTE          decimal.Decimal `gorm:"type:numeric(8,2)" json:"fte"`
-	IsOverridden bool          `gorm:"not null;default:false" json:"isOverridden"`
+	IsOverridden bool            `gorm:"not null;default:false" json:"isOverridden"`
 }
 
 // TableName specifies the table name for StaffHeadcount
@@ -109,12 +109,12 @@ func (StaffHeadcount) TableName() string {
 // 8 categories × 5 years = 40 rows per scenario.
 type StaffSalary struct {
 	TenantScoped
-	ScenarioID         uuid.UUID     `gorm:"type:uuid;not null;uniqueIndex:uix_staff_salaries" json:"scenarioId"`
-	Category           StaffCategory `gorm:"type:varchar(50);not null;uniqueIndex:uix_staff_salaries" json:"category"`
-	YearIndex          int           `gorm:"column:year;not null;uniqueIndex:uix_staff_salaries" json:"yearIndex"` // 1–5, DB column: year
+	ScenarioID         uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:uix_staff_salaries" json:"scenarioId"`
+	Category           StaffCategory   `gorm:"type:varchar(50);not null;uniqueIndex:uix_staff_salaries" json:"category"`
+	YearIndex          int             `gorm:"column:year;not null;uniqueIndex:uix_staff_salaries" json:"yearIndex"` // 1–5, DB column: year
 	MonthlyGrossSalary decimal.Decimal `gorm:"type:numeric(12,4)" json:"monthlyGrossSalary"`
 	AnnualIncreasePct  decimal.Decimal `gorm:"type:numeric(8,4)" json:"annualIncreasePct"`
-	IsOverridden       bool          `gorm:"not null;default:false" json:"isOverridden"`
+	IsOverridden       bool            `gorm:"not null;default:false" json:"isOverridden"`
 }
 
 // TableName specifies the table name for StaffSalary
@@ -220,7 +220,7 @@ type StaffCategoryPayroll struct {
 	FTE           decimal.Decimal `json:"fte"`
 	MonthlySalary decimal.Decimal `json:"monthlySalary"`
 	EmployerRate  decimal.Decimal `json:"employerRate"`
-	Months        int             `json:"months"`       // C57 or C58 for Yr1
+	Months        int             `json:"months"` // C57 or C58 for Yr1
 	FYAdjustment  decimal.Decimal `json:"fyAdjustment"`
 	AnnualPayroll decimal.Decimal `json:"annualPayroll"` // the computed result
 }

@@ -1,11 +1,11 @@
 package service
 
 import (
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
 	"ascenda/internal/event"
-	"github.com/ovander/backendkit/socrate"
 	"ascenda/internal/repo"
+	"github.com/ovander/backendkit/socrate"
+	"github.com/sirupsen/logrus"
 )
 
 // ServiceBundle contains all service instances.
@@ -15,26 +15,26 @@ type ServiceBundle struct {
 	Organization *OrganizationService
 	Registration *RegistrationService
 	MagicLink    *MagicLinkService
-	Tenant    *TenantService
-	Plan      *PlanService
-	Settings  *SettingsService
-	Product   *ProductService
-	Staff     *StaffService
-	Capex     *CapexService
-	Opex      *OpexService
-	PnL       *PnLService
-	FiPlan    *FiplanService
-	PnlCash   *PnlCashService
-	BSheet    *BSheetService
-	Ratios    *RatiosService
-	WCR       *WCRService
-	Cash      *CashService
-	Budget    *BudgetService
-	Graph     *GraphService
-	Report    *ReportService
-	Snapshot  *SnapshotService
-	User      *UserService
-	Seed      *SeedService
+	Tenant       *TenantService
+	Plan         *PlanService
+	Settings     *SettingsService
+	Product      *ProductService
+	Staff        *StaffService
+	Capex        *CapexService
+	Opex         *OpexService
+	PnL          *PnLService
+	FiPlan       *FiplanService
+	PnlCash      *PnlCashService
+	BSheet       *BSheetService
+	Ratios       *RatiosService
+	WCR          *WCRService
+	Cash         *CashService
+	Budget       *BudgetService
+	Graph        *GraphService
+	Report       *ReportService
+	Snapshot     *SnapshotService
+	User         *UserService
+	Seed         *SeedService
 
 	// AI services
 	AIUsagePolicy    *AIUsagePolicyService
@@ -143,31 +143,31 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 	seedSvc := NewSeedService(repos, countryRateSvc, logger)
 
 	bundle := &ServiceBundle{
-		Admin:             NewAdminService(repos.AdminStats, socrateClient, logger),
-		AdminUser:         NewAdminUserService(socrateClient, repos.User, repos.Tenant, logger),
-		Organization:      NewOrganizationService(repos.Org, repos.Tenant, repos.User, socrateInviter, logger),
-		Registration:      NewRegistrationService(socrateRegistrar, repos.User, repos.Tenant, seedSvc, logger),
-		MagicLink:         NewMagicLinkService(socrateMailer, repos.MagicLink, cfg.AppBaseURL, logger),
-		Tenant:            NewTenantService(repos.Tenant, logger),
-		Report:            reportService,
-		Plan:              NewPlanService(repos.Plan, repos.Settings, repos.Audit, repos, countryRateSvc, emitter, logger).WithFeaturePolicyService(featurePolicySvc),
-		Settings:          NewSettingsService(repos.Settings, emitter, logger),
-		Product:           NewProductService(repos.Product, reportService, emitter, logger),
-		Staff:             NewStaffService(repos.Staff, reportService, emitter, logger),
-		Capex:             NewCapexService(repos.Capex, reportService, emitter, logger),
-		Opex:              NewOpexService(repos.Opex, reportService, emitter, logger),
-		PnL:               NewPnLService(repos.PnL, reportService, emitter, logger),
-		FiPlan:            fiplanSvc,
-		PnlCash:           NewPnlCashService(repos.PnlCash, reportService, emitter, logger),
-		BSheet:            NewBSheetService(reportService, logger),
-		Ratios:            NewRatiosService(reportService, logger),
-		WCR:               NewWCRService(repos.WCR, reportService, emitter, logger),
-		Cash:              NewCashService(repos.Cash, reportService, emitter, logger),
-		Budget:            NewBudgetService(repos.Budget, reportService, emitter, logger),
-		Graph:             NewGraphService(reportService, logger),
-		Snapshot:          NewSnapshotService(repos.Snapshot, repos, emitter, logger),
-		User:              NewUserService(repos.User, repos.Tenant, socrateInviter, socrateProfiler, emitter, logger),
-		Seed:              seedSvc,
+		Admin:        NewAdminService(repos.AdminStats, socrateClient, logger),
+		AdminUser:    NewAdminUserService(socrateClient, repos.User, repos.Tenant, logger),
+		Organization: NewOrganizationService(repos.Org, repos.Tenant, repos.User, socrateInviter, logger),
+		Registration: NewRegistrationService(socrateRegistrar, repos.User, repos.Tenant, seedSvc, logger),
+		MagicLink:    NewMagicLinkService(socrateMailer, repos.MagicLink, cfg.AppBaseURL, logger),
+		Tenant:       NewTenantService(repos.Tenant, logger),
+		Report:       reportService,
+		Plan:         NewPlanService(repos.Plan, repos.Settings, repos.Audit, repos, countryRateSvc, emitter, logger).WithFeaturePolicyService(featurePolicySvc),
+		Settings:     NewSettingsService(repos.Settings, emitter, logger),
+		Product:      NewProductService(repos.Product, reportService, emitter, logger),
+		Staff:        NewStaffService(repos.Staff, reportService, emitter, logger),
+		Capex:        NewCapexService(repos.Capex, reportService, emitter, logger),
+		Opex:         NewOpexService(repos.Opex, reportService, emitter, logger),
+		PnL:          NewPnLService(repos.PnL, reportService, emitter, logger),
+		FiPlan:       fiplanSvc,
+		PnlCash:      NewPnlCashService(repos.PnlCash, reportService, emitter, logger),
+		BSheet:       NewBSheetService(reportService, logger),
+		Ratios:       NewRatiosService(reportService, logger),
+		WCR:          NewWCRService(repos.WCR, reportService, emitter, logger),
+		Cash:         NewCashService(repos.Cash, reportService, emitter, logger),
+		Budget:       NewBudgetService(repos.Budget, reportService, emitter, logger),
+		Graph:        NewGraphService(reportService, logger),
+		Snapshot:     NewSnapshotService(repos.Snapshot, repos, emitter, logger),
+		User:         NewUserService(repos.User, repos.Tenant, socrateInviter, socrateProfiler, emitter, logger),
+		Seed:         seedSvc,
 		// AI services
 		AIUsagePolicy:    NewAIUsagePolicyService(repos.AIUsagePolicy, repos.AIUsageRecord, logger),
 		PlanOrchestrator: orchestrator,

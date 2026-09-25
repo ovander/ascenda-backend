@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
-	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/service"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 // ProductServicer is the narrow interface the ProductHandler depends on.

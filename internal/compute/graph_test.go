@@ -3,9 +3,9 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -21,32 +21,32 @@ func minimalOutput() model.FullPlanOutput {
 
 	// PnL — 5 annual rows
 	out.PnL.Years[0] = model.PnlYear{
-		Year:             2025,
-		Sales:            dec(1000),
-		ExportSalesMemo:  dec(200),
-		COGS:             dec(300),
-		ExternalExpenses: dec(100),
-		PayrollExpenses:  dec(150),
-		Depreciation:     dec(50),
-		TaxesAndDuties:   dec(20),
+		Year:              2025,
+		Sales:             dec(1000),
+		ExportSalesMemo:   dec(200),
+		COGS:              dec(300),
+		ExternalExpenses:  dec(100),
+		PayrollExpenses:   dec(150),
+		Depreciation:      dec(50),
+		TaxesAndDuties:    dec(20),
 		OtherOperatingExp: dec(30),
-		EBITDA:           dec(400),
-		NetProfit:        dec(250),
-		CashFlow:         dec(300),
+		EBITDA:            dec(400),
+		NetProfit:         dec(250),
+		CashFlow:          dec(300),
 	}
 	out.PnL.Years[1] = model.PnlYear{
-		Year:             2026,
-		Sales:            dec(1200),
-		ExportSalesMemo:  dec(300),
-		COGS:             dec(360),
-		ExternalExpenses: dec(120),
-		PayrollExpenses:  dec(180),
-		Depreciation:     dec(60),
-		TaxesAndDuties:   dec(25),
+		Year:              2026,
+		Sales:             dec(1200),
+		ExportSalesMemo:   dec(300),
+		COGS:              dec(360),
+		ExternalExpenses:  dec(120),
+		PayrollExpenses:   dec(180),
+		Depreciation:      dec(60),
+		TaxesAndDuties:    dec(25),
 		OtherOperatingExp: dec(35),
-		EBITDA:           dec(480),
-		NetProfit:        dec(300),
-		CashFlow:         dec(360),
+		EBITDA:            dec(480),
+		NetProfit:         dec(300),
+		CashFlow:          dec(360),
 	}
 	// Years 2–4 stay at zero — enough to verify indexing does not overflow
 
@@ -71,7 +71,7 @@ func minimalOutput() model.FullPlanOutput {
 	// Cash — 3 years, 12 months each
 	for y := 0; y < 3; y++ {
 		for m := 0; m < 12; m++ {
-			out.Cash.Years[y].Revenue.Total[m] = dec(float64((y*12+m+1) * 10))
+			out.Cash.Years[y].Revenue.Total[m] = dec(float64((y*12 + m + 1) * 10))
 			out.Cash.Years[y].Operating.Total[m] = dec(float64((y*12 + m + 1) * 4))
 			out.Cash.Years[y].Tax.Total[m] = dec(float64((y*12 + m + 1) * 1))
 			out.Cash.Years[y].NetCashFlow[m] = dec(float64((y*12 + m + 1) * 5))

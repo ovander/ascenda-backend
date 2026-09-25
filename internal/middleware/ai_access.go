@@ -10,10 +10,10 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/service"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
 )
 
 // ============================================================================
@@ -104,19 +104,19 @@ func (m *AIAccessMiddleware) RequireAIAccess(feature model.AIFeatureType) func(h
 				w.WriteHeader(statusCode)
 
 				resp := AIAccessErrorResponse{
-					Error:           result.DeniedMessage,
-					Code:            string(result.DeniedReason),
-					Feature:         string(feature),
-					DailyUsed:       result.DailyUsed,
-					DailyLimit:      result.DailyLimit,
-					DailyRemaining:  quotaRemaining(result.DailyLimit, result.DailyUsed),
-					WeeklyUsed:      result.WeeklyUsed,
-					WeeklyLimit:     result.WeeklyLimit,
-					WeeklyRemaining: quotaRemaining(result.WeeklyLimit, result.WeeklyUsed),
-					MonthlyUsed:     result.MonthlyUsed,
-					MonthlyLimit:    result.MonthlyLimit,
+					Error:            result.DeniedMessage,
+					Code:             string(result.DeniedReason),
+					Feature:          string(feature),
+					DailyUsed:        result.DailyUsed,
+					DailyLimit:       result.DailyLimit,
+					DailyRemaining:   quotaRemaining(result.DailyLimit, result.DailyUsed),
+					WeeklyUsed:       result.WeeklyUsed,
+					WeeklyLimit:      result.WeeklyLimit,
+					WeeklyRemaining:  quotaRemaining(result.WeeklyLimit, result.WeeklyUsed),
+					MonthlyUsed:      result.MonthlyUsed,
+					MonthlyLimit:     result.MonthlyLimit,
 					MonthlyRemaining: quotaRemaining(result.MonthlyLimit, result.MonthlyUsed),
-					UpgradeRequired: result.DeniedReason == model.AIAccessDeniedTierNotAllowed,
+					UpgradeRequired:  result.DeniedReason == model.AIAccessDeniedTierNotAllowed,
 				}
 				if resp.UpgradeRequired {
 					resp.UpgradeURL = "/settings/subscription"

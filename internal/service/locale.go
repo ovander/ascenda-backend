@@ -19,20 +19,29 @@
 // # Translation keys
 //
 // Risk messages  : cash_gap, late_profitability_late, late_profitability_none,
-//                  no_profitability, unrealistic_growth, high_leverage_no_fcf,
-//                  high_leverage_elevated
+//
+//	no_profitability, unrealistic_growth, high_leverage_no_fcf,
+//	high_leverage_elevated
+//
 // Driver names   : driver_hiring_aggressive, driver_pricing_low,
-//                  driver_inefficient_growth, driver_strong_leverage,
-//                  driver_payroll_dominant
+//
+//	driver_inefficient_growth, driver_strong_leverage,
+//	driver_payroll_dominant
+//
 // Driver effects : effect_hiring_aggressive, effect_pricing_low,
-//                  effect_inefficient_growth, effect_strong_leverage,
-//                  effect_payroll_dominant
+//
+//	effect_inefficient_growth, effect_strong_leverage,
+//	effect_payroll_dominant
+//
 // Highlights     : hl_no_signal, hl_cash_positive, hl_ebitda_positive,
-//                  hl_weaknesses_none, hl_top_risks_none, hl_top_drivers_none
+//
+//	hl_weaknesses_none, hl_top_risks_none, hl_top_drivers_none
+//
 // Headlines      : headline_healthy, headline_strong_risk,
-//                  headline_moderate_root, headline_moderate_no_root,
-//                  headline_critical, headline_approaching,
-//                  headline_not_fundable
+//
+//	headline_moderate_root, headline_moderate_no_root,
+//	headline_critical, headline_approaching,
+//	headline_not_fundable
 package service
 
 import (

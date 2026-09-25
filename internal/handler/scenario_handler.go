@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
 )
 
 // ScenarioServicer is the narrow interface the ScenarioHandler depends on.

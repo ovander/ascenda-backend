@@ -1,9 +1,9 @@
 package repo
 
 import (
+	"ascenda/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"ascenda/internal/model"
 )
 
 // CountryRateConfigRepository defines the data-access interface.

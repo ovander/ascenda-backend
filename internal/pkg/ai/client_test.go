@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/config"
 )
 
 // ── Test server helpers ───────────────────────────────────────────────────────

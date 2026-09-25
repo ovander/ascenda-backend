@@ -4,11 +4,11 @@ import (
 	"context"
 	"net/http"
 
+	"ascenda/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
 )
 
 // GraphServicer defines the interface the GraphHandler depends on.

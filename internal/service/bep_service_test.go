@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/event"
-	"ascenda/internal/model"
 )
 
 func newTestBEPService() (*BEPService, *MockBEPRepo) {
@@ -175,7 +175,10 @@ func TestBEP_UpsertFixedCostLines_PersistsLines(t *testing.T) {
 		{SnapshotID: snap.ID, Category: model.FixedCostRent, Label: "Office Rent", AmountAnnual: decimal.NewFromInt(24000)},
 		{SnapshotID: snap.ID, Category: model.FixedCostPayroll, Label: "Staff Cost", AmountAnnual: decimal.NewFromInt(60000)},
 	}
-	for i := range lines { lines[i].TenantID = tenantID; lines[i].ID = uuid.New() }
+	for i := range lines {
+		lines[i].TenantID = tenantID
+		lines[i].ID = uuid.New()
+	}
 
 	require.NoError(t, svc.UpsertFixedCostLines(ctx, tenantID, snap.ID, lines))
 

@@ -4,15 +4,15 @@ import (
 	"errors"
 	"net/http"
 
+	"ascenda/internal/model"
+	"ascenda/internal/repo"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
 )
 
 // PlanCapTableHandler handles the simplified plan-level cap table endpoints
@@ -29,10 +29,10 @@ func NewPlanCapTableHandler(repo repo.PlanShareholderRepository, logger *logrus.
 
 // planCapTableSummary is the response shape for GET /cap-table.
 type planCapTableSummary struct {
-	PlanID        string                    `json:"planId"`
-	TotalShares   int64                     `json:"totalShares"`
-	TotalInvested decimal.Decimal           `json:"totalInvested"`
-	Shareholders  []*model.PlanShareholder  `json:"shareholders"`
+	PlanID        string                   `json:"planId"`
+	TotalShares   int64                    `json:"totalShares"`
+	TotalInvested decimal.Decimal          `json:"totalInvested"`
+	Shareholders  []*model.PlanShareholder `json:"shareholders"`
 }
 
 // GetSummary GET /plans/{planId}/cap-table

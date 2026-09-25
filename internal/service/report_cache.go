@@ -4,9 +4,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"github.com/google/uuid"
 )
 
 // ReportCache is a simple in-memory LRU cache for computed full plan reports.
@@ -14,7 +14,7 @@ import (
 type ReportCache struct {
 	mu          sync.RWMutex
 	entries     map[uuid.UUID]*cacheEntry // keyed by scenarioID
-	order       []uuid.UUID              // LRU order (oldest first)
+	order       []uuid.UUID               // LRU order (oldest first)
 	maxSize     int
 	invalidator *event.ReportInvalidator
 }

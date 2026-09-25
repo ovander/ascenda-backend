@@ -42,12 +42,12 @@ func TestDriverTypeValues(t *testing.T) {
 func TestDriverTypeFromString(t *testing.T) {
 	// All known driver types should round-trip through string conversion.
 	known := map[string]DriverType{
-		"generic":      DriverGeneric,
-		"saas":         DriverSaaS,
-		"consulting":   DriverConsulting,
-		"industry":     DriverIndustry,
-		"marketplace":  DriverMarketplace,
-		"media":        DriverMedia,
+		"generic":       DriverGeneric,
+		"saas":          DriverSaaS,
+		"consulting":    DriverConsulting,
+		"industry":      DriverIndustry,
+		"marketplace":   DriverMarketplace,
+		"media":         DriverMedia,
 		"session_based": DriverSessionBased,
 	}
 	for str, expected := range known {
@@ -382,14 +382,14 @@ func TestConsultingDeliveryY1CostPerDay(t *testing.T) {
 
 func TestSessionBasedParamsJSONRoundTrip(t *testing.T) {
 	original := SessionBasedParams{
-		Sessions:               [5]FlexInt64{100, 140, 180, 220, 260},
-		ParticipantsPerSession: [5]decimal.Decimal{d("20"), d("20"), d("22"), d("22"), d("25")},
-		FillRate:               [5]decimal.Decimal{d("0.75"), d("0.78"), d("0.80"), d("0.82"), d("0.85")},
-		PricePerParticipant:    [5]decimal.Decimal{d("150"), d("155"), d("160"), d("165"), d("170")},
-		TrainerCount:           [5]decimal.Decimal{d("3"), d("4"), d("5"), d("6"), d("6")},
-		SessionsPerTrainer:     [5]FlexInt64{40, 40, 40, 40, 45},
-		UtilizationRate:        [5]decimal.Decimal{d("0.90"), d("0.90"), d("0.90"), d("0.90"), d("0.90")},
-		TrainerCostPerSession:  [5]decimal.Decimal{d("400"), d("400"), d("420"), d("420"), d("450")},
+		Sessions:                   [5]FlexInt64{100, 140, 180, 220, 260},
+		ParticipantsPerSession:     [5]decimal.Decimal{d("20"), d("20"), d("22"), d("22"), d("25")},
+		FillRate:                   [5]decimal.Decimal{d("0.75"), d("0.78"), d("0.80"), d("0.82"), d("0.85")},
+		PricePerParticipant:        [5]decimal.Decimal{d("150"), d("155"), d("160"), d("165"), d("170")},
+		TrainerCount:               [5]decimal.Decimal{d("3"), d("4"), d("5"), d("6"), d("6")},
+		SessionsPerTrainer:         [5]FlexInt64{40, 40, 40, 40, 45},
+		UtilizationRate:            [5]decimal.Decimal{d("0.90"), d("0.90"), d("0.90"), d("0.90"), d("0.90")},
+		TrainerCostPerSession:      [5]decimal.Decimal{d("400"), d("400"), d("420"), d("420"), d("450")},
 		VariableCostPerParticipant: [5]decimal.Decimal{d("15"), d("15"), d("14"), d("14"), d("13")},
 	}
 
@@ -432,8 +432,8 @@ func TestSessionBasedUnitEconomicsFormula(t *testing.T) {
 	trainerCostPerSession := d("400")
 	variableCostPerParticipant := d("15")
 
-	realized := participantsPerSession.Mul(fillRate) // 15
-	unitPrice := realized.Mul(pricePerParticipant)   // 2 250
+	realized := participantsPerSession.Mul(fillRate)                                // 15
+	unitPrice := realized.Mul(pricePerParticipant)                                  // 2 250
 	unitCost := trainerCostPerSession.Add(variableCostPerParticipant.Mul(realized)) // 625
 
 	assert.True(t, realized.Equal(d("15")), "realized participants: got %s", realized)
@@ -495,14 +495,14 @@ func TestSessionBasedCapacityNotClamped(t *testing.T) {
 // stores and retrieves SessionBasedParams correctly through json.RawMessage.
 func TestSessionBasedProductRoundTrip(t *testing.T) {
 	params := SessionBasedParams{
-		Sessions:               [5]FlexInt64{80, 100, 120, 140, 160},
-		ParticipantsPerSession: [5]decimal.Decimal{d("15"), d("15"), d("18"), d("18"), d("20")},
-		FillRate:               [5]decimal.Decimal{d("0.80"), d("0.82"), d("0.83"), d("0.85"), d("0.87")},
-		PricePerParticipant:    [5]decimal.Decimal{d("200"), d("200"), d("210"), d("210"), d("220")},
-		TrainerCount:           [5]decimal.Decimal{d("2"), d("2"), d("3"), d("3"), d("4")},
-		SessionsPerTrainer:     [5]FlexInt64{50, 50, 50, 50, 50},
-		UtilizationRate:        [5]decimal.Decimal{d("0.85"), d("0.85"), d("0.85"), d("0.87"), d("0.87")},
-		TrainerCostPerSession:  [5]decimal.Decimal{d("350"), d("350"), d("370"), d("370"), d("390")},
+		Sessions:                   [5]FlexInt64{80, 100, 120, 140, 160},
+		ParticipantsPerSession:     [5]decimal.Decimal{d("15"), d("15"), d("18"), d("18"), d("20")},
+		FillRate:                   [5]decimal.Decimal{d("0.80"), d("0.82"), d("0.83"), d("0.85"), d("0.87")},
+		PricePerParticipant:        [5]decimal.Decimal{d("200"), d("200"), d("210"), d("210"), d("220")},
+		TrainerCount:               [5]decimal.Decimal{d("2"), d("2"), d("3"), d("3"), d("4")},
+		SessionsPerTrainer:         [5]FlexInt64{50, 50, 50, 50, 50},
+		UtilizationRate:            [5]decimal.Decimal{d("0.85"), d("0.85"), d("0.85"), d("0.87"), d("0.87")},
+		TrainerCostPerSession:      [5]decimal.Decimal{d("350"), d("350"), d("370"), d("370"), d("390")},
 		VariableCostPerParticipant: [5]decimal.Decimal{d("10"), d("10"), d("10"), d("9"), d("9")},
 	}
 

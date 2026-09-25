@@ -4,13 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/event"
-	"ascenda/internal/model"
 )
 
 func newTestFiplanService() (*FiplanService, *MockFiplanRepo) {

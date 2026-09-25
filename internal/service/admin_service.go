@@ -6,8 +6,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // ─── DTO types ────────────────────────────────────────────────────────────────
@@ -65,13 +65,13 @@ type TopUserItem struct {
 
 // AdminAIUsageStats is the full response payload for GET /api/v1/admin/ai-usage.
 type AdminAIUsageStats struct {
-	PeriodStart string                  `json:"periodStart"`
-	PeriodEnd   string                  `json:"periodEnd"`
-	CallsToday  int64                   `json:"callsToday"`
-	CallsWeek   int64                   `json:"callsWeek"`
-	CallsMonth  int64                   `json:"callsMonth"`
-	ByFeature   []AIUsageFeatureItem    `json:"byFeature"`
-	ByTenant    []AIUsageTenantItem     `json:"byTenant"`
+	PeriodStart string               `json:"periodStart"`
+	PeriodEnd   string               `json:"periodEnd"`
+	CallsToday  int64                `json:"callsToday"`
+	CallsWeek   int64                `json:"callsWeek"`
+	CallsMonth  int64                `json:"callsMonth"`
+	ByFeature   []AIUsageFeatureItem `json:"byFeature"`
+	ByTenant    []AIUsageTenantItem  `json:"byTenant"`
 }
 
 // AIUsageFeatureItem is one row in the per-feature breakdown.

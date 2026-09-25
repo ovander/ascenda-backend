@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"testing"
 
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/repo"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-	"ascenda/internal/event"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
 )
 
 // ── Test fixtures & mocks ──────────────────────────────────────────────────────
@@ -149,22 +149,26 @@ func (r *inMemSettingsRepo) BatchUpsertMultiYearAdjustments(tenantID, scenarioID
 // mockAuditRepo is a minimal in-memory implementation of AuditRepository.
 type mockAuditRepo struct{}
 
-func (r *mockAuditRepo) Create(auditLog *model.AuditLog) error                                            { return nil }
+func (r *mockAuditRepo) Create(auditLog *model.AuditLog) error { return nil }
 func (r *mockAuditRepo) ListByEntity(tenantID uuid.UUID, entityType string, entityID uuid.UUID) ([]*model.AuditLog, error) {
 	return nil, nil
 }
 func (r *mockAuditRepo) ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
 	return nil, nil
 }
-func (r *mockAuditRepo) CountByTenant(tenantID uuid.UUID) (int64, error)                             { return 0, nil }
-func (r *mockAuditRepo) GetByID(tenantID, entryID uuid.UUID) (*model.AuditLog, error)               { return nil, nil }
+func (r *mockAuditRepo) CountByTenant(tenantID uuid.UUID) (int64, error) { return 0, nil }
+func (r *mockAuditRepo) GetByID(tenantID, entryID uuid.UUID) (*model.AuditLog, error) {
+	return nil, nil
+}
 func (r *mockAuditRepo) ListByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
 	return nil, nil
 }
 func (r *mockAuditRepo) CountByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID) (int64, error) {
 	return 0, nil
 }
-func (r *mockAuditRepo) ListByEntityID(tenantID, entityID uuid.UUID) ([]*model.AuditLog, error)     { return nil, nil }
+func (r *mockAuditRepo) ListByEntityID(tenantID, entityID uuid.UUID) ([]*model.AuditLog, error) {
+	return nil, nil
+}
 func (r *mockAuditRepo) ListByUser(tenantID, userID uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
 	return nil, nil
 }
@@ -176,17 +180,17 @@ type mockPlanDeps struct {
 }
 
 func (m *mockPlanDeps) GetScenario() repo.ScenarioRepository { return m.scenarioRepo }
-func (m *mockPlanDeps) GetProduct() repo.ProductRepository  { return nil }
-func (m *mockPlanDeps) GetStaff() repo.StaffRepository      { return nil }
-func (m *mockPlanDeps) GetCapex() repo.CapexRepository      { return nil }
-func (m *mockPlanDeps) GetOpex() repo.OpexRepository        { return nil }
-func (m *mockPlanDeps) GetPnL() repo.PnLRepository          { return nil }
-func (m *mockPlanDeps) GetFiPlan() repo.FiplanRepository    { return nil }
-func (m *mockPlanDeps) GetPnlCash() repo.PnlCashRepository  { return nil }
-func (m *mockPlanDeps) GetWCR() repo.WCRRepository          { return nil }
-func (m *mockPlanDeps) GetCash() repo.CashRepository        { return nil }
-func (m *mockPlanDeps) GetBudget() repo.BudgetRepository    { return nil }
-func (m *mockPlanDeps) GetDB() *gorm.DB                     { return m.db }
+func (m *mockPlanDeps) GetProduct() repo.ProductRepository   { return nil }
+func (m *mockPlanDeps) GetStaff() repo.StaffRepository       { return nil }
+func (m *mockPlanDeps) GetCapex() repo.CapexRepository       { return nil }
+func (m *mockPlanDeps) GetOpex() repo.OpexRepository         { return nil }
+func (m *mockPlanDeps) GetPnL() repo.PnLRepository           { return nil }
+func (m *mockPlanDeps) GetFiPlan() repo.FiplanRepository     { return nil }
+func (m *mockPlanDeps) GetPnlCash() repo.PnlCashRepository   { return nil }
+func (m *mockPlanDeps) GetWCR() repo.WCRRepository           { return nil }
+func (m *mockPlanDeps) GetCash() repo.CashRepository         { return nil }
+func (m *mockPlanDeps) GetBudget() repo.BudgetRepository     { return nil }
+func (m *mockPlanDeps) GetDB() *gorm.DB                      { return m.db }
 
 // newTestPlanService creates a PlanService for testing.
 func newTestPlanService(planRepo repo.PlanRepository, settingsRepo repo.SettingsRepository, deps repo.PlanDeps) *PlanService {

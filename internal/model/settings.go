@@ -10,32 +10,32 @@ import (
 // PlanConfig stores plan-level configuration settings
 type PlanConfig struct {
 	TenantScoped
-	ScenarioID              uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
+	ScenarioID uuid.UUID `gorm:"type:uuid;not null;index" json:"scenarioId"`
 	// §1: General Configuration
-	Language                string          `gorm:"type:varchar(10);default:'fr'" json:"language"`
-	CompanyName             string          `gorm:"type:varchar(255)" json:"companyName"`
-	ForecastStart           time.Time       `gorm:"not null" json:"forecastStart"`
+	Language      string    `gorm:"type:varchar(10);default:'fr'" json:"language"`
+	CompanyName   string    `gorm:"type:varchar(255)" json:"companyName"`
+	ForecastStart time.Time `gorm:"not null" json:"forecastStart"`
 	// §5: Key Rates & Parameters
-	PreviousStaff           int             `gorm:"not null;default:0" json:"previousStaff"`
-	PriorYearTurnover       decimal.Decimal `gorm:"type:numeric(15,2)" json:"priorYearTurnover"`
-	AvgDistributorDiscount  decimal.Decimal `gorm:"type:numeric(5,4)" json:"avgDistributorDiscount"`
-	MLTInterestRate         decimal.Decimal `gorm:"type:numeric(5,4)" json:"mltInterestRate"`
-	DiscountedSalesPct      decimal.Decimal `gorm:"type:numeric(5,4)" json:"discountedSalesPct"`
-	BillsDiscountRate       decimal.Decimal `gorm:"type:numeric(5,4)" json:"billsDiscountRate"`
-	AvgBillTermMonths       int             `gorm:"not null;default:3" json:"avgBillTermMonths"`
-	VATRate                 decimal.Decimal `gorm:"type:numeric(5,4)" json:"vatRate"`
-	CorporateTaxRate        decimal.Decimal `gorm:"type:numeric(5,4)" json:"corporateTaxRate"`
-	TaxesAndDutiesRate      decimal.Decimal `gorm:"type:numeric(5,4)" json:"taxesAndDutiesRate"`
-	InterestOnPositiveCash  decimal.Decimal `gorm:"type:numeric(5,4)" json:"interestOnPositiveCash"`
-	MLTLoanTermYears        int             `gorm:"not null;default:5" json:"mltLoanTermYears"`
-	CurrencySymbol          string          `gorm:"type:varchar(10);default:'€'" json:"currencySymbol"`
+	PreviousStaff          int             `gorm:"not null;default:0" json:"previousStaff"`
+	PriorYearTurnover      decimal.Decimal `gorm:"type:numeric(15,2)" json:"priorYearTurnover"`
+	AvgDistributorDiscount decimal.Decimal `gorm:"type:numeric(5,4)" json:"avgDistributorDiscount"`
+	MLTInterestRate        decimal.Decimal `gorm:"type:numeric(5,4)" json:"mltInterestRate"`
+	DiscountedSalesPct     decimal.Decimal `gorm:"type:numeric(5,4)" json:"discountedSalesPct"`
+	BillsDiscountRate      decimal.Decimal `gorm:"type:numeric(5,4)" json:"billsDiscountRate"`
+	AvgBillTermMonths      int             `gorm:"not null;default:3" json:"avgBillTermMonths"`
+	VATRate                decimal.Decimal `gorm:"type:numeric(5,4)" json:"vatRate"`
+	CorporateTaxRate       decimal.Decimal `gorm:"type:numeric(5,4)" json:"corporateTaxRate"`
+	TaxesAndDutiesRate     decimal.Decimal `gorm:"type:numeric(5,4)" json:"taxesAndDutiesRate"`
+	InterestOnPositiveCash decimal.Decimal `gorm:"type:numeric(5,4)" json:"interestOnPositiveCash"`
+	MLTLoanTermYears       int             `gorm:"not null;default:5" json:"mltLoanTermYears"`
+	CurrencySymbol         string          `gorm:"type:varchar(10);default:'€'" json:"currencySymbol"`
 	// §7: Payroll & Fiscal Year
-	SalaryMonthsPerYear     int             `gorm:"not null;default:12" json:"salaryMonthsPerYear"`
-	EmployerTaxRate         decimal.Decimal `gorm:"type:numeric(5,4)" json:"employerTaxRate"`
-	FirstFiscalYearMonths   int             `gorm:"not null;default:12" json:"firstFiscalYearMonths"`
-	DiscountRate            decimal.Decimal `gorm:"type:numeric(5,4)" json:"discountRate"`
-	IncentiveCap            decimal.Decimal `gorm:"type:numeric(5,4)" json:"incentiveCap"`
-	Country                 string          `gorm:"type:varchar(50);default:'BE'" json:"country"`
+	SalaryMonthsPerYear   int             `gorm:"not null;default:12" json:"salaryMonthsPerYear"`
+	EmployerTaxRate       decimal.Decimal `gorm:"type:numeric(5,4)" json:"employerTaxRate"`
+	FirstFiscalYearMonths int             `gorm:"not null;default:12" json:"firstFiscalYearMonths"`
+	DiscountRate          decimal.Decimal `gorm:"type:numeric(5,4)" json:"discountRate"`
+	IncentiveCap          decimal.Decimal `gorm:"type:numeric(5,4)" json:"incentiveCap"`
+	Country               string          `gorm:"type:varchar(50);default:'BE'" json:"country"`
 }
 
 // TableName specifies the table name for PlanConfig
@@ -46,18 +46,18 @@ func (PlanConfig) TableName() string {
 // OpeningBalance stores the opening balance sheet for a scenario
 type OpeningBalance struct {
 	TenantScoped
-	ScenarioID          uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
+	ScenarioID uuid.UUID `gorm:"type:uuid;not null;index" json:"scenarioId"`
 	// Assets
 	NoncurrentAssets    decimal.Decimal `gorm:"type:numeric(15,2)" json:"noncurrentAssets"`
 	Inventories         decimal.Decimal `gorm:"type:numeric(15,2)" json:"inventories"`
 	CustomerReceivables decimal.Decimal `gorm:"type:numeric(15,2)" json:"customerReceivables"`
 	CashAndSecurities   decimal.Decimal `gorm:"type:numeric(15,2)" json:"cashAndSecurities"`
 	// Liabilities
-	ShareCapital        decimal.Decimal `gorm:"type:numeric(15,2)" json:"shareCapital"`
-	RetainedEarnings    decimal.Decimal `gorm:"type:numeric(15,2)" json:"retainedEarnings"`
-	LoansAndDebt        decimal.Decimal `gorm:"type:numeric(15,2)" json:"loansAndDebt"`
-	SupplierPayables    decimal.Decimal `gorm:"type:numeric(15,2)" json:"supplierPayables"`
-	SocialAndTaxDebts   decimal.Decimal `gorm:"type:numeric(15,2)" json:"socialAndTaxDebts"`
+	ShareCapital      decimal.Decimal `gorm:"type:numeric(15,2)" json:"shareCapital"`
+	RetainedEarnings  decimal.Decimal `gorm:"type:numeric(15,2)" json:"retainedEarnings"`
+	LoansAndDebt      decimal.Decimal `gorm:"type:numeric(15,2)" json:"loansAndDebt"`
+	SupplierPayables  decimal.Decimal `gorm:"type:numeric(15,2)" json:"supplierPayables"`
+	SocialAndTaxDebts decimal.Decimal `gorm:"type:numeric(15,2)" json:"socialAndTaxDebts"`
 }
 
 // TableName specifies the table name for OpeningBalance
@@ -68,7 +68,7 @@ func (OpeningBalance) TableName() string {
 // WorkingCapitalConfig stores working capital assumptions for a scenario
 type WorkingCapitalConfig struct {
 	TenantScoped
-	ScenarioID        uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
+	ScenarioID uuid.UUID `gorm:"type:uuid;not null;index" json:"scenarioId"`
 	// Customer payment distribution (must sum to ≤100%)
 	CustomerPct0Days  decimal.Decimal `gorm:"type:numeric(5,4)" json:"customerPct0Days"`
 	CustomerPct30Days decimal.Decimal `gorm:"type:numeric(5,4)" json:"customerPct30Days"`
@@ -96,15 +96,15 @@ func (WorkingCapitalConfig) TableName() string {
 // One row per scenario.
 type OpexPerHire struct {
 	TenantScoped
-	ScenarioID              uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	PropertyRentals         decimal.Decimal `gorm:"type:numeric(12,4)" json:"propertyRentals"`          // D64 k, 1st year base
-	PostageTelecom          decimal.Decimal `gorm:"type:numeric(12,4)" json:"postageTelecom"`           // D65 k/person/year
-	SuppliesPurchases       decimal.Decimal `gorm:"type:numeric(12,4)" json:"suppliesPurchases"`        // D66 k/person/year
-	StudiesDocumentation    decimal.Decimal `gorm:"type:numeric(12,4)" json:"studiesDocumentation"`     // D67 k/person/year
-	InsuranceCostsPctSales  decimal.Decimal `gorm:"type:numeric(5,4)" json:"insuranceCostsPctSales"`    // D68 % of sales
-	RoyaltyPaymentsPctSales decimal.Decimal `gorm:"type:numeric(5,4)" json:"royaltyPaymentsPctSales"`   // J65 % of sales
-	TravelTransportation    decimal.Decimal `gorm:"type:numeric(12,4)" json:"travelTransportation"`     // J66 k/person/year
-	MissionRepresentation   decimal.Decimal `gorm:"type:numeric(12,4)" json:"missionRepresentation"`    // J67 k/person/year
+	ScenarioID                uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
+	PropertyRentals           decimal.Decimal `gorm:"type:numeric(12,4)" json:"propertyRentals"`          // D64 k, 1st year base
+	PostageTelecom            decimal.Decimal `gorm:"type:numeric(12,4)" json:"postageTelecom"`           // D65 k/person/year
+	SuppliesPurchases         decimal.Decimal `gorm:"type:numeric(12,4)" json:"suppliesPurchases"`        // D66 k/person/year
+	StudiesDocumentation      decimal.Decimal `gorm:"type:numeric(12,4)" json:"studiesDocumentation"`     // D67 k/person/year
+	InsuranceCostsPctSales    decimal.Decimal `gorm:"type:numeric(5,4)" json:"insuranceCostsPctSales"`    // D68 % of sales
+	RoyaltyPaymentsPctSales   decimal.Decimal `gorm:"type:numeric(5,4)" json:"royaltyPaymentsPctSales"`   // J65 % of sales
+	TravelTransportation      decimal.Decimal `gorm:"type:numeric(12,4)" json:"travelTransportation"`     // J66 k/person/year
+	MissionRepresentation     decimal.Decimal `gorm:"type:numeric(12,4)" json:"missionRepresentation"`    // J67 k/person/year
 	RecruitTrainingPctPayroll decimal.Decimal `gorm:"type:numeric(5,4)" json:"recruitTrainingPctPayroll"` // J68 % of payroll
 }
 
@@ -132,7 +132,7 @@ func (CapexPerHire) TableName() string {
 type MultiYearAdjustment struct {
 	TenantScoped
 	ScenarioID           uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	YearIndex            int             `gorm:"not null" json:"yearIndex"` // 1–5
+	YearIndex            int             `gorm:"not null" json:"yearIndex"`                      // 1–5
 	PreviousDepreciation decimal.Decimal `gorm:"type:numeric(15,2)" json:"previousDepreciation"` // D55:H55 k
 	PotentialTaxCredits  decimal.Decimal `gorm:"type:numeric(15,2)" json:"potentialTaxCredits"`  // D56:H56 k
 }

@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/repo"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/sirupsen/logrus"
 )
 
 // FeaturePolicyService manages feature-to-tier access rules.
@@ -66,8 +66,8 @@ func (s *FeaturePolicyService) UpdatePolicy(req UpdateFeaturePolicyRequest) (*mo
 		return nil, apierror.BadRequest(err.Error())
 	}
 
-	existing.Freemium   = req.Freemium
-	existing.Pro        = req.Pro
+	existing.Freemium = req.Freemium
+	existing.Pro = req.Pro
 	existing.Enterprise = req.Enterprise
 
 	if err := s.repo.Upsert(existing); err != nil {
@@ -76,7 +76,7 @@ func (s *FeaturePolicyService) UpdatePolicy(req UpdateFeaturePolicyRequest) (*mo
 
 	s.bust() // invalidate cache so the change takes effect immediately
 	s.logger.WithFields(logrus.Fields{
-		"feature":  req.Feature,
+		"feature": req.Feature,
 	}).Info("feature policy updated")
 
 	return existing, nil

@@ -3,11 +3,11 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -384,9 +384,9 @@ func TestComputeValuation_ModeA_ZeroHorizon_NoResult(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestComputeValuation_ModeB_InvestmentToTerminal(t *testing.T) {
-	inv := decimal.NewFromFloat(100.0)    // 100 k
-	yield := decimal.NewFromFloat(10.0)   // 10 % per year
-	horizon := decimal.NewFromFloat(5.0)  // 5 years
+	inv := decimal.NewFromFloat(100.0)   // 100 k
+	yield := decimal.NewFromFloat(10.0)  // 10 % per year
+	horizon := decimal.NewFromFloat(5.0) // 5 years
 
 	vs := model.ValuationScenario{
 		CalcType:       model.ValScenInvestmentToTerminal,
@@ -462,8 +462,8 @@ func TestComputeValuation_ModeD_NewMoneyToPremoney(t *testing.T) {
 	pct := decimal.NewFromFloat(20.0)       // 20 % post-money
 
 	vs := model.ValuationScenario{
-		CalcType:        model.ValScenNewMoneyToPremoney,
-		NewMoneyK:       &newMoney,
+		CalcType:         model.ValScenNewMoneyToPremoney,
+		NewMoneyK:        &newMoney,
 		FinalInvestorPct: &pct,
 	}
 
@@ -534,8 +534,8 @@ func TestComputeStockOptions_PlanSummary(t *testing.T) {
 	assert.Equal(t, int64(600), summary.Attributed)
 	assert.Equal(t, int64(100), summary.Exercised)
 	assert.Equal(t, int64(50), summary.Cancelled)
-	assert.Equal(t, int64(400), summary.Reserve)        // 1000 - 600
-	assert.Equal(t, int64(450), summary.Outstanding)    // 600 - 100 - 50
+	assert.Equal(t, int64(400), summary.Reserve)     // 1000 - 600
+	assert.Equal(t, int64(450), summary.Outstanding) // 600 - 100 - 50
 
 	// Pool gauge
 	require.Len(t, report.Charts.PoolUtilisationGauge, 1)

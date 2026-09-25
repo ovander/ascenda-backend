@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/event"
-	"ascenda/internal/model"
 )
 
 // ── Mock implementations ──────────────────────────────────────────
@@ -122,8 +122,8 @@ func (m *MockTenantRepoForUsers) GetBySlug(slug string) (*model.Tenant, error) {
 func (m *MockTenantRepoForUsers) ListActive(offset, limit int) ([]*model.Tenant, error) {
 	return nil, nil
 }
-func (m *MockTenantRepoForUsers) Update(t *model.Tenant) error  { return nil }
-func (m *MockTenantRepoForUsers) Delete(id uuid.UUID) error     { return nil }
+func (m *MockTenantRepoForUsers) Update(t *model.Tenant) error { return nil }
+func (m *MockTenantRepoForUsers) Delete(id uuid.UUID) error    { return nil }
 
 func newTestUserService() (*UserService, *MockUserRepo, *MockTenantRepoForUsers) {
 	userRepo := NewMockUserRepo()
