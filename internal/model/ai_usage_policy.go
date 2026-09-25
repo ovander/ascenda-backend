@@ -228,7 +228,7 @@ type AIUsagePolicy struct {
 
 	// Priority and cost management
 	Priority       int     `json:"priority" gorm:"default:0"`
-	CostMultiplier float64 `json:"cost_multiplier" gorm:"default:1.0"`
+	CostMultiplier float64 `json:"cost_multiplier" gorm:"default:1"`
 }
 
 // TableName specifies the table name for GORM.

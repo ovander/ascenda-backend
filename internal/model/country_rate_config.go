@@ -14,14 +14,14 @@ import (
 // There is no tenant scope — these are platform-wide defaults.
 type CountryRateConfig struct {
 	CountryCode      string          `gorm:"primaryKey;type:varchar(2)"         json:"countryCode"`
-	CountryName      string          `gorm:"type:varchar(100);not null"         json:"countryName"`
-	CorporateTaxRate decimal.Decimal `gorm:"type:numeric(6,4);not null"         json:"corporateTaxRate"`
-	VATRate          decimal.Decimal `gorm:"type:numeric(6,4);not null"         json:"vatRate"`
-	EmployerTaxRate  decimal.Decimal `gorm:"type:numeric(6,4);not null"         json:"employerTaxRate"`
-	MLTInterestRate  decimal.Decimal `gorm:"type:numeric(6,4);not null"         json:"mltInterestRate"`
-	Language         string          `gorm:"type:varchar(10);not null"          json:"language"`
-	CurrencySymbol   string          `gorm:"type:varchar(10);not null"          json:"currencySymbol"`
-	UpdatedAt        time.Time       `gorm:"autoUpdateTime"                     json:"updatedAt"`
+	CountryName      string          `gorm:"type:varchar(100);not null;default:''"  json:"countryName"`
+	CorporateTaxRate decimal.Decimal `gorm:"type:numeric(6,4);not null;default:0"  json:"corporateTaxRate"`
+	VATRate          decimal.Decimal `gorm:"type:numeric(6,4);not null;default:0"  json:"vatRate"`
+	EmployerTaxRate  decimal.Decimal `gorm:"type:numeric(6,4);not null;default:0"  json:"employerTaxRate"`
+	MLTInterestRate  decimal.Decimal `gorm:"type:numeric(6,4);not null;default:0"  json:"mltInterestRate"`
+	Language         string          `gorm:"type:varchar(10);not null;default:'en'" json:"language"`
+	CurrencySymbol   string          `gorm:"type:varchar(10);not null;default:'€'"  json:"currencySymbol"`
+	UpdatedAt        time.Time       `gorm:"autoUpdateTime;not null;default:now()" json:"updatedAt"`
 }
 
 func (CountryRateConfig) TableName() string { return "country_rate_configs" }

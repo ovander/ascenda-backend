@@ -26,8 +26,8 @@ type WCREntry struct {
 	TenantScoped
 	ScenarioID uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
 	LineID     WCRLineID       `gorm:"type:varchar(100);not null" json:"lineId"`
-	YearIndex  int             `gorm:"not null" json:"yearIndex"`
-	Amount     decimal.Decimal `gorm:"type:numeric(15,2)" json:"amount"`
+	YearIndex  int             `gorm:"type:integer;not null" json:"yearIndex"`
+	Amount     decimal.Decimal `gorm:"type:numeric(15,2);not null;default:0" json:"amount"`
 }
 
 func (WCREntry) TableName() string {
