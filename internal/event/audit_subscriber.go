@@ -2,6 +2,10 @@ package event
 
 import (
 	"encoding/json"
+	"errors"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"ascenda/internal/model"
 	"ascenda/internal/repo"
@@ -9,20 +13,32 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// auditWriteAttempts is how many times an audit entry is written before it is
+// counted as lost; the delay before attempt n+1 is n × auditRetryDelay.
+const (
+	auditWriteAttempts = 3
+	auditRetryDelay    = 100 * time.Millisecond
+)
+
 // AuditSubscriber writes audit log entries to the database for every domain event.
 type AuditSubscriber struct {
-	auditRepo repo.AuditRepository
-	logger    *logrus.Entry
+	auditRepo  repo.AuditRepository
+	logger     *logrus.Entry
+	retryDelay time.Duration
 }
 
 // NewAuditSubscriber creates an AuditSubscriber and returns its handler function
 // ready to be passed to Emitter.Subscribe.
 func NewAuditSubscriber(auditRepo repo.AuditRepository, logger *logrus.Entry) Subscriber {
-	s := &AuditSubscriber{
-		auditRepo: auditRepo,
-		logger:    logger.WithField("component", "audit_subscriber"),
+	return newAuditSubscriber(auditRepo, logger, auditRetryDelay).Handle
+}
+
+func newAuditSubscriber(auditRepo repo.AuditRepository, logger *logrus.Entry, retryDelay time.Duration) *AuditSubscriber {
+	return &AuditSubscriber{
+		auditRepo:  auditRepo,
+		logger:     logger.WithField("component", "audit_subscriber"),
+		retryDelay: retryDelay,
 	}
-	return s.Handle
 }
 
 // Handle processes an event by persisting an audit log entry.
@@ -56,12 +72,38 @@ func (s *AuditSubscriber) Handle(evt Event) {
 		Changes:    changes,
 	}
 
-	if err := s.auditRepo.Create(entry); err != nil {
-		s.logger.WithError(err).
-			WithField("entity_type", evt.EntityType).
-			WithField("action", evt.Action).
-			Error("failed to write audit log")
+	// Transient database errors (failover, pool exhaustion) are retried with
+	// a short linear backoff. The entry keeps its ID across attempts, so a
+	// retry after an ambiguous failure (committed, but the reply was lost)
+	// hits the primary key instead of creating a second row, and that
+	// duplicate means the first attempt did land.
+	var err error
+	for attempt := 1; attempt <= auditWriteAttempts; attempt++ {
+		err = s.auditRepo.Create(entry)
+		if err == nil || (attempt > 1 && isUniqueViolation(err)) {
+			return
+		}
+		if attempt < auditWriteAttempts {
+			time.Sleep(time.Duration(attempt) * s.retryDelay)
+		}
 	}
+
+	auditWriteFailuresTotal.Inc()
+	s.logger.WithError(err).WithFields(logrus.Fields{
+		"audit_id":    entry.ID,
+		"tenant_id":   entry.TenantID,
+		"user_id":     entry.UserID,
+		"entity_type": entry.EntityType,
+		"entity_id":   entry.EntityID,
+		"action":      entry.Action,
+		"attempts":    auditWriteAttempts,
+	}).Error("audit log entry lost: write failed after all attempts")
+}
+
+// isUniqueViolation reports whether err is PostgreSQL's unique_violation.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // injectEntityID merges {"_entityId": id} into an existing JSON object.

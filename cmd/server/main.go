@@ -114,9 +114,10 @@ func main() {
 	//
 	// Must happen AFTER the HTTP server stops so that no new events are
 	// published (by request handlers) while we are flushing the queue.
-	// emitter.Close() closes the async channel and calls wg.Wait(), which
-	// blocks until all async subscribers (audit logger, cache invalidator)
-	// have processed their pending events.
+	// emitter.Close() closes the async queue and blocks until the workers
+	// have delivered every queued event to the async subscribers (the audit
+	// logger). Anything published after this point (a straggling background
+	// goroutine) is delivered in the publisher's goroutine, never dropped.
 	if resources.Emitter != nil {
 		shutLog.Info("draining event emitter (flushing audit log and cache invalidation)")
 		resources.Emitter.Close()

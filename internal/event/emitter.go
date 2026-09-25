@@ -12,14 +12,19 @@ type Subscriber func(Event)
 // Emitter is an in-process event bus that dispatches domain events to
 // registered subscribers. Sync subscribers run in the calling goroutine;
 // async subscribers are dispatched to a background worker pool.
+//
+// Delivery to async subscribers is guaranteed for every published event: when
+// the queue is full, or once the emitter is closed, Publish runs the async
+// subscribers itself instead of dropping the event. A burst therefore slows
+// the publishers down (backpressure) rather than losing audit entries.
 type Emitter struct {
 	mu        sync.RWMutex
 	syncSubs  []Subscriber
 	asyncSubs []Subscriber
 	asyncCh   chan Event
+	closed    bool // guarded by mu; set once by Close
 	logger    *logrus.Entry
 	wg        sync.WaitGroup
-	closed    chan struct{}
 }
 
 // NewEmitter creates a new Emitter with a buffered async channel.
@@ -36,7 +41,6 @@ func NewEmitter(logger *logrus.Entry, opts ...EmitterOption) *Emitter {
 	e := &Emitter{
 		asyncCh: make(chan Event, cfg.bufferSize),
 		logger:  logger.WithField("component", "event_emitter"),
-		closed:  make(chan struct{}),
 	}
 
 	// Start async worker goroutines
@@ -81,72 +85,90 @@ func (e *Emitter) SubscribeAsync(sub Subscriber) {
 	e.asyncSubs = append(e.asyncSubs, sub)
 }
 
-// Publish dispatches an event to all sync subscribers immediately, then
-// enqueues it for async subscribers. A panic in one sync subscriber is
-// recovered so that remaining subscribers still run.
+// Publish dispatches an event to all sync subscribers immediately, then hands
+// it to the async subscribers: through the worker queue when there is room,
+// otherwise in the calling goroutine (queue full, or emitter closed). No event
+// is ever dropped. A panic in one subscriber is recovered so that the
+// remaining subscribers still run.
 func (e *Emitter) Publish(evt Event) {
 	e.mu.RLock()
-	syncSubs := make([]Subscriber, len(e.syncSubs))
-	copy(syncSubs, e.syncSubs)
-	hasAsync := len(e.asyncSubs) > 0
+	syncSubs := append([]Subscriber(nil), e.syncSubs...)
 	e.mu.RUnlock()
 
-	// Dispatch sync subscribers inline
-	for _, sub := range syncSubs {
+	e.dispatch(syncSubs, evt, "sync")
+
+	// The read lock is held across the non-blocking send so that Close cannot
+	// close the channel between the closed check and the send.
+	e.mu.RLock()
+	asyncSubs := append([]Subscriber(nil), e.asyncSubs...)
+	reason := ""
+	if len(asyncSubs) > 0 {
+		if e.closed {
+			reason = "closed"
+		} else {
+			select {
+			case e.asyncCh <- evt:
+			default:
+				reason = "queue_full"
+			}
+		}
+	}
+	e.mu.RUnlock()
+
+	if reason != "" {
+		inlineDispatchTotal.WithLabelValues(reason).Inc()
+		e.logger.WithFields(logrus.Fields{
+			"reason":      reason,
+			"event_type":  evt.Type,
+			"entity_type": evt.EntityType,
+		}).Warn("async event queue unavailable, delivering event in the publishing goroutine")
+		e.dispatch(asyncSubs, evt, "async")
+	}
+}
+
+// dispatch runs every subscriber on evt, recovering panics individually.
+func (e *Emitter) dispatch(subs []Subscriber, evt Event, mode string) {
+	for _, sub := range subs {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					e.logger.WithField("panic", r).Error("sync subscriber panicked while handling event")
+					subscriberPanicsTotal.WithLabelValues(mode).Inc()
+					e.logger.WithFields(logrus.Fields{
+						"panic":      r,
+						"mode":       mode,
+						"event_type": evt.Type,
+					}).Error("event subscriber panicked while handling event")
 				}
 			}()
 			sub(evt)
 		}()
 	}
-
-	// Enqueue for async subscribers (non-blocking drop if channel full)
-	if hasAsync {
-		select {
-		case e.asyncCh <- evt:
-		default:
-			e.logger.Warn("async event channel full, dropping event")
-		}
-	}
 }
 
-// asyncWorker reads events from the async channel and dispatches to all async subscribers.
+// asyncWorker delivers queued events to the async subscribers until the queue
+// is closed and drained.
 func (e *Emitter) asyncWorker() {
 	defer e.wg.Done()
-	for {
-		select {
-		case evt, ok := <-e.asyncCh:
-			if !ok {
-				return
-			}
-			e.mu.RLock()
-			subs := make([]Subscriber, len(e.asyncSubs))
-			copy(subs, e.asyncSubs)
-			e.mu.RUnlock()
-
-			for _, sub := range subs {
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							e.logger.WithField("panic", r).Error("async subscriber panicked while handling event")
-						}
-					}()
-					sub(evt)
-				}()
-			}
-		case <-e.closed:
-			return
-		}
+	for evt := range e.asyncCh {
+		e.mu.RLock()
+		subs := append([]Subscriber(nil), e.asyncSubs...)
+		e.mu.RUnlock()
+		e.dispatch(subs, evt, "async")
 	}
 }
 
-// Close shuts down the async workers gracefully.
-// It closes the async channel and waits for workers to drain.
+// Close stops accepting events into the queue, waits until the workers have
+// delivered every queued event, and returns. Events published afterwards are
+// delivered in the publishing goroutine. Close is safe to call more than once.
 func (e *Emitter) Close() {
+	e.mu.Lock()
+	if e.closed {
+		e.mu.Unlock()
+		return
+	}
+	e.closed = true
 	close(e.asyncCh)
+	e.mu.Unlock()
 	e.wg.Wait()
 }
 

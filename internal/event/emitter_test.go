@@ -257,10 +257,12 @@ func TestEmitterClose(t *testing.T) {
 		atomic.AddInt64(&count, 1)
 	})
 
-	emitter.Publish(Event{Type: DataChanged})
+	for i := 0; i < 5; i++ {
+		emitter.Publish(Event{Type: DataChanged})
+	}
 	emitter.Close()
-	// After close, workers should have drained
-	// No assertion on count since it's a race, just ensure no deadlock
+	// Close waits for the workers to drain the queue.
+	assert.Equal(t, int64(5), atomic.LoadInt64(&count))
 }
 
 func TestEmitterSubscriberCountMixed(t *testing.T) {

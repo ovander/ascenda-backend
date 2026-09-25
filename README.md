@@ -328,7 +328,7 @@ All authenticated endpoints are prefixed with `/api/v1`. JWT bearer token requir
 |---|---|---|
 | GET | `/health` | Liveness check |
 | GET | `/ready` | Readiness check |
-| GET | `/metrics` | Prometheus metrics (if enabled) |
+| GET | `/metrics` | Prometheus metrics (if `METRICS_ENABLED=true`): Go/process defaults plus `ascenda_event_inline_dispatch_total{reason}`, `ascenda_event_subscriber_panics_total{mode}` and `ascenda_audit_write_failures_total`, all expected to stay at 0 |
 | GET | `/api/v1/version` | Version info |
 
 ### Plans & Scenarios
