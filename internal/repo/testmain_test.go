@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 	glogger "gorm.io/gorm/logger"
 
-	"ascenda/internal/model"
+	dbmigrations "ascenda/migrations"
 )
 
 // globalDB is the single *gorm.DB instance shared across all repo tests.
@@ -26,25 +26,38 @@ var globalDB *gorm.DB
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
-	pgContainer, err := tcpostgres.Run(ctx,
-		"postgres:16-alpine",
-		tcpostgres.WithDatabase("ascenda_test"),
-		tcpostgres.WithUsername("testuser"),
-		tcpostgres.WithPassword("testpass"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2),
-		),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "FATAL: failed to start postgres container: %v\n", err)
-		os.Exit(1)
-	}
-	defer pgContainer.Terminate(ctx) //nolint:errcheck
+	// TEST_DATABASE_URL points the suite at an existing PostgreSQL database
+	// (local development without Docker). Otherwise a throwaway container is
+	// started with testcontainers. Either way the schema is provisioned from
+	// the embedded SQL migrations — the same path production uses — so these
+	// tests fail if a model drifts from the migrations.
+	connStr := os.Getenv("TEST_DATABASE_URL")
+	if connStr == "" {
+		pgContainer, err := tcpostgres.Run(ctx,
+			"postgres:16-alpine",
+			tcpostgres.WithDatabase("ascenda_test"),
+			tcpostgres.WithUsername("testuser"),
+			tcpostgres.WithPassword("testpass"),
+			testcontainers.WithWaitStrategy(
+				wait.ForLog("database system is ready to accept connections").
+					WithOccurrence(2),
+			),
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "FATAL: failed to start postgres container: %v\n", err)
+			os.Exit(1)
+		}
+		defer pgContainer.Terminate(ctx) //nolint:errcheck
 
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "FATAL: failed to get connection string: %v\n", err)
+		connStr, err = pgContainer.ConnectionString(ctx, "sslmode=disable")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "FATAL: failed to get connection string: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if _, _, err := dbmigrations.Apply(connStr, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: SQL migrations failed: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -56,92 +69,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := migrateAll(db); err != nil {
-		fmt.Fprintf(os.Stderr, "FATAL: AutoMigrate failed: %v\n", err)
-		os.Exit(1)
-	}
-
 	globalDB = db
 	os.Exit(m.Run())
-}
-
-// migrateAll runs GORM AutoMigrate for every model used by repo tests.
-// The set mirrors the list in cmd/server/migrate.go so tests exercise the
-// real schema, not a hand-crafted subset.
-func migrateAll(db *gorm.DB) error {
-	return db.AutoMigrate(
-		// Core tenant/user models
-		&model.Tenant{},
-		&model.User{},
-		&model.PlanMember{},
-
-		// Planning core
-		&model.BusinessPlan{},
-		&model.Scenario{},
-
-		// Settings sub-tables
-		&model.PlanConfig{},
-		&model.OpeningBalance{},
-		&model.WorkingCapitalConfig{},
-		&model.OpexPerHire{},
-		&model.CapexPerHire{},
-		&model.MultiYearAdjustment{},
-
-		// Products
-		&model.Product{},
-		&model.ProductAssumption{},
-		&model.ProductSalesVolume{},
-		&model.ProductDistributorMargin{},
-
-		// Staff
-		&model.StaffHeadcount{},
-		&model.StaffSalary{},
-		&model.StaffIncentive{},
-
-		// Financial entries
-		&model.CapexEntry{},
-		&model.OpexManualEntry{},
-		&model.PnlManualEntry{},
-		&model.FiplanEntry{},
-		&model.PnlCashEntry{},
-		&model.WCREntry{},
-		&model.CashMonthlyOverride{},
-		&model.BudgetMonthlyOverride{},
-
-		// Reporting / audit
-		&model.Report{},
-		&model.PlanSnapshot{},
-		&model.AuditLog{},
-
-		// Auth
-		&model.MagicLinkToken{},
-
-		// Cap table
-		&model.CapTableCompany{},
-		&model.CapTableShareClass{},
-		&model.CapTableShareholder{},
-		&model.CapTableRound{},
-		&model.CapTablePosition{},
-		&model.StockOptionPlan{},
-		&model.OptionGrant{},
-		&model.ValuationScenario{},
-		&model.CapTableScenarioBranch{},
-
-		// BEP
-		&model.BEPSnapshot{},
-		&model.FixedCostLine{},
-		&model.VariableCostLine{},
-		&model.SensitivityConfig{},
-		&model.OptimisationPlan{},
-		&model.FixedCostSaving{},
-		&model.VariableCostSaving{},
-		&model.PCGReviewItem{},
-
-		// Pro-tier extras
-		&model.PlanShareholder{},
-		&model.AIUsagePolicy{},
-		&model.AIUsageRecord{},
-	)
 }
 
 // testDB returns a *gorm.DB that wraps the global connection in a database
