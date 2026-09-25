@@ -201,6 +201,7 @@ type CapTableRepository interface {
 
 	// CapTableShareholder
 	ListShareholders(tenantID, scenarioID uuid.UUID) ([]*model.CapTableShareholder, error)
+	GetShareholder(tenantID, id uuid.UUID) (*model.CapTableShareholder, error)
 	CreateShareholder(sh *model.CapTableShareholder) error
 	UpdateShareholder(sh *model.CapTableShareholder) error
 	DeleteShareholder(tenantID, id uuid.UUID) error
@@ -227,6 +228,7 @@ type CapTableRepository interface {
 	// OptionGrant
 	ListGrantsByPlan(tenantID, planID uuid.UUID) ([]*model.OptionGrant, error)
 	ListGrantsByScenario(tenantID, scenarioID uuid.UUID) ([]*model.OptionGrant, error)
+	GetGrant(tenantID, id uuid.UUID) (*model.OptionGrant, error)
 	CreateGrant(grant *model.OptionGrant) error
 	UpdateGrant(grant *model.OptionGrant) error
 	DeleteGrant(tenantID, id uuid.UUID) error
@@ -240,6 +242,7 @@ type CapTableRepository interface {
 
 	// CapTableScenarioBranch
 	ListBranches(tenantID, scenarioID uuid.UUID) ([]*model.CapTableScenarioBranch, error)
+	GetBranch(tenantID, id uuid.UUID) (*model.CapTableScenarioBranch, error)
 	CreateBranch(branch *model.CapTableScenarioBranch) error
 	UpdateBranch(branch *model.CapTableScenarioBranch) error
 	DeleteBranch(tenantID, id uuid.UUID) error

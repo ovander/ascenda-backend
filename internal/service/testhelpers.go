@@ -753,6 +753,13 @@ func (m *MockCapTableRepo) ListShareholders(tenantID, scenarioID uuid.UUID) ([]*
 	}
 	return out, nil
 }
+func (m *MockCapTableRepo) GetShareholder(tenantID, id uuid.UUID) (*model.CapTableShareholder, error) {
+	sh := m.shareholders[tenantID.String()+":"+id.String()]
+	if sh == nil {
+		return nil, errors.New("not found")
+	}
+	return sh, nil
+}
 func (m *MockCapTableRepo) CreateShareholder(sh *model.CapTableShareholder) error {
 	m.shareholders[sh.TenantID.String()+":"+sh.ID.String()] = sh; return nil
 }
@@ -851,6 +858,13 @@ func (m *MockCapTableRepo) ListGrantsByScenario(tenantID, scenarioID uuid.UUID) 
 	}
 	return out, nil
 }
+func (m *MockCapTableRepo) GetGrant(tenantID, id uuid.UUID) (*model.OptionGrant, error) {
+	g := m.grants[tenantID.String()+":"+id.String()]
+	if g == nil {
+		return nil, errors.New("not found")
+	}
+	return g, nil
+}
 func (m *MockCapTableRepo) CreateGrant(grant *model.OptionGrant) error {
 	m.grants[grant.TenantID.String()+":"+grant.ID.String()] = grant; return nil
 }
@@ -887,6 +901,13 @@ func (m *MockCapTableRepo) ListBranches(tenantID, scenarioID uuid.UUID) ([]*mode
 		if b.TenantID == tenantID && b.ScenarioID == scenarioID { out = append(out, b) }
 	}
 	return out, nil
+}
+func (m *MockCapTableRepo) GetBranch(tenantID, id uuid.UUID) (*model.CapTableScenarioBranch, error) {
+	b := m.branches[tenantID.String()+":"+id.String()]
+	if b == nil {
+		return nil, errors.New("not found")
+	}
+	return b, nil
 }
 func (m *MockCapTableRepo) CreateBranch(branch *model.CapTableScenarioBranch) error {
 	m.branches[branch.TenantID.String()+":"+branch.ID.String()] = branch; return nil

@@ -142,8 +142,25 @@ func defaultScenarios() *mockScenarioRepo {
 	return sr
 }
 
+// fakeProductLookup satisfies middleware.ProductLookup. Product 44444444-…
+// belongs to the default scenario 22222222-…; product 55555555-… belongs to a
+// scenario of another plan.
+type fakeProductLookup struct{}
+
+func (fakeProductLookup) GetByID(tenantID, productID uuid.UUID) (*model.Product, error) {
+	tid := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	switch productID {
+	case uuid.MustParse("44444444-4444-4444-4444-444444444444"):
+		return &model.Product{TenantScoped: model.TenantScoped{ID: productID, TenantID: tid}, ScenarioID: uuid.MustParse("22222222-2222-2222-2222-222222222222")}, nil
+	case uuid.MustParse("55555555-5555-5555-5555-555555555555"):
+		return &model.Product{TenantScoped: model.TenantScoped{ID: productID, TenantID: tid}, ScenarioID: uuid.MustParse("33333333-3333-3333-3333-333333333333")}, nil
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
 func buildTestRouter(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository, scenarioRepo repo.ScenarioRepository) *chi.Mux {
 	logger := logrus.NewEntry(logrus.New())
+	scopeMW := middleware.NewResourceScopeMiddleware(fakeProductLookup{}, nil, nil, logger)
 
 	// Create real RBAC and PlanAccess middleware
 	rbacMW := middleware.NewRBACMiddleware(logger)
@@ -197,6 +214,12 @@ func buildTestRouter(planRepo repo.PlanRepository, planMemberRepo repo.PlanMembe
 							r.Route("/products", func(r chi.Router) {
 								r.Get("/", stubHandler("ListProducts"))
 								r.With(planAccessMW.RequirePlanEdit).Post("/", stubHandler("CreateProduct"))
+								// Guarded single-product routes, as in the real router.
+								r.Route("/{productId}", func(r chi.Router) {
+									r.Use(scopeMW.RequireProductInScenario)
+									r.Get("/", stubHandler("GetProduct"))
+									r.With(planAccessMW.RequirePlanEdit).Put("/", stubHandler("UpdateProduct"))
+								})
 							})
 
 							r.Route("/settings", func(r chi.Router) {
@@ -554,6 +577,33 @@ func TestRouterScenarioMustBelongToPlan(t *testing.T) {
 			r.ServeHTTP(w, newReq("GET", path, "owner"))
 			assert.Equal(t, 404, w.Code)
 			assert.Empty(t, w.Header().Get("X-Handler"), "handler must not run")
+		})
+	}
+}
+
+// TestRouterProductMustBelongToScenario: a product ID from another scenario is
+// not reachable through a scenario the caller can access (sub-resource scoping).
+func TestRouterProductMustBelongToScenario(t *testing.T) {
+	base := "/api/v1/plans/11111111-1111-1111-1111-111111111111/scenarios/22222222-2222-2222-2222-222222222222/products/"
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), defaultScenarios())
+
+	t.Run("product in scenario is served", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, newReq("GET", base+"44444444-4444-4444-4444-444444444444/", "owner"))
+		assert.Equal(t, 200, w.Code)
+		assert.Equal(t, "GetProduct", w.Header().Get("X-Handler"))
+	})
+	for name, id := range map[string]string{
+		"product of another scenario": "55555555-5555-5555-5555-555555555555",
+		"unknown product":             uuid.New().String(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, method := range []string{"GET", "PUT"} {
+				w := httptest.NewRecorder()
+				r.ServeHTTP(w, newReq(method, base+id+"/", "owner"))
+				assert.Equal(t, 404, w.Code, method)
+				assert.Empty(t, w.Header().Get("X-Handler"), "handler must not run")
+			}
 		})
 	}
 }

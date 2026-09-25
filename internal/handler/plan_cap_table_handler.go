@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -131,9 +132,9 @@ func (h *PlanCapTableHandler) UpdateShareholder(w http.ResponseWriter, r *http.R
 	}
 	tenantID := ctxutil.GetTenantID(r.Context())
 
-	sh, err := h.repo.GetByID(tenantID, id)
+	sh, err := h.shareholderInPlan(r, tenantID, id)
 	if err != nil {
-		handleError(w, r, apierror.NotFound("shareholder", id.String()))
+		handleError(w, r, err)
 		return
 	}
 	sh.Name = req.Name
@@ -158,6 +159,10 @@ func (h *PlanCapTableHandler) DeleteShareholder(w http.ResponseWriter, r *http.R
 		return
 	}
 	tenantID := ctxutil.GetTenantID(r.Context())
+	if _, err := h.shareholderInPlan(r, tenantID, id); err != nil {
+		handleError(w, r, err)
+		return
+	}
 	if err := h.repo.Delete(tenantID, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			handleError(w, r, apierror.NotFound("shareholder", id.String()))
@@ -167,4 +172,18 @@ func (h *PlanCapTableHandler) DeleteShareholder(w http.ResponseWriter, r *http.R
 		return
 	}
 	respondNoContent(w)
+}
+
+// shareholderInPlan loads the shareholder and verifies it belongs to the
+// {planId} in the URL; a shareholder of another plan is reported as not found.
+func (h *PlanCapTableHandler) shareholderInPlan(r *http.Request, tenantID, id uuid.UUID) (*model.PlanShareholder, error) {
+	planID, err := parseUUIDParam(chi.URLParam(r, "planId"))
+	if err != nil {
+		return nil, err
+	}
+	sh, err := h.repo.GetByID(tenantID, id)
+	if err != nil || sh == nil || sh.PlanID != planID {
+		return nil, apierror.NotFound("shareholder", id.String())
+	}
+	return sh, nil
 }

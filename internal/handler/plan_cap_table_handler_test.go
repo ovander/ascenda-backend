@@ -9,15 +9,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -320,6 +320,7 @@ func TestPlanCapTable_UpdateShareholder_OK(t *testing.T) {
 	}
 	existing.TenantScoped.ID = shareholderID
 	existing.TenantID = tenantID
+	existing.PlanID = planID
 
 	repo := &mockPlanShareholderRepo{
 		getByIDFunc: func(tid, id uuid.UUID) (*model.PlanShareholder, error) {
@@ -397,6 +398,7 @@ func TestPlanCapTable_UpdateShareholder_RepoSaveError(t *testing.T) {
 	existing := &model.PlanShareholder{Name: "Alice"}
 	existing.TenantScoped.ID = shareholderID
 	existing.TenantID = tenantID
+	existing.PlanID = planID
 
 	repo := &mockPlanShareholderRepo{
 		getByIDFunc: func(_, _ uuid.UUID) (*model.PlanShareholder, error) {
@@ -432,7 +434,12 @@ func TestPlanCapTable_DeleteShareholder_OK(t *testing.T) {
 	shareholderID := uuid.New()
 
 	deleted := false
+	inPlan := &model.PlanShareholder{PlanID: planID}
+	inPlan.TenantScoped.ID = shareholderID
+	inPlan.TenantID = tenantID
 	repo := &mockPlanShareholderRepo{
+		getByIDFunc: func(_, _ uuid.UUID) (*model.PlanShareholder, error) { return inPlan, nil },
+
 		deleteFunc: func(tid, id uuid.UUID) error {
 			assert.Equal(t, tenantID, tid)
 			assert.Equal(t, shareholderID, id)
@@ -469,7 +476,12 @@ func TestPlanCapTable_DeleteShareholder_RepoError(t *testing.T) {
 	planID := uuid.New()
 	shareholderID := uuid.New()
 
+	inPlan := &model.PlanShareholder{PlanID: planID}
+	inPlan.TenantScoped.ID = shareholderID
+	inPlan.TenantID = tenantID
 	repo := &mockPlanShareholderRepo{
+		getByIDFunc: func(_, _ uuid.UUID) (*model.PlanShareholder, error) { return inPlan, nil },
+
 		deleteFunc: func(_, _ uuid.UUID) error {
 			return errors.New("foreign key constraint")
 		},
@@ -492,7 +504,12 @@ func TestPlanCapTable_DeleteShareholder_WrongTenant404(t *testing.T) {
 	planID := uuid.New()
 	shareholderID := uuid.New()
 
+	inPlan := &model.PlanShareholder{PlanID: planID}
+	inPlan.TenantScoped.ID = shareholderID
+	inPlan.TenantID = tenantID
 	repo := &mockPlanShareholderRepo{
+		getByIDFunc: func(_, _ uuid.UUID) (*model.PlanShareholder, error) { return inPlan, nil },
+
 		deleteFunc: func(tid, id uuid.UUID) error {
 			assert.Equal(t, tenantID, tid)
 			assert.Equal(t, shareholderID, id)
@@ -506,4 +523,59 @@ func TestPlanCapTable_DeleteShareholder_WrongTenant404(t *testing.T) {
 	h.DeleteShareholder(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Plan binding: a shareholder of another plan must be reported as not found
+// (audit: sub-resource scoping), and never updated or deleted.
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestPlanCapTable_UpdateShareholder_OtherPlan404(t *testing.T) {
+	tenantID := uuid.New()
+	planID := uuid.New()
+	shareholderID := uuid.New()
+
+	foreign := &model.PlanShareholder{Name: "Bob", PlanID: uuid.New()} // another plan of the same tenant
+	foreign.TenantScoped.ID = shareholderID
+	foreign.TenantID = tenantID
+
+	updated := false
+	repo := &mockPlanShareholderRepo{
+		getByIDFunc: func(_, _ uuid.UUID) (*model.PlanShareholder, error) { return foreign, nil },
+		updateFunc:  func(*model.PlanShareholder) error { updated = true; return nil },
+	}
+
+	h := newPlanCapTableHandler(repo)
+	body := updateShareholderRequest{Name: "Hacked", Type: model.ShareholderFounder}
+	req := planCapTableReqWithID(http.MethodPut, "/cap-table/shareholders/"+shareholderID.String(), body, planID, tenantID, shareholderID)
+	w := httptest.NewRecorder()
+	h.UpdateShareholder(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.False(t, updated, "shareholder of another plan must not be updated")
+	assert.Equal(t, "Bob", foreign.Name)
+}
+
+func TestPlanCapTable_DeleteShareholder_OtherPlan404(t *testing.T) {
+	tenantID := uuid.New()
+	planID := uuid.New()
+	shareholderID := uuid.New()
+
+	foreign := &model.PlanShareholder{PlanID: uuid.New()}
+	foreign.TenantScoped.ID = shareholderID
+	foreign.TenantID = tenantID
+
+	deleted := false
+	repo := &mockPlanShareholderRepo{
+		getByIDFunc: func(_, _ uuid.UUID) (*model.PlanShareholder, error) { return foreign, nil },
+		deleteFunc:  func(_, _ uuid.UUID) error { deleted = true; return nil },
+	}
+
+	h := newPlanCapTableHandler(repo)
+	req := planCapTableReqWithID(http.MethodDelete, "/cap-table/shareholders/"+shareholderID.String(), nil, planID, tenantID, shareholderID)
+	w := httptest.NewRecorder()
+	h.DeleteShareholder(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.False(t, deleted, "shareholder of another plan must not be deleted")
 }

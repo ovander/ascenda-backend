@@ -139,6 +139,33 @@ func (r *CapTableRepo) GetRound(tenantID, id uuid.UUID) (*model.CapTableRound, e
 	return &row, nil
 }
 
+// GetShareholder retrieves a single cap-table shareholder by ID.
+func (r *CapTableRepo) GetShareholder(tenantID, id uuid.UUID) (*model.CapTableShareholder, error) {
+	var row model.CapTableShareholder
+	if err := r.db.Where("tenant_id = ? AND id = ?", tenantID, id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// GetGrant retrieves a single option grant by ID.
+func (r *CapTableRepo) GetGrant(tenantID, id uuid.UUID) (*model.OptionGrant, error) {
+	var row model.OptionGrant
+	if err := r.db.Where("tenant_id = ? AND id = ?", tenantID, id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// GetBranch retrieves a single cap-table scenario branch by ID.
+func (r *CapTableRepo) GetBranch(tenantID, id uuid.UUID) (*model.CapTableScenarioBranch, error) {
+	var row model.CapTableScenarioBranch
+	if err := r.db.Where("tenant_id = ? AND id = ?", tenantID, id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
 // CreateRound inserts a new round.
 func (r *CapTableRepo) CreateRound(rnd *model.CapTableRound) error {
 	return r.db.Create(rnd).Error

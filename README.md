@@ -449,6 +449,7 @@ Three levels of access control are enforced:
 2. **Tenant role** — `owner`, `admin`, `editor`, `viewer` for tenant-level operations
 3. **Plan membership** — users must be a member of a plan (`editor` or `viewer`) to access plan-scoped routes; tenant owners have access to every plan in their tenant. Demo plans are a shared sandbox: every tenant user gets `editor` access to them without membership (`reader` stays read-only), and owners can reset them via `POST /plans/reset-demo`.
 4. **Scenario binding** — `PlanAccessMiddleware.RequireScenarioInPlan` verifies that `{scenarioId}` belongs to `{planId}` before any scenario-scoped handler runs, and snapshot operations are scoped to the scenario in the URL (clone targets must be in the same plan)
+5. **Sub-resource binding** — `ResourceScopeMiddleware` guards every route that addresses one product, BEP snapshot, BEP optimisation plan or scenario-level cap-table row (`{productId}` ∈ scenario, BEP `{snapshotId}` ∈ scenario, `{optPlanId}` ∈ BEP snapshot, cap-table `{id}`/`{roundId}` ∈ scenario); plan-level shareholders are checked against `{planId}` in the handler. A foreign ID is reported as `404`, never confirmed
 
 ### Graceful Shutdown
 
