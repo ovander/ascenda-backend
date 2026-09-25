@@ -5,15 +5,15 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
+	"ascenda/internal/service"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/service"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 // FiplanServicer interface for dependency injection.
@@ -35,18 +35,18 @@ type capTableRoundLinker interface {
 
 // FiplanHandler handles financial plan operations.
 type FiplanHandler struct {
-	svc        FiplanServicer
+	svc         FiplanServicer
 	roundLinker capTableRoundLinker // nil when cap table feature is unavailable
-	logger     *logrus.Entry
+	logger      *logrus.Entry
 }
 
 // NewFiplanHandler creates a new FiplanHandler.
 // roundLinker may be nil; CreateRoundFromCapitalIncrease returns 501 in that case.
 func NewFiplanHandler(svc FiplanServicer, roundLinker capTableRoundLinker, logger *logrus.Entry) *FiplanHandler {
 	return &FiplanHandler{
-		svc:        svc,
+		svc:         svc,
 		roundLinker: roundLinker,
-		logger:     logger,
+		logger:      logger,
 	}
 }
 
@@ -133,10 +133,10 @@ func (h *FiplanHandler) GetGrantsForPnL(w http.ResponseWriter, r *http.Request) 
 // createRoundFromCapitalIncreaseRequest is the body for
 // POST /fiplan/capital-increase/{yearIndex}/create-round
 type createRoundFromCapitalIncreaseRequest struct {
-	Label         string  `json:"label"`         // e.g. "Series A"
+	Label          string `json:"label"`          // e.g. "Series A"
 	ShareClassType string `json:"shareClassType"` // e.g. "preferred_a"
-	PhaseNumber   int     `json:"phaseNumber"`   // 1-based phase number
-	SortOrder     int     `json:"sortOrder"`
+	PhaseNumber    int    `json:"phaseNumber"`    // 1-based phase number
+	SortOrder      int    `json:"sortOrder"`
 }
 
 // CreateRoundFromCapitalIncrease POST /fiplan/capital-increase/{yearIndex}/create-round

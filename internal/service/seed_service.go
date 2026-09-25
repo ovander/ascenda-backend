@@ -21,11 +21,11 @@ import (
 	"context"
 	"encoding/json"
 
+	"ascenda/internal/model"
+	"ascenda/internal/repo"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-	"ascenda/internal/model"
-	"ascenda/internal/repo"
 )
 
 // SeedService manages demo-plan provisioning.
@@ -117,7 +117,7 @@ type demoPlanDef struct {
 	scenarioDescription string
 	companyName         string
 	country             string
-	products    []demoProduct
+	products            []demoProduct
 	// category → [y1..y5] FTE
 	headcounts map[model.StaffCategory][5]decimal.Decimal
 	// category → [y1..y5] monthly gross salary
@@ -142,7 +142,7 @@ type demoProduct struct {
 	pType model.ProductType
 	// DriverType selects the business-driver compute formula.
 	// Leave zero to keep the default "generic" driver.
-	driverType   model.DriverType
+	driverType model.DriverType
 	// driverParams is the typed parameter struct serialised to JSONB.
 	// nil → generic product (manual ProductAssumption inputs only).
 	driverParams any
@@ -183,8 +183,8 @@ func saasDemo() demoPlanDef {
 		name:                "SaaS Startup — Ascenda Demo",
 		description:         "Software-as-a-Service subscription model with a professional-services upsell. Demonstrates PLG-driven client acquisition, 12 % annual churn and 110 % net revenue retention over 5 years.",
 		scenarioDescription: "Base-case projection: 12 % annual churn, 110 % NRR, headcount growing from 5 to 22 FTE. Opex dominated by R&D salaries and cloud infrastructure. Breakeven expected in Year 3.",
-		companyName: "SaaS Co.",
-		country:     "FR",
+		companyName:         "SaaS Co.",
+		country:             "FR",
 		products: []demoProduct{
 			{
 				// MRR × 12 = ARR; 1 unit = 1 active client-year
@@ -215,8 +215,8 @@ func saasDemo() demoPlanDef {
 			{
 				// Professional services; 1 "unit" = the annual services bucket
 				// Generic driver — revenue is a single lump figure per year
-				name:  "Professional Services",
-				pType: model.ProductTypeService,
+				name:   "Professional Services",
+				pType:  model.ProductTypeService,
 				prices: [5]decimal.Decimal{d(50000), d(126000), d(250000), d(420000), d(650000)},
 				cogs:   [5]decimal.Decimal{d(0), d(0), d(0), d(0), d(0)},
 				units:  [5]int64{1, 1, 1, 1, 1},
@@ -256,8 +256,8 @@ func hardwareDemo() demoPlanDef {
 		name:                "Hardware Scaleup — Ascenda Demo",
 		description:         "Specialty hardware company using contract manufacturing. Demonstrates unit-economics scaling with ~50 % base BOM cost, scrap-adjusted COGS, and heavy capex in R&D and production equipment over 5 years.",
 		scenarioDescription: "Base-case projection: ~40–49 % gross margin after scrap and setup costs, ASP rising from €12 000 to €15 500. Capex-heavy early years (R&D, tooling, production equipment). EBITDA positive from Year 2.",
-		companyName: "HardCo.",
-		country:     "FR",
+		companyName:         "HardCo.",
+		country:             "FR",
 		products: []demoProduct{
 			{
 				name:       "Hardware Units",
@@ -342,8 +342,8 @@ func consultingDemo() demoPlanDef {
 		name:                "Consulting Firm — Ascenda Demo",
 		description:         "Pure professional-services firm with two billing tiers: premium Strategy & Advisory (daily rate €2 500–3 200) and standard Consulting & Delivery (€1 400–1 800/day). Delivery cost is modelled as COGS per billable day — consultant salaries + 45 % French employer charges embedded in cost of revenue. Staff table shows overhead only. ~55–65 % gross margin per tier.",
 		scenarioDescription: "Base-case projection: 60–70 % billable utilisation, two revenue tiers, 45 % employer charges baked into COGS per day. Reaches 20 % EBITDA margin in Year 2, 30 % by Year 5. Travel and recruitment are the main opex drivers.",
-		companyName: "ConsultCo.",
-		country:     "FR",
+		companyName:         "ConsultCo.",
+		country:             "FR",
 		products: []demoProduct{
 			{
 				// 1 unit = 1 billable senior-consultant-day (Strategy & Advisory)
@@ -354,18 +354,18 @@ func consultingDemo() demoPlanDef {
 				driverType: model.DriverConsulting,
 				driverParams: model.ConsultingParams{
 					// Senior billable headcount per year (Y1..Y5)
-					Headcount:       [5]decimal.Decimal{d(1), d(3), d(6), d(10), d(15)},
-					WorkingDays:     220,
+					Headcount:   [5]decimal.Decimal{d(1), d(3), d(6), d(10), d(15)},
+					WorkingDays: 220,
 					// Utilisation rates from the inline comment (85 %→82 %→83 %→84 %→85 %)
 					UtilizationRate: [5]decimal.Decimal{d(0.85), d(0.82), d(0.83), d(0.84), d(0.85)},
 					// Average monthly gross salary of a senior consultant (€)
-					MonthlyGross:    [5]decimal.Decimal{d(9000), d(9500), d(10000), d(10500), d(11000)},
+					MonthlyGross: [5]decimal.Decimal{d(9000), d(9500), d(10000), d(10500), d(11000)},
 					// French employer charge factor
 					EmployerCharges: d(1.45),
 				},
 				prices: [5]decimal.Decimal{d(2500), d(2600), d(2700), d(2900), d(3200)},
-				cogs:  [5]decimal.Decimal{d(837), d(917), d(953), d(989), d(1023)},
-				units: [5]int64{187, 541, 1095, 1848, 2805},
+				cogs:   [5]decimal.Decimal{d(837), d(917), d(953), d(989), d(1023)},
+				units:  [5]int64{187, 541, 1095, 1848, 2805},
 			},
 			{
 				// 1 unit = 1 billable standard-consultant-day (Consulting & Delivery)
@@ -376,78 +376,78 @@ func consultingDemo() demoPlanDef {
 				driverType: model.DriverConsulting,
 				driverParams: model.ConsultingParams{
 					// Standard billable headcount per year (Y1..Y5)
-					Headcount:       [5]decimal.Decimal{d(4), d(8), d(15), d(25), d(37)},
-					WorkingDays:     220,
+					Headcount:   [5]decimal.Decimal{d(4), d(8), d(15), d(25), d(37)},
+					WorkingDays: 220,
 					// Utilisation rates from the inline comment (75 %→72 %→75 %→76 %→78 %)
 					UtilizationRate: [5]decimal.Decimal{d(0.75), d(0.72), d(0.75), d(0.76), d(0.78)},
 					// Average monthly gross salary of a standard consultant (€)
-					MonthlyGross:    [5]decimal.Decimal{d(6500), d(6800), d(7100), d(7500), d(8000)},
+					MonthlyGross: [5]decimal.Decimal{d(6500), d(6800), d(7100), d(7500), d(8000)},
 					// French employer charge factor
 					EmployerCharges: d(1.45),
 				},
 				prices: [5]decimal.Decimal{d(1400), d(1500), d(1600), d(1700), d(1800)},
-				cogs:  [5]decimal.Decimal{d(686), d(746), d(750), d(780), d(813)},
-				units: [5]int64{660, 1267, 2475, 4180, 6349},
+				cogs:   [5]decimal.Decimal{d(686), d(746), d(750), d(780), d(813)},
+				units:  [5]int64{660, 1267, 2475, 4180, 6349},
 			},
 		},
-	// Overhead staff only — delivery consultants are costed via COGS above.
-	// HR and Finance added from Y3/Y4 once the firm exceeds ~20 people.
-	headcounts: map[model.StaffCategory][5]decimal.Decimal{
-		model.CategorySalesTeam:     {d(1), d(2), d(4), d(7), d(11)},
-		model.CategoryMarketingTeam: {d(0), d(1), d(1), d(2), d(3)},
-		model.CategoryAdminManagers: {d(1), d(1), d(2), d(3), d(6)},
-		model.CategoryExecutiveTeam: {d(1), d(1), d(1), d(2), d(3)},
-		// People & talent: hired once firm crosses ~20 total staff (Y3)
-		model.CategoryHR:            {d(0), d(0), d(1), d(2), d(3)},
-		// Finance & controlling: hired in Y4 as revenues pass ~10 M EUR
-		model.CategoryFinance:       {d(0), d(0), d(0), d(1), d(1)},
-	},
-	salaries: map[model.StaffCategory][5]decimal.Decimal{
-		model.CategorySalesTeam:     {d(5500), d(5750), d(6000), d(6500), d(7000)},
-		model.CategoryMarketingTeam: {d(5000), d(5250), d(5500), d(5750), d(6000)},
-		model.CategoryAdminManagers: {d(4500), d(4750), d(5000), d(5250), d(5500)},
-		model.CategoryExecutiveTeam: {d(12000), d(12500), d(13000), d(14000), d(15000)},
-		model.CategoryHR:            {d(5500), d(5750), d(6000), d(6250), d(6500)},
-		model.CategoryFinance:       {d(7500), d(8000), d(8000), d(8500), d(9000)},
-	},
-	// Variable pay as fraction of annual base salary per category.
-	incentiveRates: map[model.StaffCategory]decimal.Decimal{
-		model.CategorySalesTeam:     d(0.20),
-		model.CategoryExecutiveTeam: d(0.25),
-		model.CategoryMarketingTeam: d(0.10),
-		model.CategoryAdminManagers: d(0.08),
-		model.CategoryHR:            d(0.08),
-		model.CategoryFinance:       d(0.12),
-	},
-	capex: []demoCapex{
-		{model.AssetComputerHWSW,    3, [5]decimal.Decimal{d(15000), d(20000), d(30000), d(45000), d(65000)}},
-		{model.AssetOfficeFurniture, 5, [5]decimal.Decimal{d(20000), d(0), d(25000), d(0), d(35000)}},
-		{model.AssetSetupExpenses,   5, [5]decimal.Decimal{d(15000), d(0), d(0), d(0), d(0)}},
-	},
-	opex: []demoOpex{
-		{model.LineTravelTransport,     [5]decimal.Decimal{d(40000), d(80000), d(140000), d(220000), d(350000)}},
-		{model.LineProfessionalFees,    [5]decimal.Decimal{d(50000), d(100000), d(160000), d(230000), d(300000)}},
-		{model.LineAdvertisingComms,    [5]decimal.Decimal{d(25000), d(50000), d(90000), d(140000), d(200000)}},
-		{model.LineRecruitmentTraining, [5]decimal.Decimal{d(30000), d(60000), d(100000), d(160000), d(250000)}},
-		// Laptop/mobile/collab-tool leasing for all staff (billable + overhead)
-		{model.LineLeasingMovable,      [5]decimal.Decimal{d(30000), d(55000), d(90000), d(140000), d(210000)}},
-		// Industry conferences, sponsorships and awards
-		{model.LineTradeShows,          [5]decimal.Decimal{d(20000), d(40000), d(70000), d(110000), d(160000)}},
-		// Subscriptions, office consumables, misc operational costs
-		{model.LineOtherExpenses,       [5]decimal.Decimal{d(20000), d(35000), d(55000), d(80000), d(110000)}},
-	},
-	// Founder equity + working-capital credit line in Y1. Dividends from Y3.
-	fiplanEntries: []demoFiplan{
-		{model.FiplanCapitalIncrease, [5]decimal.Decimal{d(150000), d(0), d(0), d(0), d(0)}},
-		{model.FiplanLTLoans,         [5]decimal.Decimal{d(100000), d(0), d(0), d(0), d(0)}},
-		{model.FiplanDividends,       [5]decimal.Decimal{d(0), d(0), d(50000), d(100000), d(150000)}},
-	},
-	// Corporate clients pay in 60 days (DSO = 60 d).
-	// Firm pays suppliers in 45 days (default 0.5/0.5 split).
-	wcCustomer30Pct: d(0),
-	wcCustomer60Pct: d(1),
-	wcSupplier30Pct: d(0.5),
-	wcSupplier60Pct: d(0.5),
+		// Overhead staff only — delivery consultants are costed via COGS above.
+		// HR and Finance added from Y3/Y4 once the firm exceeds ~20 people.
+		headcounts: map[model.StaffCategory][5]decimal.Decimal{
+			model.CategorySalesTeam:     {d(1), d(2), d(4), d(7), d(11)},
+			model.CategoryMarketingTeam: {d(0), d(1), d(1), d(2), d(3)},
+			model.CategoryAdminManagers: {d(1), d(1), d(2), d(3), d(6)},
+			model.CategoryExecutiveTeam: {d(1), d(1), d(1), d(2), d(3)},
+			// People & talent: hired once firm crosses ~20 total staff (Y3)
+			model.CategoryHR: {d(0), d(0), d(1), d(2), d(3)},
+			// Finance & controlling: hired in Y4 as revenues pass ~10 M EUR
+			model.CategoryFinance: {d(0), d(0), d(0), d(1), d(1)},
+		},
+		salaries: map[model.StaffCategory][5]decimal.Decimal{
+			model.CategorySalesTeam:     {d(5500), d(5750), d(6000), d(6500), d(7000)},
+			model.CategoryMarketingTeam: {d(5000), d(5250), d(5500), d(5750), d(6000)},
+			model.CategoryAdminManagers: {d(4500), d(4750), d(5000), d(5250), d(5500)},
+			model.CategoryExecutiveTeam: {d(12000), d(12500), d(13000), d(14000), d(15000)},
+			model.CategoryHR:            {d(5500), d(5750), d(6000), d(6250), d(6500)},
+			model.CategoryFinance:       {d(7500), d(8000), d(8000), d(8500), d(9000)},
+		},
+		// Variable pay as fraction of annual base salary per category.
+		incentiveRates: map[model.StaffCategory]decimal.Decimal{
+			model.CategorySalesTeam:     d(0.20),
+			model.CategoryExecutiveTeam: d(0.25),
+			model.CategoryMarketingTeam: d(0.10),
+			model.CategoryAdminManagers: d(0.08),
+			model.CategoryHR:            d(0.08),
+			model.CategoryFinance:       d(0.12),
+		},
+		capex: []demoCapex{
+			{model.AssetComputerHWSW, 3, [5]decimal.Decimal{d(15000), d(20000), d(30000), d(45000), d(65000)}},
+			{model.AssetOfficeFurniture, 5, [5]decimal.Decimal{d(20000), d(0), d(25000), d(0), d(35000)}},
+			{model.AssetSetupExpenses, 5, [5]decimal.Decimal{d(15000), d(0), d(0), d(0), d(0)}},
+		},
+		opex: []demoOpex{
+			{model.LineTravelTransport, [5]decimal.Decimal{d(40000), d(80000), d(140000), d(220000), d(350000)}},
+			{model.LineProfessionalFees, [5]decimal.Decimal{d(50000), d(100000), d(160000), d(230000), d(300000)}},
+			{model.LineAdvertisingComms, [5]decimal.Decimal{d(25000), d(50000), d(90000), d(140000), d(200000)}},
+			{model.LineRecruitmentTraining, [5]decimal.Decimal{d(30000), d(60000), d(100000), d(160000), d(250000)}},
+			// Laptop/mobile/collab-tool leasing for all staff (billable + overhead)
+			{model.LineLeasingMovable, [5]decimal.Decimal{d(30000), d(55000), d(90000), d(140000), d(210000)}},
+			// Industry conferences, sponsorships and awards
+			{model.LineTradeShows, [5]decimal.Decimal{d(20000), d(40000), d(70000), d(110000), d(160000)}},
+			// Subscriptions, office consumables, misc operational costs
+			{model.LineOtherExpenses, [5]decimal.Decimal{d(20000), d(35000), d(55000), d(80000), d(110000)}},
+		},
+		// Founder equity + working-capital credit line in Y1. Dividends from Y3.
+		fiplanEntries: []demoFiplan{
+			{model.FiplanCapitalIncrease, [5]decimal.Decimal{d(150000), d(0), d(0), d(0), d(0)}},
+			{model.FiplanLTLoans, [5]decimal.Decimal{d(100000), d(0), d(0), d(0), d(0)}},
+			{model.FiplanDividends, [5]decimal.Decimal{d(0), d(0), d(50000), d(100000), d(150000)}},
+		},
+		// Corporate clients pay in 60 days (DSO = 60 d).
+		// Firm pays suppliers in 45 days (default 0.5/0.5 split).
+		wcCustomer30Pct: d(0),
+		wcCustomer60Pct: d(1),
+		wcSupplier30Pct: d(0.5),
+		wcSupplier60Pct: d(0.5),
 	}
 }
 
@@ -471,11 +471,11 @@ func golfDemo() demoPlanDef {
 	// Travel is by far the largest opex — DP World Tour events span 4 continents.
 	// Goal: reach Top-50 ranking and ~€1.7M total revenue by Year 5.
 	return demoPlanDef{
-		name:        "Pro Tour Golfer — Ascenda Demo",
-		description: "Individual professional golfer transitioning from the Challenge Tour (Y1) to an established DP World Tour career (Y5). Three revenue streams: tournament prize money, brand sponsorships, and corporate appearance fees. Caddie costs are modelled as COGS; travel is the dominant opex driver (~€60K–€250K/year). Demonstrates athlete business economics with ~85 % gross margin on prize money and rapid revenue growth tied to world-ranking progression.",
+		name:                "Pro Tour Golfer — Ascenda Demo",
+		description:         "Individual professional golfer transitioning from the Challenge Tour (Y1) to an established DP World Tour career (Y5). Three revenue streams: tournament prize money, brand sponsorships, and corporate appearance fees. Caddie costs are modelled as COGS; travel is the dominant opex driver (~€60K–€250K/year). Demonstrates athlete business economics with ~85 % gross margin on prize money and rapid revenue growth tied to world-ranking progression.",
 		scenarioDescription: "Base-case: gradual ascent from Challenge Tour rookie (€65K revenue Y1) to Top-50 DP World Tour player (€1.7M Y5). Y1 funded by €250K personal savings + bank loan; player self-manages admin in Y1 to preserve cash. Swing coach and agent hired from Y2 once DP World Tour card is secured. Fitness trainer + PA added from Y4 as profile and commercial schedule grows. Travel cost ramps from €35K (European Challenge Tour, Y1) to €230K (global DP World Tour, Y5). First endorsements signed mid-Y2; major equipment brand deal from Y3.",
-		companyName: "ProGolf SAS",
-		country:     "FR",
+		companyName:         "ProGolf SAS",
+		country:             "FR",
 		products: []demoProduct{
 			{
 				// 1 unit = 1 tournament played; price = average net prize per event.
@@ -494,8 +494,8 @@ func golfDemo() demoPlanDef {
 			{
 				// 1 unit = 1 annual sponsorship/endorsement contract bundle.
 				// Agent commission (~10 %) carried in professional_fees opex.
-				name:  "Sponsorship & Endorsements",
-				pType: model.ProductTypeService,
+				name:   "Sponsorship & Endorsements",
+				pType:  model.ProductTypeService,
 				prices: [5]decimal.Decimal{d(15000), d(40000), d(120000), d(300000), d(600000)},
 				cogs:   [5]decimal.Decimal{d(0), d(0), d(0), d(0), d(0)},
 				units:  [5]int64{1, 1, 1, 1, 1},
@@ -503,8 +503,8 @@ func golfDemo() demoPlanDef {
 			{
 				// 1 unit = 1 corporate pro-am or appearance day.
 				// Travel/prep cost per appearance carried in COGS.
-				name:  "Appearance Fees & Pro-Ams",
-				pType: model.ProductTypeService,
+				name:   "Appearance Fees & Pro-Ams",
+				pType:  model.ProductTypeService,
 				prices: [5]decimal.Decimal{d(2000), d(2500), d(4000), d(6000), d(8000)},
 				cogs:   [5]decimal.Decimal{d(200), d(250), d(400), d(500), d(600)},
 				units:  [5]int64{5, 10, 15, 20, 25},
@@ -553,8 +553,8 @@ func golfDemo() demoPlanDef {
 		// Dividends deferred to Y4 once the business is firmly cash-positive.
 		fiplanEntries: []demoFiplan{
 			{model.FiplanCapitalIncrease, [5]decimal.Decimal{d(150000), d(0), d(0), d(0), d(0)}},
-			{model.FiplanLTLoans,         [5]decimal.Decimal{d(100000), d(0), d(0), d(0), d(0)}},
-			{model.FiplanDividends,       [5]decimal.Decimal{d(0), d(0), d(0), d(30000), d(100000)}},
+			{model.FiplanLTLoans, [5]decimal.Decimal{d(100000), d(0), d(0), d(0), d(0)}},
+			{model.FiplanDividends, [5]decimal.Decimal{d(0), d(0), d(0), d(30000), d(100000)}},
 		},
 		// Prize money and appearance fees are paid within ~30 days of the event.
 		// Operating expenses (travel, entry fees) are settled on delivery.
@@ -823,9 +823,9 @@ func (s *SeedService) createDemoPlan(ctx context.Context, tenantID, userID uuid.
 			ratesMap[string(cat)] = rate.InexactFloat64()
 		}
 		s.auditCreate(tenantID, userID, scenario.ID, "staff_incentives", map[string]any{
-			"note":        "target-bonus rates seeded (fraction of annual base salary)",
-			"categories":  len(def.incentiveRates),
-			"rates":       ratesMap,
+			"note":       "target-bonus rates seeded (fraction of annual base salary)",
+			"categories": len(def.incentiveRates),
+			"rates":      ratesMap,
 		})
 	} else {
 		s.auditCreate(tenantID, userID, scenario.ID, "staff_incentives", map[string]any{
@@ -993,8 +993,8 @@ func (s *SeedService) createDemoProduct(tenantID, userID, scenarioID uuid.UUID, 
 	if sp, ok := pd.driverParams.(model.SaaSParams); ok {
 		var monthlyFeeF, churnRateF, expansionRateF [5]float64
 		for i := 0; i < 5; i++ {
-			monthlyFeeF[i]    = sp.MonthlyFee[i].InexactFloat64()
-			churnRateF[i]     = sp.ChurnRate[i].InexactFloat64()
+			monthlyFeeF[i] = sp.MonthlyFee[i].InexactFloat64()
+			churnRateF[i] = sp.ChurnRate[i].InexactFloat64()
 			expansionRateF[i] = sp.ExpansionRate[i].InexactFloat64()
 		}
 		s.auditCreate(tenantID, userID, scenarioID, "product_driver_params", map[string]any{
@@ -1029,10 +1029,10 @@ func (s *SeedService) createDemoProduct(tenantID, userID, scenarioID uuid.UUID, 
 	if cp, ok := pd.driverParams.(model.ConsultingParams); ok {
 		var headcountF, utilizationF, availableF, billableF, monthlyGrossF [5]float64
 		for i := 0; i < 5; i++ {
-			headcountF[i]   = cp.Headcount[i].InexactFloat64()
+			headcountF[i] = cp.Headcount[i].InexactFloat64()
 			utilizationF[i] = cp.UtilizationRate[i].InexactFloat64()
-			availableF[i]   = headcountF[i] * float64(cp.WorkingDays)
-			billableF[i]    = availableF[i] * utilizationF[i]
+			availableF[i] = headcountF[i] * float64(cp.WorkingDays)
+			billableF[i] = availableF[i] * utilizationF[i]
 			monthlyGrossF[i] = cp.MonthlyGross[i].InexactFloat64()
 		}
 		s.auditCreate(tenantID, userID, scenarioID, "product_workforce", map[string]any{

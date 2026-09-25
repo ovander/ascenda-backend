@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"ascenda/internal/model"
 )
 
 func TestComputeStaffPayroll(t *testing.T) {
@@ -26,14 +26,14 @@ func TestComputeStaffPayroll(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		headcounts   []model.StaffHeadcount
-		salaries     []model.StaffSalary
-		incentives   []model.StaffIncentive
-		config       model.PlanConfig
-		expectedSal  [5]decimal.Decimal
-		expectedInc  [5]decimal.Decimal
-		expectedPay  [5]decimal.Decimal
+		name        string
+		headcounts  []model.StaffHeadcount
+		salaries    []model.StaffSalary
+		incentives  []model.StaffIncentive
+		config      model.PlanConfig
+		expectedSal [5]decimal.Decimal
+		expectedInc [5]decimal.Decimal
+		expectedPay [5]decimal.Decimal
 	}{
 		{
 			name: "single role - 5 entries per role one per year",

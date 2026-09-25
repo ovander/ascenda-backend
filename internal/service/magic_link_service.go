@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/socrate"
+	"github.com/sirupsen/logrus"
 )
 
 // SocrateMailer can dispatch a passwordless sign-in email via Socrate.
@@ -39,9 +39,9 @@ type magicLinkTokenRepo interface {
 // MagicLinkService handles generation, delivery, and verification of single-use
 // passwordless sign-in tokens.
 type MagicLinkService struct {
-	mailer     SocrateMailer      // nil → skip email (dev mode)
+	mailer     SocrateMailer // nil → skip email (dev mode)
 	tokenRepo  magicLinkTokenRepo
-	appBaseURL string             // e.g. "https://api.ascenda.io" — used to build verify URLs
+	appBaseURL string // e.g. "https://api.ascenda.io" — used to build verify URLs
 	logger     *logrus.Entry
 }
 

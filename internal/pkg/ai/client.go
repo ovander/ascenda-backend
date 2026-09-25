@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
+	"github.com/sirupsen/logrus"
 )
 
 // Client is an AI gateway client for OpenAI and Claude providers.
@@ -166,7 +166,9 @@ func (c *Client) callOpenAI(ctx context.Context, prompt string, maxTokens int) (
 
 	var result struct {
 		Choices []struct {
-			Message struct{ Content string `json:"content"` } `json:"message"`
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
 		} `json:"choices"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

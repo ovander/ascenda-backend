@@ -10,16 +10,16 @@ type BudgetLineID string
 
 const (
 	// Revenue section
-	BudgetSalesRevenue    BudgetLineID = "sales_revenue"
-	BudgetOtherRevenue    BudgetLineID = "other_revenue"
-	BudgetTotalRevenue    BudgetLineID = "total_revenue"
+	BudgetSalesRevenue BudgetLineID = "sales_revenue"
+	BudgetOtherRevenue BudgetLineID = "other_revenue"
+	BudgetTotalRevenue BudgetLineID = "total_revenue"
 	// COGS section
-	BudgetRawMaterials    BudgetLineID = "raw_materials"
-	BudgetSubcontracting  BudgetLineID = "subcontracting"
-	BudgetDirectLabor     BudgetLineID = "direct_labor"
-	BudgetTotalCOGS       BudgetLineID = "total_cogs"
+	BudgetRawMaterials   BudgetLineID = "raw_materials"
+	BudgetSubcontracting BudgetLineID = "subcontracting"
+	BudgetDirectLabor    BudgetLineID = "direct_labor"
+	BudgetTotalCOGS      BudgetLineID = "total_cogs"
 	// Gross Margin
-	BudgetGrossMargin     BudgetLineID = "gross_margin"
+	BudgetGrossMargin BudgetLineID = "gross_margin"
 	// External Expenses
 	BudgetRentExpenses    BudgetLineID = "rent_expenses"
 	BudgetLeasingExpenses BudgetLineID = "leasing_expenses"
@@ -30,24 +30,24 @@ const (
 	BudgetHRExpenses      BudgetLineID = "hr_expenses"
 	BudgetTotalExternal   BudgetLineID = "total_external"
 	// Staff Costs
-	BudgetPayroll         BudgetLineID = "payroll"
-	BudgetIncentives      BudgetLineID = "incentives"
-	BudgetTotalStaff      BudgetLineID = "total_staff"
+	BudgetPayroll    BudgetLineID = "payroll"
+	BudgetIncentives BudgetLineID = "incentives"
+	BudgetTotalStaff BudgetLineID = "total_staff"
 	// Taxes
-	BudgetTaxesDuties     BudgetLineID = "taxes_duties"
+	BudgetTaxesDuties BudgetLineID = "taxes_duties"
 	// EBITDA
-	BudgetEBITDA          BudgetLineID = "ebitda"
+	BudgetEBITDA BudgetLineID = "ebitda"
 	// Depreciation
-	BudgetDepreciation    BudgetLineID = "depreciation"
+	BudgetDepreciation BudgetLineID = "depreciation"
 	// EBIT
-	BudgetEBIT            BudgetLineID = "ebit"
+	BudgetEBIT BudgetLineID = "ebit"
 	// Financial
 	BudgetFinancialIncome BudgetLineID = "financial_income"
 	BudgetFinancialExp    BudgetLineID = "financial_expense"
 	// Net
-	BudgetPreTaxProfit    BudgetLineID = "pretax_profit"
-	BudgetCorporateTax    BudgetLineID = "corporate_tax"
-	BudgetNetProfit       BudgetLineID = "net_profit"
+	BudgetPreTaxProfit BudgetLineID = "pretax_profit"
+	BudgetCorporateTax BudgetLineID = "corporate_tax"
+	BudgetNetProfit    BudgetLineID = "net_profit"
 )
 
 // BudgetMonthlyOverride represents monthly budget overrides (sparse storage).
@@ -83,16 +83,16 @@ type BudgetMonthlyRow struct {
 
 // Budget2Report is the computed summarised budget (not stored in DB).
 type Budget2Report struct {
-	Quarterly   Budget2View `json:"quarterly"`
-	SemiAnnual  Budget2View `json:"semiAnnual"`
-	ByFunction  Budget2View `json:"byFunction"`
-	ByCostType  Budget2View `json:"byCostType"`
+	Quarterly  Budget2View `json:"quarterly"`
+	SemiAnnual Budget2View `json:"semiAnnual"`
+	ByFunction Budget2View `json:"byFunction"`
+	ByCostType Budget2View `json:"byCostType"`
 }
 
 type Budget2View struct {
-	Label   string              `json:"label"`
-	Columns []string            `json:"columns"`
-	Rows    []Budget2Row        `json:"rows"`
+	Label   string       `json:"label"`
+	Columns []string     `json:"columns"`
+	Rows    []Budget2Row `json:"rows"`
 }
 
 type Budget2Row struct {

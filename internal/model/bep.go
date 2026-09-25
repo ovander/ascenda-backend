@@ -74,18 +74,18 @@ type BEPSnapshot struct {
 	ScenarioID uuid.UUID `gorm:"type:uuid;not null;index"             json:"scenarioId"`
 
 	// User-defined metadata
-	Label      string    `gorm:"not null"                             json:"label"`
-	FiscalYear int       `gorm:"default:0"                            json:"fiscalYear"`  // 0 = not year-anchored
+	Label       string     `gorm:"not null"                             json:"label"`
+	FiscalYear  int        `gorm:"default:0"                            json:"fiscalYear"` // 0 = not year-anchored
 	PeriodStart *time.Time `gorm:"type:date"                           json:"periodStart,omitempty"`
 	PeriodEnd   *time.Time `gorm:"type:date"                           json:"periodEnd,omitempty"`
-	Source      BEPSource `gorm:"not null;default:'manual'"            json:"source"`
+	Source      BEPSource  `gorm:"not null;default:'manual'"            json:"source"`
 
 	// Primary inputs — the two mandatory values for BEP computation.
 	// FixedCostsTotal: total annual fixed costs in €.
 	// ContributionMarginPct: (Revenue − VariableCosts) / Revenue expressed as a
 	// percentage [0.000001 – 100], stored to 6 decimal places.
-	FixedCostsTotal        decimal.Decimal `gorm:"type:numeric(18,2);not null;default:0" json:"fixedCostsTotal"`
-	ContributionMarginPct  decimal.Decimal `gorm:"type:numeric(12,6);not null;default:0" json:"contributionMarginPct"`
+	FixedCostsTotal       decimal.Decimal `gorm:"type:numeric(18,2);not null;default:0" json:"fixedCostsTotal"`
+	ContributionMarginPct decimal.Decimal `gorm:"type:numeric(12,6);not null;default:0" json:"contributionMarginPct"`
 
 	// Optional input. When provided, volume break-even can be computed.
 	// nil = user has not entered an average order value.
@@ -140,8 +140,8 @@ type SensitivityConfig struct {
 	StepSizePct decimal.Decimal `gorm:"type:numeric(6,2);not null" json:"stepSizePct"`
 	// RangePct: symmetric range around base value
 	// (e.g. 50 means ±50%, producing 11 columns at 10% step).
-	RangePct    decimal.Decimal `gorm:"type:numeric(6,2);not null" json:"rangePct"`
-	IsDefault   bool            `gorm:"default:true"               json:"isDefault"`
+	RangePct  decimal.Decimal `gorm:"type:numeric(6,2);not null" json:"rangePct"`
+	IsDefault bool            `gorm:"default:true"               json:"isDefault"`
 }
 
 func (SensitivityConfig) TableName() string { return "bep_sensitivity_configs" }
@@ -200,11 +200,11 @@ func (OptimisationPlan) TableName() string { return "bep_optimisation_plans" }
 // PCGAccountRefs stores a JSON array of PCG account codes for the accountant.
 type FixedCostSaving struct {
 	TenantScoped
-	PlanID         uuid.UUID       `gorm:"type:uuid;not null;index"              json:"planId"`
-	FixedCostLineID uuid.UUID      `gorm:"type:uuid;not null"                    json:"fixedCostLineId"`
-	SavingAmount   decimal.Decimal `gorm:"type:numeric(18,2);not null;default:0" json:"savingAmount"`
-	NewAmount      decimal.Decimal `gorm:"type:numeric(18,2);not null;default:0" json:"newAmount"`
-	Comment        string          `gorm:"type:text"                             json:"comment,omitempty"`
+	PlanID          uuid.UUID       `gorm:"type:uuid;not null;index"              json:"planId"`
+	FixedCostLineID uuid.UUID       `gorm:"type:uuid;not null"                    json:"fixedCostLineId"`
+	SavingAmount    decimal.Decimal `gorm:"type:numeric(18,2);not null;default:0" json:"savingAmount"`
+	NewAmount       decimal.Decimal `gorm:"type:numeric(18,2);not null;default:0" json:"newAmount"`
+	Comment         string          `gorm:"type:text"                             json:"comment,omitempty"`
 	// PCGAccountRefs: PCG account codes this saving relates to.
 	// Serialised as a JSON array in the TEXT column.
 	PCGAccountRefs StringSlice `gorm:"type:text;serializer:json"             json:"pcgAccountRefs,omitempty"`
@@ -217,11 +217,11 @@ func (FixedCostSaving) TableName() string { return "bep_fixed_cost_savings" }
 // VariableCostSaving records one proposed saving on a variable cost line.
 type VariableCostSaving struct {
 	TenantScoped
-	PlanID              uuid.UUID       `gorm:"type:uuid;not null;index"              json:"planId"`
-	VariableCostLineID  uuid.UUID       `gorm:"type:uuid;not null"                    json:"variableCostLineId"`
-	SavingAmount        decimal.Decimal `gorm:"type:numeric(18,4);not null;default:0" json:"savingAmount"`
-	NewAmount           decimal.Decimal `gorm:"type:numeric(18,4);not null;default:0" json:"newAmount"`
-	Comment             string          `gorm:"type:text"                             json:"comment,omitempty"`
+	PlanID             uuid.UUID       `gorm:"type:uuid;not null;index"              json:"planId"`
+	VariableCostLineID uuid.UUID       `gorm:"type:uuid;not null"                    json:"variableCostLineId"`
+	SavingAmount       decimal.Decimal `gorm:"type:numeric(18,4);not null;default:0" json:"savingAmount"`
+	NewAmount          decimal.Decimal `gorm:"type:numeric(18,4);not null;default:0" json:"newAmount"`
+	Comment            string          `gorm:"type:text"                             json:"comment,omitempty"`
 }
 
 func (VariableCostSaving) TableName() string { return "bep_variable_cost_savings" }
@@ -409,19 +409,19 @@ type FixedCostSensRow struct {
 
 // BEPReport is the full computed report returned by GET /bep/snapshots/{id}/report.
 type BEPReport struct {
-	SnapshotID uuid.UUID      `json:"snapshotId"`
-	Core       BEPCoreResult  `json:"core"`
-	EBETable   []EBERow       `json:"ebeTable"`   // 11 columns, ±range% in step% increments
-	MarginSens []MarginSensRow `json:"marginSens"` // 11 columns, ±range pp in step pp increments
-	CostSens   []FixedCostSensRow `json:"costSens"` // 11 columns, ±range% in step% increments
+	SnapshotID uuid.UUID          `json:"snapshotId"`
+	Core       BEPCoreResult      `json:"core"`
+	EBETable   []EBERow           `json:"ebeTable"`   // 11 columns, ±range% in step% increments
+	MarginSens []MarginSensRow    `json:"marginSens"` // 11 columns, ±range pp in step pp increments
+	CostSens   []FixedCostSensRow `json:"costSens"`   // 11 columns, ±range% in step% increments
 }
 
 // OptimisedCostState shows baseline vs optimised for one cost dimension.
 type OptimisedCostState struct {
-	Current     decimal.Decimal `json:"current"`    // baseline value
-	Optimised   decimal.Decimal `json:"optimised"`  // after applying savings
-	DeltaAbs    decimal.Decimal `json:"deltaAbs"`   // current − optimised (positive = saving)
-	DeltaPct    decimal.Decimal `json:"deltaPct"`   // Δ% from baseline
+	Current   decimal.Decimal `json:"current"`   // baseline value
+	Optimised decimal.Decimal `json:"optimised"` // after applying savings
+	DeltaAbs  decimal.Decimal `json:"deltaAbs"`  // current − optimised (positive = saving)
+	DeltaPct  decimal.Decimal `json:"deltaPct"`  // Δ% from baseline
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -439,16 +439,16 @@ type MultiYearBEPRow struct {
 	ContributionMarginPct decimal.Decimal `json:"contributionMarginPct"` // 0–100
 
 	// Break-even output
-	BEPRevenue        *decimal.Decimal `json:"bepRevenue"`        // nil when margin ≤ 0
-	BEPRevenueUndefined bool           `json:"bepRevenueUndefined"`
-	RevenueAboveBEP   bool             `json:"revenueAboveBep"`   // planned revenue ≥ BEP revenue
+	BEPRevenue          *decimal.Decimal `json:"bepRevenue"` // nil when margin ≤ 0
+	BEPRevenueUndefined bool             `json:"bepRevenueUndefined"`
+	RevenueAboveBEP     bool             `json:"revenueAboveBep"` // planned revenue ≥ BEP revenue
 
 	// Profitability
 	AnnualEBE     decimal.Decimal `json:"annualEbe"`     // Revenue × Margin% − FixedCosts (€)
 	CumulativeEBE decimal.Decimal `json:"cumulativeEbe"` // running sum from year 1
 
 	// Flags
-	IsFirstAnnualBEP        bool `json:"isFirstAnnualBep"`        // first year with annual EBE > 0
+	IsFirstAnnualBEP         bool `json:"isFirstAnnualBep"`         // first year with annual EBE > 0
 	IsCumulativeBEPCrossover bool `json:"isCumulativeBepCrossover"` // year cumulative EBE first ≥ 0
 }
 
@@ -461,7 +461,7 @@ type MultiYearBEPReport struct {
 	FirstProfitableYear *int `json:"firstProfitableYear,omitempty"`
 
 	// Year in which cumulative EBE first turns non-negative (payback year)
-	CumulativeBEPYear  *int `json:"cumulativeBepYear,omitempty"`
+	CumulativeBEPYear *int `json:"cumulativeBepYear,omitempty"`
 	// Estimated month within that year at which cumulative crossover occurs (1–12)
 	CumulativeBEPMonth *int `json:"cumulativeBepMonth,omitempty"`
 
@@ -475,10 +475,10 @@ type OptimisedBEPReport struct {
 	PlanID     uuid.UUID `json:"planId"`
 
 	// Baseline (unchanged)
-	BaselineFixedCosts   decimal.Decimal  `json:"baselineFixedCosts"`
-	BaselineMarginPct    decimal.Decimal  `json:"baselineMarginPct"`
-	BaselineBEPRevenue   *decimal.Decimal `json:"baselineBepRevenue"`
-	BaselineBEPVolume    *decimal.Decimal `json:"baselineBepVolume"`
+	BaselineFixedCosts decimal.Decimal  `json:"baselineFixedCosts"`
+	BaselineMarginPct  decimal.Decimal  `json:"baselineMarginPct"`
+	BaselineBEPRevenue *decimal.Decimal `json:"baselineBepRevenue"`
+	BaselineBEPVolume  *decimal.Decimal `json:"baselineBepVolume"`
 
 	// Fixed cost optimisation
 	FixedCosts OptimisedCostState `json:"fixedCosts"`
@@ -488,8 +488,8 @@ type OptimisedBEPReport struct {
 	MarginPct           OptimisedCostState `json:"marginPct"`
 
 	// Combined optimised break-even
-	OptimisedBEPRevenue   *decimal.Decimal `json:"optimisedBepRevenue"`
-	OptimisedBEPVolume    *decimal.Decimal `json:"optimisedBepVolume"`
+	OptimisedBEPRevenue *decimal.Decimal `json:"optimisedBepRevenue"`
+	OptimisedBEPVolume  *decimal.Decimal `json:"optimisedBepVolume"`
 
 	// Improvement deltas
 	BEPRevenueImprovementPct *decimal.Decimal `json:"bepRevenueImprovementPct"` // nil if baseline undefined

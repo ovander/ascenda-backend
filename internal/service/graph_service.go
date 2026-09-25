@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"ascenda/internal/compute"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-	"ascenda/internal/compute"
-	"github.com/ovander/backendkit/apierror"
 )
 
 // ChartDataset mirrors the frontend ChartDataset interface.
@@ -62,25 +62,25 @@ func (s *GraphService) GetAllAnnualCharts(ctx context.Context, tenantID, scenari
 			Labels: labels,
 			Datasets: []ChartDataset{
 				{Label: "Domestic Sales", Data: decimalsToFloats(g.SalesAnalysis.DomesticSales[:])},
-				{Label: "Export Sales",   Data: decimalsToFloats(g.SalesAnalysis.ExportSales[:])},
+				{Label: "Export Sales", Data: decimalsToFloats(g.SalesAnalysis.ExportSales[:])},
 			},
 		},
 		"cost-structure": {
 			Labels: labels,
 			Datasets: []ChartDataset{
-				{Label: "COGS",               Data: decimalsToFloats(g.CostStructure.COGS[:])},
-				{Label: "External Expenses",  Data: decimalsToFloats(g.CostStructure.ExternalExp[:])},
-				{Label: "Payroll",            Data: decimalsToFloats(g.CostStructure.PayrollExp[:])},
-				{Label: "Depreciation",       Data: decimalsToFloats(g.CostStructure.Depreciation[:])},
-				{Label: "Other Opex",         Data: decimalsToFloats(g.CostStructure.OtherOpex[:])},
+				{Label: "COGS", Data: decimalsToFloats(g.CostStructure.COGS[:])},
+				{Label: "External Expenses", Data: decimalsToFloats(g.CostStructure.ExternalExp[:])},
+				{Label: "Payroll", Data: decimalsToFloats(g.CostStructure.PayrollExp[:])},
+				{Label: "Depreciation", Data: decimalsToFloats(g.CostStructure.Depreciation[:])},
+				{Label: "Other Opex", Data: decimalsToFloats(g.CostStructure.OtherOpex[:])},
 			},
 		},
 		"revenue-profit-cash": {
 			Labels: labels,
 			Datasets: []ChartDataset{
-				{Label: "Revenue",         Data: decimalsToFloats(g.RevProfitCash.Revenue[:])},
-				{Label: "Net Profit",      Data: decimalsToFloats(g.RevProfitCash.NetProfit[:])},
-				{Label: "Cash Flow",       Data: decimalsToFloats(g.RevProfitCash.CashFlow[:]),       Type: "line"},
+				{Label: "Revenue", Data: decimalsToFloats(g.RevProfitCash.Revenue[:])},
+				{Label: "Net Profit", Data: decimalsToFloats(g.RevProfitCash.NetProfit[:])},
+				{Label: "Cash Flow", Data: decimalsToFloats(g.RevProfitCash.CashFlow[:]), Type: "line"},
 				{Label: "Cumulative Cash", Data: decimalsToFloats(g.RevProfitCash.CumulativeCash[:]), Type: "line"},
 			},
 		},
@@ -88,35 +88,35 @@ func (s *GraphService) GetAllAnnualCharts(ctx context.Context, tenantID, scenari
 			Labels: labels,
 			Datasets: []ChartDataset{
 				{Label: "Total Requirements", Data: decimalsToFloats(g.FinRequirements.Requirements[:])},
-				{Label: "Total Resources",    Data: decimalsToFloats(g.FinRequirements.Resources[:])},
-				{Label: "Cumulative Cash",    Data: decimalsToFloats(g.FinRequirements.CumulativeCash[:]), Type: "line"},
+				{Label: "Total Resources", Data: decimalsToFloats(g.FinRequirements.Resources[:])},
+				{Label: "Cumulative Cash", Data: decimalsToFloats(g.FinRequirements.CumulativeCash[:]), Type: "line"},
 			},
 		},
 		"balance-sheet-structure": {
 			Labels: labels,
 			Datasets: []ChartDataset{
-				{Label: "Equity",          Data: decimalsToFloats(g.BalanceSheet.Equity[:])},
-				{Label: "Long-Term Debt",  Data: decimalsToFloats(g.BalanceSheet.LongTermDebt[:])},
+				{Label: "Equity", Data: decimalsToFloats(g.BalanceSheet.Equity[:])},
+				{Label: "Long-Term Debt", Data: decimalsToFloats(g.BalanceSheet.LongTermDebt[:])},
 				{Label: "Short-Term Debt", Data: decimalsToFloats(g.BalanceSheet.ShortTermDebt[:])},
 			},
 		},
 		"headcount-annual": {
 			Labels: labels,
 			Datasets: []ChartDataset{
-				{Label: "R&D",        Data: decimalsToFloats(g.HeadcountAnnual.RnD[:])},
+				{Label: "R&D", Data: decimalsToFloats(g.HeadcountAnnual.RnD[:])},
 				{Label: "Production", Data: decimalsToFloats(g.HeadcountAnnual.Production[:])},
-				{Label: "Sales",      Data: decimalsToFloats(g.HeadcountAnnual.Sales[:])},
-				{Label: "G&A",        Data: decimalsToFloats(g.HeadcountAnnual.GnA[:])},
+				{Label: "Sales", Data: decimalsToFloats(g.HeadcountAnnual.Sales[:])},
+				{Label: "G&A", Data: decimalsToFloats(g.HeadcountAnnual.GnA[:])},
 			},
 		},
 		"pnl-cascade": {
 			Labels: labels,
 			Datasets: []ChartDataset{
-				{Label: "Revenue",      Data: decimalsToFloats(g.PnLCascade.Revenue[:])},
+				{Label: "Revenue", Data: decimalsToFloats(g.PnLCascade.Revenue[:])},
 				{Label: "Gross Margin", Data: decimalsToFloats(g.PnLCascade.GrossMargin[:])},
-				{Label: "EBITDA",       Data: decimalsToFloats(g.PnLCascade.EBITDA[:])},
-				{Label: "EBIT",         Data: decimalsToFloats(g.PnLCascade.EBIT[:]),       Type: "line"},
-				{Label: "Net Profit",   Data: decimalsToFloats(g.PnLCascade.NetProfit[:]),  Type: "line"},
+				{Label: "EBITDA", Data: decimalsToFloats(g.PnLCascade.EBITDA[:])},
+				{Label: "EBIT", Data: decimalsToFloats(g.PnLCascade.EBIT[:]), Type: "line"},
+				{Label: "Net Profit", Data: decimalsToFloats(g.PnLCascade.NetProfit[:]), Type: "line"},
 			},
 		},
 	}
@@ -194,8 +194,8 @@ func (s *GraphService) GetAnnualChart(ctx context.Context, tenantID, scenarioID 
 		return &ChartData{
 			Labels: labels,
 			Datasets: []ChartDataset{
-				{Label: "Equity",          Data: decimalsToFloats(g.BalanceSheet.Equity[:])},
-				{Label: "Long-Term Debt",  Data: decimalsToFloats(g.BalanceSheet.LongTermDebt[:])},
+				{Label: "Equity", Data: decimalsToFloats(g.BalanceSheet.Equity[:])},
+				{Label: "Long-Term Debt", Data: decimalsToFloats(g.BalanceSheet.LongTermDebt[:])},
 				{Label: "Short-Term Debt", Data: decimalsToFloats(g.BalanceSheet.ShortTermDebt[:])},
 			},
 		}, nil
@@ -204,10 +204,10 @@ func (s *GraphService) GetAnnualChart(ctx context.Context, tenantID, scenarioID 
 		return &ChartData{
 			Labels: labels,
 			Datasets: []ChartDataset{
-				{Label: "R&D",        Data: decimalsToFloats(g.HeadcountAnnual.RnD[:])},
+				{Label: "R&D", Data: decimalsToFloats(g.HeadcountAnnual.RnD[:])},
 				{Label: "Production", Data: decimalsToFloats(g.HeadcountAnnual.Production[:])},
-				{Label: "Sales",      Data: decimalsToFloats(g.HeadcountAnnual.Sales[:])},
-				{Label: "G&A",        Data: decimalsToFloats(g.HeadcountAnnual.GnA[:])},
+				{Label: "Sales", Data: decimalsToFloats(g.HeadcountAnnual.Sales[:])},
+				{Label: "G&A", Data: decimalsToFloats(g.HeadcountAnnual.GnA[:])},
 			},
 		}, nil
 
@@ -215,11 +215,11 @@ func (s *GraphService) GetAnnualChart(ctx context.Context, tenantID, scenarioID 
 		return &ChartData{
 			Labels: labels,
 			Datasets: []ChartDataset{
-				{Label: "Revenue",      Data: decimalsToFloats(g.PnLCascade.Revenue[:])},
+				{Label: "Revenue", Data: decimalsToFloats(g.PnLCascade.Revenue[:])},
 				{Label: "Gross Margin", Data: decimalsToFloats(g.PnLCascade.GrossMargin[:])},
-				{Label: "EBITDA",       Data: decimalsToFloats(g.PnLCascade.EBITDA[:])},
-				{Label: "EBIT",         Data: decimalsToFloats(g.PnLCascade.EBIT[:]), Type: "line"},
-				{Label: "Net Profit",   Data: decimalsToFloats(g.PnLCascade.NetProfit[:]), Type: "line"},
+				{Label: "EBITDA", Data: decimalsToFloats(g.PnLCascade.EBITDA[:])},
+				{Label: "EBIT", Data: decimalsToFloats(g.PnLCascade.EBIT[:]), Type: "line"},
+				{Label: "Net Profit", Data: decimalsToFloats(g.PnLCascade.NetProfit[:]), Type: "line"},
 			},
 		}, nil
 

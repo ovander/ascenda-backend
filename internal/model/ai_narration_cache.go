@@ -17,12 +17,12 @@ import (
 // invalidation semantics required.  Stale-but-never-matched rows are harmless
 // and can be cleaned up with a periodic maintenance job if needed.
 type AINarrationCache struct {
-	CacheKey   string    `gorm:"type:varchar(120);primaryKey" json:"cache_key"`
-	TenantID   uuid.UUID `gorm:"type:uuid;primaryKey" json:"tenant_id"`
-	Output     []byte    `gorm:"type:jsonb;not null" json:"-"` // JSON-encoded NarrationOutput
-	HitCount   int       `gorm:"not null;default:0" json:"hit_count"`
-	CreatedAt  time.Time `gorm:"autoCreateTime" json:"created_at"`
-	LastHitAt  *time.Time `json:"last_hit_at,omitempty"`
+	CacheKey  string     `gorm:"type:varchar(120);primaryKey" json:"cache_key"`
+	TenantID  uuid.UUID  `gorm:"type:uuid;primaryKey" json:"tenant_id"`
+	Output    []byte     `gorm:"type:jsonb;not null" json:"-"` // JSON-encoded NarrationOutput
+	HitCount  int        `gorm:"not null;default:0" json:"hit_count"`
+	CreatedAt time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	LastHitAt *time.Time `json:"last_hit_at,omitempty"`
 }
 
 // TableName returns the table name for GORM.

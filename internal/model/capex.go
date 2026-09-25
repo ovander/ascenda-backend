@@ -64,25 +64,25 @@ func (CapexEntry) TableName() string {
 
 // CapexSummary is the computed output for the Capex sheet (not stored in DB).
 type CapexSummary struct {
-	Investments         []CapexCategoryRow   `json:"investments"`
-	Totals              CapexTotals          `json:"totals"`
+	Investments          []CapexCategoryRow     `json:"investments"`
+	Totals               CapexTotals            `json:"totals"`
 	DepreciationSchedule []CapexDepreciationRow `json:"depreciationSchedule"`
 }
 
 type CapexCategoryRow struct {
-	Category        AssetCategory      `json:"category"`
-	IsDepreciable   bool               `json:"isDepreciable"`
-	IsStaffLinked   bool               `json:"isStaffLinked"`
-	DepreciationYears int              `json:"depreciationYears"`
-	Years           [5]decimal.Decimal `json:"years"`
+	Category          AssetCategory      `json:"category"`
+	IsDepreciable     bool               `json:"isDepreciable"`
+	IsStaffLinked     bool               `json:"isStaffLinked"`
+	DepreciationYears int                `json:"depreciationYears"`
+	Years             [5]decimal.Decimal `json:"years"`
 }
 
 type CapexTotals struct {
-	TotalCapex          [5]decimal.Decimal `json:"totalCapex"`
-	PreviousNetAssets   decimal.Decimal    `json:"previousNetAssets"`
-	PriorDepreciation   [5]decimal.Decimal `json:"priorDepreciation"`
-	TotalDepreciation   [5]decimal.Decimal `json:"totalDepreciation"`
-	NetAssets           [6]decimal.Decimal `json:"netAssets"`
+	TotalCapex        [5]decimal.Decimal `json:"totalCapex"`
+	PreviousNetAssets decimal.Decimal    `json:"previousNetAssets"`
+	PriorDepreciation [5]decimal.Decimal `json:"priorDepreciation"`
+	TotalDepreciation [5]decimal.Decimal `json:"totalDepreciation"`
+	NetAssets         [6]decimal.Decimal `json:"netAssets"`
 }
 
 type CapexDepreciationRow struct {

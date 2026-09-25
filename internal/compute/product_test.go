@@ -4,17 +4,17 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestComputeProductRevenue(t *testing.T) {
 	config := model.PlanConfig{
-		CorporateTaxRate:   decimal.NewFromFloat(0.25),
-		EmployerTaxRate: decimal.NewFromFloat(0.42),
-		IncentiveCap:       decimal.NewFromFloat(0.15),
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		EmployerTaxRate:  decimal.NewFromFloat(0.42),
+		IncentiveCap:     decimal.NewFromFloat(0.15),
 	}
 
 	scenarioID := uuid.New()
@@ -28,8 +28,8 @@ func TestComputeProductRevenue(t *testing.T) {
 		bundle   ProductInputBundle
 		config   model.PlanConfig
 		expected struct {
-			turnover   [5]decimal.Decimal
-			cogs       [5]decimal.Decimal
+			turnover    [5]decimal.Decimal
+			cogs        [5]decimal.Decimal
 			grossMargin [5]decimal.Decimal
 		}
 	}{
@@ -121,8 +121,8 @@ func TestComputeProductRevenue(t *testing.T) {
 			},
 			config: config,
 			expected: struct {
-				turnover   [5]decimal.Decimal
-				cogs       [5]decimal.Decimal
+				turnover    [5]decimal.Decimal
+				cogs        [5]decimal.Decimal
 				grossMargin [5]decimal.Decimal
 			}{
 				// 3000 units * 100 = 300 000 € turnover per year
@@ -202,12 +202,12 @@ func TestComputeProductRevenue(t *testing.T) {
 					},
 				},
 				Volumes: []model.ProductSalesVolume{},
-				Margins:  []model.ProductDistributorMargin{},
+				Margins: []model.ProductDistributorMargin{},
 			},
 			config: config,
 			expected: struct {
-				turnover   [5]decimal.Decimal
-				cogs       [5]decimal.Decimal
+				turnover    [5]decimal.Decimal
+				cogs        [5]decimal.Decimal
 				grossMargin [5]decimal.Decimal
 			}{
 				turnover: [5]decimal.Decimal{
@@ -308,8 +308,8 @@ func TestComputeProductRevenue(t *testing.T) {
 			},
 			config: config,
 			expected: struct {
-				turnover   [5]decimal.Decimal
-				cogs       [5]decimal.Decimal
+				turnover    [5]decimal.Decimal
+				cogs        [5]decimal.Decimal
 				grossMargin [5]decimal.Decimal
 			}{
 				// Year 1: 100 units * 100 = 10000, 100 * 50 = 5000, margin = 5000
@@ -351,9 +351,9 @@ func TestComputeProductRevenue(t *testing.T) {
 
 func TestComputeConsolidatedRevenue(t *testing.T) {
 	config := model.PlanConfig{
-		CorporateTaxRate:   decimal.NewFromFloat(0.25),
-		EmployerTaxRate: decimal.NewFromFloat(0.42),
-		IncentiveCap:       decimal.NewFromFloat(0.15),
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		EmployerTaxRate:  decimal.NewFromFloat(0.42),
+		IncentiveCap:     decimal.NewFromFloat(0.15),
 	}
 
 	scenarioID := uuid.New()
@@ -361,9 +361,9 @@ func TestComputeConsolidatedRevenue(t *testing.T) {
 	product2ID := uuid.New()
 
 	tests := []struct {
-		name              string
-		products          []model.Product
-		bundles           []ProductInputBundle
+		name                  string
+		products              []model.Product
+		bundles               []ProductInputBundle
 		expectedTotalTurnover [5]decimal.Decimal
 		expectedTotalCOGS     [5]decimal.Decimal
 	}{

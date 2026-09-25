@@ -4,30 +4,30 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestComputeFullPlan(t *testing.T) {
 	tests := []struct {
-		name                string
-		input               FullPlanInput
-		expectedNoWarnings  bool
-		shouldNotPanic      bool
+		name               string
+		input              FullPlanInput
+		expectedNoWarnings bool
+		shouldNotPanic     bool
 	}{
 		{
 			name: "minimal valid input with empty entries produces zero reports",
 			input: FullPlanInput{
 				Config: model.PlanConfig{
-						DiscountRate:         decimal.NewFromFloat(0.10),
-					CorporateTaxRate:     decimal.NewFromFloat(0.25),
-					EmployerTaxRate:      decimal.NewFromFloat(0.42),
-					IncentiveCap:         decimal.NewFromFloat(0.15),
-					Country:              "BE",
-					SalaryMonthsPerYear:  12,
+					DiscountRate:          decimal.NewFromFloat(0.10),
+					CorporateTaxRate:      decimal.NewFromFloat(0.25),
+					EmployerTaxRate:       decimal.NewFromFloat(0.42),
+					IncentiveCap:          decimal.NewFromFloat(0.15),
+					Country:               "BE",
+					SalaryMonthsPerYear:   12,
 					FirstFiscalYearMonths: 12,
-					ForecastStart:        time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+					ForecastStart:         time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 				},
 				OpeningBalance: model.OpeningBalance{
 					ShareCapital:        decimal.NewFromInt(100000),
@@ -72,14 +72,14 @@ func TestComputeFullPlan(t *testing.T) {
 			name: "basic plan with single product",
 			input: FullPlanInput{
 				Config: model.PlanConfig{
-						DiscountRate:         decimal.NewFromFloat(0.10),
-					CorporateTaxRate:     decimal.NewFromFloat(0.25),
-					EmployerTaxRate:      decimal.NewFromFloat(0.42),
-					IncentiveCap:         decimal.NewFromFloat(0.15),
-					Country:              "BE",
-					SalaryMonthsPerYear:  12,
+					DiscountRate:          decimal.NewFromFloat(0.10),
+					CorporateTaxRate:      decimal.NewFromFloat(0.25),
+					EmployerTaxRate:       decimal.NewFromFloat(0.42),
+					IncentiveCap:          decimal.NewFromFloat(0.15),
+					Country:               "BE",
+					SalaryMonthsPerYear:   12,
 					FirstFiscalYearMonths: 12,
-					ForecastStart:        time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+					ForecastStart:         time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 				},
 				OpeningBalance: model.OpeningBalance{
 					ShareCapital:        decimal.NewFromInt(100000),
@@ -207,14 +207,14 @@ func TestComputeFullPlan(t *testing.T) {
 func TestComputeFullPlanIntegration(t *testing.T) {
 	// Integration test: ensure all layers compute without panicking
 	config := model.PlanConfig{
-		DiscountRate:         decimal.NewFromFloat(0.10),
-		CorporateTaxRate:     decimal.NewFromFloat(0.25),
-		EmployerTaxRate:      decimal.NewFromFloat(0.42),
-		IncentiveCap:         decimal.NewFromFloat(0.15),
-		Country:              "BE",
-		SalaryMonthsPerYear:  12,
+		DiscountRate:          decimal.NewFromFloat(0.10),
+		CorporateTaxRate:      decimal.NewFromFloat(0.25),
+		EmployerTaxRate:       decimal.NewFromFloat(0.42),
+		IncentiveCap:          decimal.NewFromFloat(0.15),
+		Country:               "BE",
+		SalaryMonthsPerYear:   12,
 		FirstFiscalYearMonths: 12,
-		ForecastStart:        time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		ForecastStart:         time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 
 	input := FullPlanInput{

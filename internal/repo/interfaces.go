@@ -1,10 +1,10 @@
 package repo
 
 import (
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
 )
 
 // PlanRepository defines the interface for business plan data operations
@@ -319,27 +319,27 @@ type PlanDeps interface {
 
 // Compile-time interface compliance checks
 var (
-	_ PlanRepository        = (*PlanRepo)(nil)
-	_ PlanDeps              = (*RepoBundle)(nil)
+	_ PlanRepository         = (*PlanRepo)(nil)
+	_ PlanDeps               = (*RepoBundle)(nil)
 	_ OrganizationRepository = (*OrgRepo)(nil)
 
-	_ ScenarioRepository    = (*ScenarioRepo)(nil)
-	_ TenantRepository      = (*TenantRepo)(nil)
-	_ UserRepository        = (*UserRepo)(nil)
-	_ SettingsRepository    = (*SettingsRepo)(nil)
-	_ ProductRepository     = (*ProductRepo)(nil)
-	_ StaffRepository       = (*StaffRepo)(nil)
-	_ CapexRepository       = (*CapexRepo)(nil)
-	_ OpexRepository        = (*OpexRepo)(nil)
-	_ PnLRepository         = (*PnLRepo)(nil)
-	_ FiplanRepository      = (*FiplanRepo)(nil)
-	_ PnlCashRepository     = (*PnlCashRepo)(nil)
-	_ WCRRepository         = (*WCRRepo)(nil)
-	_ CashRepository        = (*CashRepo)(nil)
-	_ BudgetRepository      = (*BudgetRepo)(nil)
-	_ SnapshotRepository    = (*SnapshotRepo)(nil)
-	_ AuditRepository       = (*AuditRepo)(nil)
-	_ PlanMemberRepository  = (*PlanMemberRepo)(nil)
-	_ CapTableRepository    = (*CapTableRepo)(nil)
-	_ BEPRepository         = (*BEPRepo)(nil)
+	_ ScenarioRepository   = (*ScenarioRepo)(nil)
+	_ TenantRepository     = (*TenantRepo)(nil)
+	_ UserRepository       = (*UserRepo)(nil)
+	_ SettingsRepository   = (*SettingsRepo)(nil)
+	_ ProductRepository    = (*ProductRepo)(nil)
+	_ StaffRepository      = (*StaffRepo)(nil)
+	_ CapexRepository      = (*CapexRepo)(nil)
+	_ OpexRepository       = (*OpexRepo)(nil)
+	_ PnLRepository        = (*PnLRepo)(nil)
+	_ FiplanRepository     = (*FiplanRepo)(nil)
+	_ PnlCashRepository    = (*PnlCashRepo)(nil)
+	_ WCRRepository        = (*WCRRepo)(nil)
+	_ CashRepository       = (*CashRepo)(nil)
+	_ BudgetRepository     = (*BudgetRepo)(nil)
+	_ SnapshotRepository   = (*SnapshotRepo)(nil)
+	_ AuditRepository      = (*AuditRepo)(nil)
+	_ PlanMemberRepository = (*PlanMemberRepo)(nil)
+	_ CapTableRepository   = (*CapTableRepo)(nil)
+	_ BEPRepository        = (*BEPRepo)(nil)
 )

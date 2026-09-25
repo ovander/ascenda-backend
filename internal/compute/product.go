@@ -1,15 +1,15 @@
 package compute
 
 import (
-	"fmt"
 	"ascenda/internal/model"
+	"fmt"
 
 	"github.com/shopspring/decimal"
 )
 
 // ProductInputBundle groups all per-product inputs across 5 years
 type ProductInputBundle struct {
-	Assumptions [MaxYears]model.ProductAssumption  // indexed by yearIndex-1
+	Assumptions [MaxYears]model.ProductAssumption // indexed by yearIndex-1
 	Volumes     []model.ProductSalesVolume        // all zone×channel combinations
 	Margins     []model.ProductDistributorMargin  // per zone per year
 	// SurplusInventoryValue[y] is populated by applyIndustryDriver when the

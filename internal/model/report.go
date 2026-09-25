@@ -41,21 +41,21 @@ type BSheetDetailed struct {
 }
 
 type BSheetDetailedAssets struct {
-	NoncurrentAssets  [6]decimal.Decimal `json:"noncurrentAssets"`
-	Inventory         [6]decimal.Decimal `json:"inventory"`
+	NoncurrentAssets   [6]decimal.Decimal `json:"noncurrentAssets"`
+	Inventory          [6]decimal.Decimal `json:"inventory"`
 	AccountsReceivable [6]decimal.Decimal `json:"accountsReceivable"`
-	Cash              [6]decimal.Decimal `json:"cash"`
-	TotalAssets       [6]decimal.Decimal `json:"totalAssets"`
+	Cash               [6]decimal.Decimal `json:"cash"`
+	TotalAssets        [6]decimal.Decimal `json:"totalAssets"`
 }
 
 type BSheetDetailedLiabilities struct {
-	ShareCapital    [6]decimal.Decimal `json:"shareCapital"`
-	NetProfit       [6]decimal.Decimal `json:"netProfit"`
+	ShareCapital     [6]decimal.Decimal `json:"shareCapital"`
+	NetProfit        [6]decimal.Decimal `json:"netProfit"`
 	RetainedEarnings [6]decimal.Decimal `json:"retainedEarnings"`
-	LongTermDebt    [6]decimal.Decimal `json:"longTermDebt"`
-	TradePayables   [6]decimal.Decimal `json:"tradePayables"`
-	SocialTaxDebts  [6]decimal.Decimal `json:"socialTaxDebts"`
-	OtherPayables   [6]decimal.Decimal `json:"otherPayables"`
+	LongTermDebt     [6]decimal.Decimal `json:"longTermDebt"`
+	TradePayables    [6]decimal.Decimal `json:"tradePayables"`
+	SocialTaxDebts   [6]decimal.Decimal `json:"socialTaxDebts"`
+	OtherPayables    [6]decimal.Decimal `json:"otherPayables"`
 	TotalLiabilities [6]decimal.Decimal `json:"totalLiabilities"`
 }
 
@@ -72,26 +72,26 @@ type BSheetCondensedAssets struct {
 }
 
 type BSheetCondensedLiabilities struct {
-	Equity       [6]decimal.Decimal `json:"equity"`
-	LongTermDebt [6]decimal.Decimal `json:"longTermDebt"`
+	Equity        [6]decimal.Decimal `json:"equity"`
+	LongTermDebt  [6]decimal.Decimal `json:"longTermDebt"`
 	ShortTermDebt [6]decimal.Decimal `json:"shortTermDebt"`
-	Total        [6]decimal.Decimal `json:"total"`
+	Total         [6]decimal.Decimal `json:"total"`
 }
 
 type BSheetAnalysis struct {
-	Equity          [6]decimal.Decimal `json:"equity"`
-	LongTermDebt    [6]decimal.Decimal `json:"longTermDebt"`
+	Equity           [6]decimal.Decimal `json:"equity"`
+	LongTermDebt     [6]decimal.Decimal `json:"longTermDebt"`
 	PermanentCapital [6]decimal.Decimal `json:"permanentCapital"`
-	ShortTermDebt   [6]decimal.Decimal `json:"shortTermDebt"`
-	TotalSources    [6]decimal.Decimal `json:"totalSources"`
+	ShortTermDebt    [6]decimal.Decimal `json:"shortTermDebt"`
+	TotalSources     [6]decimal.Decimal `json:"totalSources"`
 	NoncurrentAssets [6]decimal.Decimal `json:"noncurrentAssets"`
-	CurrentAssets   [6]decimal.Decimal `json:"currentAssets"`
-	Cash            [6]decimal.Decimal `json:"cash"`
-	TotalUses       [6]decimal.Decimal `json:"totalUses"`
-	WorkingCapital  [6]decimal.Decimal `json:"workingCapital"`
-	WCR             [6]decimal.Decimal `json:"wcr"`
-	WCMinusWCR      [6]decimal.Decimal `json:"wcMinusWcr"`
-	NetDebt         [6]decimal.Decimal `json:"netDebt"`
+	CurrentAssets    [6]decimal.Decimal `json:"currentAssets"`
+	Cash             [6]decimal.Decimal `json:"cash"`
+	TotalUses        [6]decimal.Decimal `json:"totalUses"`
+	WorkingCapital   [6]decimal.Decimal `json:"workingCapital"`
+	WCR              [6]decimal.Decimal `json:"wcr"`
+	WCMinusWCR       [6]decimal.Decimal `json:"wcMinusWcr"`
+	NetDebt          [6]decimal.Decimal `json:"netDebt"`
 }
 
 type BSheetCapital struct {
@@ -105,13 +105,13 @@ type BSheetWorkingCapital struct {
 }
 
 type BSheetCharts struct {
-	Years            [6]int             `json:"years"`
-	AssetStructure   [6]decimal.Decimal `json:"assetStructure"`
+	Years              [6]int             `json:"years"`
+	AssetStructure     [6]decimal.Decimal `json:"assetStructure"`
 	LiabilityStructure [6]decimal.Decimal `json:"liabilityStructure"`
-	CapitalEmployed  [6]decimal.Decimal `json:"capitalEmployed"`
-	CapitalInvested  [6]decimal.Decimal `json:"capitalInvested"`
-	WCEmployed       [6]decimal.Decimal `json:"wcEmployed"`
-	WCInvested       [6]decimal.Decimal `json:"wcInvested"`
+	CapitalEmployed    [6]decimal.Decimal `json:"capitalEmployed"`
+	CapitalInvested    [6]decimal.Decimal `json:"capitalInvested"`
+	WCEmployed         [6]decimal.Decimal `json:"wcEmployed"`
+	WCInvested         [6]decimal.Decimal `json:"wcInvested"`
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -120,14 +120,14 @@ type BSheetCharts struct {
 
 // RatiosReport is the computed financial ratios output (not stored in DB).
 type RatiosReport struct {
-	Years          [5]int              `json:"years"`
-	ScalingFactor  decimal.Decimal     `json:"scalingFactor"`
-	Sales          RatiosSalesMargins  `json:"sales"`
-	Operational    RatiosOperational   `json:"operational"`
-	Profitability  RatiosProfitability `json:"profitability"`
+	Years          [5]int               `json:"years"`
+	ScalingFactor  decimal.Decimal      `json:"scalingFactor"`
+	Sales          RatiosSalesMargins   `json:"sales"`
+	Operational    RatiosOperational    `json:"operational"`
+	Profitability  RatiosProfitability  `json:"profitability"`
 	EquityLeverage RatiosEquityLeverage `json:"equityLeverage"`
-	Valuation      RatiosValuation     `json:"valuation"`
-	Charts         RatiosCharts        `json:"charts"`
+	Valuation      RatiosValuation      `json:"valuation"`
+	Charts         RatiosCharts         `json:"charts"`
 }
 
 type RatiosSalesMargins struct {
@@ -141,28 +141,28 @@ type RatiosSalesMargins struct {
 }
 
 type RatiosOperational struct {
-	StaffHeadcount   [5]decimal.Decimal `json:"staffHeadcount"`
-	SalesPerStaff    [5]decimal.Decimal `json:"salesPerStaff"`
-	PayrollExpenses  [5]decimal.Decimal `json:"payrollExpenses"`
-	PayrollPct       [5]decimal.Decimal `json:"payrollPct"`
+	StaffHeadcount     [5]decimal.Decimal `json:"staffHeadcount"`
+	SalesPerStaff      [5]decimal.Decimal `json:"salesPerStaff"`
+	PayrollExpenses    [5]decimal.Decimal `json:"payrollExpenses"`
+	PayrollPct         [5]decimal.Decimal `json:"payrollPct"`
 	CapitalExpenditure [5]decimal.Decimal `json:"capitalExpenditure"`
-	CapexPct         [5]decimal.Decimal `json:"capexPct"`
-	Depreciation     [5]decimal.Decimal `json:"depreciation"`
-	ExternalExpenses [5]decimal.Decimal `json:"externalExpenses"`
-	AdvertisingPromo [5]decimal.Decimal `json:"advertisingPromo"`
-	AdPromoPct       [5]decimal.Decimal `json:"adPromoPct"`
+	CapexPct           [5]decimal.Decimal `json:"capexPct"`
+	Depreciation       [5]decimal.Decimal `json:"depreciation"`
+	ExternalExpenses   [5]decimal.Decimal `json:"externalExpenses"`
+	AdvertisingPromo   [5]decimal.Decimal `json:"advertisingPromo"`
+	AdPromoPct         [5]decimal.Decimal `json:"adPromoPct"`
 }
 
 type RatiosProfitability struct {
-	AddedValue      [5]decimal.Decimal `json:"addedValue"`
-	AddedValuePct   [5]decimal.Decimal `json:"addedValuePct"`
-	EBITDA          [5]decimal.Decimal `json:"ebitda"`
-	EBITDAPct       [5]decimal.Decimal `json:"ebitdaPct"`
-	NetProfit       [5]decimal.Decimal `json:"netProfit"`
-	NetProfitPct    [5]decimal.Decimal `json:"netProfitPct"`
+	AddedValue    [5]decimal.Decimal `json:"addedValue"`
+	AddedValuePct [5]decimal.Decimal `json:"addedValuePct"`
+	EBITDA        [5]decimal.Decimal `json:"ebitda"`
+	EBITDAPct     [5]decimal.Decimal `json:"ebitdaPct"`
+	NetProfit     [5]decimal.Decimal `json:"netProfit"`
+	NetProfitPct  [5]decimal.Decimal `json:"netProfitPct"`
 	// CashFlow = NetProfit + Depreciation  (accounting / operating cash flow)
-	CashFlow        [5]decimal.Decimal `json:"cashFlow"`
-	CashFlowPct     [5]decimal.Decimal `json:"cashFlowPct"`
+	CashFlow    [5]decimal.Decimal `json:"cashFlow"`
+	CashFlowPct [5]decimal.Decimal `json:"cashFlowPct"`
 	// FreeCashFlow = CashFlow − CapEx − ΔWCR  (investable free cash flow)
 	FreeCashFlow    [5]decimal.Decimal `json:"freeCashFlow"`
 	FreeCashFlowPct [5]decimal.Decimal `json:"freeCashFlowPct"`
@@ -175,40 +175,40 @@ type RatiosEquityLeverage struct {
 	TotalEquityEOY    [5]decimal.Decimal `json:"totalEquityEoy"`
 	NetProfitMinusCap [5]decimal.Decimal `json:"netProfitMinusCap"`
 	// FinancialReturn = NetProfit / TotalEquityEOY
-	FinancialReturn   [5]decimal.Decimal `json:"financialReturn"`
+	FinancialReturn [5]decimal.Decimal `json:"financialReturn"`
 	// TotalAssets: denominator for EquityToAssets; included for audit traceability
-	TotalAssets       [5]decimal.Decimal `json:"totalAssets"`
+	TotalAssets [5]decimal.Decimal `json:"totalAssets"`
 	// EquityToAssets = TotalEquityEOY / TotalAssets
-	EquityToAssets    [5]decimal.Decimal `json:"equityToAssets"`
-	LTLoans           [5]decimal.Decimal `json:"ltLoans"`
-	LTLoansToEquity   [5]decimal.Decimal `json:"ltLoansToEquity"`
-	CashFlowToLoans   [5]decimal.Decimal `json:"cashFlowToLoans"`
-	FinExpToEBITDA    [5]decimal.Decimal `json:"finExpToEbitda"`
+	EquityToAssets  [5]decimal.Decimal `json:"equityToAssets"`
+	LTLoans         [5]decimal.Decimal `json:"ltLoans"`
+	LTLoansToEquity [5]decimal.Decimal `json:"ltLoansToEquity"`
+	CashFlowToLoans [5]decimal.Decimal `json:"cashFlowToLoans"`
+	FinExpToEBITDA  [5]decimal.Decimal `json:"finExpToEbitda"`
 	// WCR: working capital requirement in currency (base for WCRRotationDays)
-	WCR               [5]decimal.Decimal `json:"wcr"`
+	WCR [5]decimal.Decimal `json:"wcr"`
 	// WCRRotationDays = WCR / Sales × 365
-	WCRRotationDays   [5]decimal.Decimal `json:"wcrRotationDays"`
+	WCRRotationDays [5]decimal.Decimal `json:"wcrRotationDays"`
 }
 
 type RatiosValuation struct {
 	DiscountRate decimal.Decimal `json:"discountRate"`
 	// NPV = Σ FreeCashFlow[y] / (1+r)^(y+1)  for y = 0..4
-	NPV             decimal.Decimal `json:"npv"`
-	IRR             decimal.Decimal `json:"irr"`
-	IRRValid        bool            `json:"irrValid"`
+	NPV      decimal.Decimal `json:"npv"`
+	IRR      decimal.Decimal `json:"irr"`
+	IRRValid bool            `json:"irrValid"`
 	// TerminalValue = FreeCashFlow[4] / max(discountRate, 5%)  discounted to today
 	// Represents perpetuity value of steady-state FCF beyond year 5
-	TerminalValue   decimal.Decimal `json:"terminalValue"`
+	TerminalValue decimal.Decimal `json:"terminalValue"`
 	// DiscountedValue = NPV + TerminalValue  (enterprise value estimate)
 	DiscountedValue decimal.Decimal `json:"discountedValue"`
 	// PEMultiple = DiscountedValue / NetProfit[4]  (DCF-implied earnings multiple)
-	PEMultiple      decimal.Decimal `json:"peMultiple"`
+	PEMultiple decimal.Decimal `json:"peMultiple"`
 }
 
 type RatiosCharts struct {
-	Summary         interface{} `json:"summary"`
-	Waterfall       interface{} `json:"waterfall"`
-	RevenueByProduct interface{} `json:"revenueByProduct"`
+	Summary            interface{} `json:"summary"`
+	Waterfall          interface{} `json:"waterfall"`
+	RevenueByProduct   interface{} `json:"revenueByProduct"`
 	CashFlowComponents interface{} `json:"cashFlowComponents"`
 	ProfitabilityChart interface{} `json:"profitabilityChart"`
 }

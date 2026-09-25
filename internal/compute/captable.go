@@ -4,9 +4,9 @@ import (
 	"math"
 	"sort"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"ascenda/internal/model"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -327,7 +327,7 @@ func ComputeStockOptions(
 					Div(decimal.NewFromInt(totalShares)).Round(4)
 			}
 			if totalShares+totalOutstanding > 0 {
-				pctFD = decimal.NewFromInt(pos.SharesAfterRound+personalOptions).
+				pctFD = decimal.NewFromInt(pos.SharesAfterRound + personalOptions).
 					Div(decimal.NewFromInt(totalShares + totalOutstanding)).Round(4)
 			}
 
@@ -595,7 +595,7 @@ func buildPhase(
 		pctFD := pctBasicAfter
 		if totalShares+totalOutstanding > 0 {
 			personalOut := outstanding[shID]
-			pctFD = decimal.NewFromInt(cnt+personalOut).
+			pctFD = decimal.NewFromInt(cnt + personalOut).
 				Div(decimal.NewFromInt(totalShares + totalOutstanding)).Round(4)
 		}
 

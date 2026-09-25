@@ -17,11 +17,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
 	aiClient "ascenda/internal/pkg/ai"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
 )
 
 // ============================================================================
@@ -50,12 +50,12 @@ const (
 	NarrationTypeCashRunway         NarrationType = "cash_runway"
 
 	// ── Pro-tier narration types (driver-aware intelligence) ─────────────────
-	NarrationTypeUnitEconomics       NarrationType = "unit_economics"
-	NarrationTypeAssumptionReview    NarrationType = "assumption_review"
-	NarrationTypeBenchmarkCommentary NarrationType = "benchmark_commentary"
-	NarrationTypePortfolioMix        NarrationType = "portfolio_mix"
-	NarrationTypeDriverAdvisor       NarrationType = "driver_advisor"
-	NarrationTypeScenarioSuggestion  NarrationType = "scenario_suggestion"
+	NarrationTypeUnitEconomics        NarrationType = "unit_economics"
+	NarrationTypeAssumptionReview     NarrationType = "assumption_review"
+	NarrationTypeBenchmarkCommentary  NarrationType = "benchmark_commentary"
+	NarrationTypePortfolioMix         NarrationType = "portfolio_mix"
+	NarrationTypeDriverAdvisor        NarrationType = "driver_advisor"
+	NarrationTypeScenarioSuggestion   NarrationType = "scenario_suggestion"
 	NarrationTypeSensitivityNarrative NarrationType = "sensitivity_narrative"
 
 	// ── Enterprise narration type ─────────────────────────────────────────────
@@ -73,12 +73,12 @@ type FinancialMetric struct {
 
 // VarianceLine captures a single budget vs actual line.
 type VarianceLine struct {
-	Label    string  `json:"label"`
-	Budget   float64 `json:"budget"`
-	Actual   float64 `json:"actual"`
-	Variance float64 `json:"variance"`          // actual - budget
-	VarPct   float64 `json:"variance_pct"`      // (actual - budget) / |budget| × 100
-	Favourable bool  `json:"favourable"`
+	Label      string  `json:"label"`
+	Budget     float64 `json:"budget"`
+	Actual     float64 `json:"actual"`
+	Variance   float64 `json:"variance"`     // actual - budget
+	VarPct     float64 `json:"variance_pct"` // (actual - budget) / |budget| × 100
+	Favourable bool    `json:"favourable"`
 }
 
 // ScenarioSummary holds key metrics for one scenario (used in comparisons).
@@ -90,9 +90,9 @@ type ScenarioSummary struct {
 
 // ProductEconomics holds driver-specific per-product economic data for Pro narrations.
 type ProductEconomics struct {
-	ProductName string                 `json:"product_name"`
-	DriverType  string                 `json:"driver_type"` // saas, consulting, marketplace, industry, media, generic
-	Metrics     []FinancialMetric      `json:"metrics"`     // driver-specific KPIs (ARPU, take rate, eCPM, etc.)
+	ProductName  string                 `json:"product_name"`
+	DriverType   string                 `json:"driver_type"` // saas, consulting, marketplace, industry, media, generic
+	Metrics      []FinancialMetric      `json:"metrics"`     // driver-specific KPIs (ARPU, take rate, eCPM, etc.)
 	DriverParams map[string]interface{} `json:"driver_params,omitempty"`
 }
 
@@ -102,9 +102,9 @@ type SensitivityLever struct {
 	DriverType    string  `json:"driver_type"`
 	BaseValue     float64 `json:"base_value"`
 	StressValue   float64 `json:"stress_value"`
-	RevenueImpact float64 `json:"revenue_impact"`  // absolute change in revenue
-	EBITDAImpact  float64 `json:"ebitda_impact"`   // absolute change in EBITDA
-	Unit          string  `json:"unit,omitempty"`  // "%", "€", "units", etc.
+	RevenueImpact float64 `json:"revenue_impact"` // absolute change in revenue
+	EBITDAImpact  float64 `json:"ebitda_impact"`  // absolute change in EBITDA
+	Unit          string  `json:"unit,omitempty"` // "%", "€", "units", etc.
 }
 
 // AssumptionFlag is a driver-specific flagged assumption requiring review.
@@ -202,11 +202,11 @@ type NarrationParagraph struct {
 
 // NarrationOutput is the final structured result returned to the caller.
 type NarrationOutput struct {
-	Title         string                 `json:"title"`
-	Summary       string                 `json:"summary"`
-	Paragraphs    []NarrationParagraph   `json:"paragraphs"`
-	KeyTakeaways  []string               `json:"key_takeaways"`
-	IsAIGenerated bool                   `json:"is_ai_generated"`
+	Title         string               `json:"title"`
+	Summary       string               `json:"summary"`
+	Paragraphs    []NarrationParagraph `json:"paragraphs"`
+	KeyTakeaways  []string             `json:"key_takeaways"`
+	IsAIGenerated bool                 `json:"is_ai_generated"`
 	// StructuredData holds machine-readable output for features that produce
 	// structured results (e.g. ScenarioSuggestion returns param diffs).
 	StructuredData map[string]interface{} `json:"structured_data,omitempty"`
@@ -413,10 +413,10 @@ TONE: High-level, accessible, balanced. Focus on the overall story. Avoid sensit
 // buildDataContext serialises the NarrationContext fields into a compact JSON block.
 func buildDataContext(nCtx *NarrationContext) string {
 	data := map[string]interface{}{
-		"plan":         nCtx.PlanName,
-		"scenario":     nCtx.ScenarioName,
-		"period":       nCtx.PeriodLabel,
-		"currency":     nCtx.Currency,
+		"plan":     nCtx.PlanName,
+		"scenario": nCtx.ScenarioName,
+		"period":   nCtx.PeriodLabel,
+		"currency": nCtx.Currency,
 	}
 
 	if nCtx.Revenue != nil {
@@ -636,18 +636,18 @@ func fallbackTitle(nCtx *NarrationContext, nt NarrationType) string {
 // fallbackTitleLabel returns the localised type label for a fallback title.
 func fallbackTitleLabel(nt NarrationType, lang, scenarioType string) string {
 	labels := map[NarrationType]map[string]string{
-		NarrationTypePlanSummary:        {"en": "Plan Summary", "fr": "Résumé du plan"},
-		NarrationTypeVarianceAnalysis:   {"en": "Variance Analysis", "fr": "Analyse des écarts"},
-		NarrationTypeScenarioComparison: {"en": "Scenario Comparison", "fr": "Comparaison de scénarios"},
-		NarrationTypeAnomalyDetection:   {"en": "Anomaly Report", "fr": "Rapport d'anomalies"},
-		NarrationTypeCashRunway:         {"en": "Cash Runway", "fr": "Autonomie de trésorerie"},
-		NarrationTypeUnitEconomics:      {"en": "Unit Economics", "fr": "Économie unitaire"},
-		NarrationTypeAssumptionReview:   {"en": "Assumption Review", "fr": "Revue des hypothèses"},
-		NarrationTypeBenchmarkCommentary:{"en": "Benchmark Commentary", "fr": "Commentaire benchmark"},
-		NarrationTypePortfolioMix:       {"en": "Portfolio Mix", "fr": "Mix portefeuille"},
-		NarrationTypeDriverAdvisor:      {"en": "Driver Advisor", "fr": "Conseiller de performance"},
-		NarrationTypeSensitivityNarrative:{"en": "Sensitivity Narrative", "fr": "Analyse de sensibilité"},
-		NarrationTypeInvestorMemo:       {"en": "Investor Memo", "fr": "Note investisseur"},
+		NarrationTypePlanSummary:          {"en": "Plan Summary", "fr": "Résumé du plan"},
+		NarrationTypeVarianceAnalysis:     {"en": "Variance Analysis", "fr": "Analyse des écarts"},
+		NarrationTypeScenarioComparison:   {"en": "Scenario Comparison", "fr": "Comparaison de scénarios"},
+		NarrationTypeAnomalyDetection:     {"en": "Anomaly Report", "fr": "Rapport d'anomalies"},
+		NarrationTypeCashRunway:           {"en": "Cash Runway", "fr": "Autonomie de trésorerie"},
+		NarrationTypeUnitEconomics:        {"en": "Unit Economics", "fr": "Économie unitaire"},
+		NarrationTypeAssumptionReview:     {"en": "Assumption Review", "fr": "Revue des hypothèses"},
+		NarrationTypeBenchmarkCommentary:  {"en": "Benchmark Commentary", "fr": "Commentaire benchmark"},
+		NarrationTypePortfolioMix:         {"en": "Portfolio Mix", "fr": "Mix portefeuille"},
+		NarrationTypeDriverAdvisor:        {"en": "Driver Advisor", "fr": "Conseiller de performance"},
+		NarrationTypeSensitivityNarrative: {"en": "Sensitivity Narrative", "fr": "Analyse de sensibilité"},
+		NarrationTypeInvestorMemo:         {"en": "Investor Memo", "fr": "Note investisseur"},
 	}
 
 	// ScenarioSuggestion needs the scenario type injected.

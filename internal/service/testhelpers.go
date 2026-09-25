@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"ascenda/internal/model"
 )
 
 // MockSettingsRepo is a manual mock implementation of SettingsRepo for testing
@@ -105,7 +105,10 @@ func (m *MockSettingsRepo) ListMultiYearAdjustments(tenantID, scenarioID uuid.UU
 func (m *MockSettingsRepo) BatchUpsertMultiYearAdjustments(tenantID, scenarioID uuid.UUID, adjustments []model.MultiYearAdjustment) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.MultiYearAdjustment, len(adjustments))
-	for i := range adjustments { a := adjustments[i]; ptrs[i] = &a }
+	for i := range adjustments {
+		a := adjustments[i]
+		ptrs[i] = &a
+	}
 	m.multiYearAdjustments[key] = ptrs
 	return nil
 }
@@ -236,7 +239,7 @@ func (m *MockReportRepo) GetLatestReport(tenantID, scenarioID uuid.UUID) (*model
 // margins before deleting the parent product row.
 type MockProductRepo struct {
 	products    map[string]*model.Product
-	assumptions map[string]*model.ProductAssumption       // key = tenantID:assumptionID
+	assumptions map[string]*model.ProductAssumption        // key = tenantID:assumptionID
 	volumes     map[string]*model.ProductSalesVolume       // key = tenantID:volumeID
 	margins     map[string]*model.ProductDistributorMargin // key = tenantID:marginID
 }
@@ -448,7 +451,10 @@ func (m *MockStaffRepo) ListHeadcountsByScenario(tenantID, scenarioID uuid.UUID)
 func (m *MockStaffRepo) BatchUpsertHeadcounts(tenantID, scenarioID uuid.UUID, hcs []model.StaffHeadcount) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.StaffHeadcount, len(hcs))
-	for i := range hcs { h := hcs[i]; ptrs[i] = &h }
+	for i := range hcs {
+		h := hcs[i]
+		ptrs[i] = &h
+	}
 	m.headcounts[key] = ptrs
 	return nil
 }
@@ -458,7 +464,10 @@ func (m *MockStaffRepo) ListSalariesByScenario(tenantID, scenarioID uuid.UUID) (
 func (m *MockStaffRepo) BatchUpsertSalaries(tenantID, scenarioID uuid.UUID, sals []model.StaffSalary) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.StaffSalary, len(sals))
-	for i := range sals { s := sals[i]; ptrs[i] = &s }
+	for i := range sals {
+		s := sals[i]
+		ptrs[i] = &s
+	}
 	m.salaries[key] = ptrs
 	return nil
 }
@@ -468,7 +477,10 @@ func (m *MockStaffRepo) ListIncentivesByScenario(tenantID, scenarioID uuid.UUID)
 func (m *MockStaffRepo) BatchUpsertIncentives(tenantID, scenarioID uuid.UUID, incs []model.StaffIncentive) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.StaffIncentive, len(incs))
-	for i := range incs { inc := incs[i]; ptrs[i] = &inc }
+	for i := range incs {
+		inc := incs[i]
+		ptrs[i] = &inc
+	}
 	m.incentives[key] = ptrs
 	return nil
 }
@@ -488,7 +500,10 @@ func (m *MockCapexRepo) ListByScenario(tenantID, scenarioID uuid.UUID) ([]*model
 func (m *MockCapexRepo) BatchUpsert(tenantID, scenarioID uuid.UUID, entries []model.CapexEntry) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.CapexEntry, len(entries))
-	for i := range entries { e := entries[i]; ptrs[i] = &e }
+	for i := range entries {
+		e := entries[i]
+		ptrs[i] = &e
+	}
 	m.entries[key] = ptrs
 	return nil
 }
@@ -508,7 +523,10 @@ func (m *MockOpexRepo) ListByScenario(tenantID, scenarioID uuid.UUID) ([]*model.
 func (m *MockOpexRepo) BatchUpsert(tenantID, scenarioID uuid.UUID, entries []model.OpexManualEntry) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.OpexManualEntry, len(entries))
-	for i := range entries { e := entries[i]; ptrs[i] = &e }
+	for i := range entries {
+		e := entries[i]
+		ptrs[i] = &e
+	}
 	m.entries[key] = ptrs
 	return nil
 }
@@ -528,7 +546,10 @@ func (m *MockFiplanRepo) ListByScenario(tenantID, scenarioID uuid.UUID) ([]*mode
 func (m *MockFiplanRepo) BatchUpsert(tenantID, scenarioID uuid.UUID, entries []model.FiplanEntry) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.FiplanEntry, len(entries))
-	for i := range entries { e := entries[i]; ptrs[i] = &e }
+	for i := range entries {
+		e := entries[i]
+		ptrs[i] = &e
+	}
 	m.entries[key] = ptrs
 	return nil
 }
@@ -585,7 +606,9 @@ type MockFiplanSyncer struct {
 }
 
 func (m *MockFiplanSyncer) UpsertCapitalIncreaseEntry(ctx context.Context, tenantID, scenarioID uuid.UUID, yearIndex int, amount decimal.Decimal, roundID uuid.UUID, roundLabel string) error {
-	if m.UpsertErr != nil { return m.UpsertErr }
+	if m.UpsertErr != nil {
+		return m.UpsertErr
+	}
 	m.UpsertedEntries = append(m.UpsertedEntries, struct {
 		TenantID, ScenarioID uuid.UUID
 		YearIndex            int
@@ -596,7 +619,9 @@ func (m *MockFiplanSyncer) UpsertCapitalIncreaseEntry(ctx context.Context, tenan
 	return nil
 }
 func (m *MockFiplanSyncer) ClearCapTableLink(ctx context.Context, tenantID, scenarioID uuid.UUID, yearIndex int) error {
-	if m.ClearErr != nil { return m.ClearErr }
+	if m.ClearErr != nil {
+		return m.ClearErr
+	}
 	m.ClearedLinks = append(m.ClearedLinks, struct {
 		TenantID, ScenarioID uuid.UUID
 		YearIndex            int
@@ -619,7 +644,10 @@ func (m *MockPnlCashRepo) ListByScenario(tenantID, scenarioID uuid.UUID) ([]*mod
 func (m *MockPnlCashRepo) BatchUpsert(tenantID, scenarioID uuid.UUID, entries []model.PnlCashEntry) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.PnlCashEntry, len(entries))
-	for i := range entries { e := entries[i]; ptrs[i] = &e }
+	for i := range entries {
+		e := entries[i]
+		ptrs[i] = &e
+	}
 	m.entries[key] = ptrs
 	return nil
 }
@@ -639,7 +667,10 @@ func (m *MockWcrRepo) ListByScenario(tenantID, scenarioID uuid.UUID) ([]*model.W
 func (m *MockWcrRepo) BatchUpsert(tenantID, scenarioID uuid.UUID, entries []model.WCREntry) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.WCREntry, len(entries))
-	for i := range entries { e := entries[i]; ptrs[i] = &e }
+	for i := range entries {
+		e := entries[i]
+		ptrs[i] = &e
+	}
 	m.entries[key] = ptrs
 	return nil
 }
@@ -659,7 +690,10 @@ func (m *MockCashRepo) ListByScenario(tenantID, scenarioID uuid.UUID) ([]*model.
 func (m *MockCashRepo) BatchUpsert(tenantID, scenarioID uuid.UUID, overrides []model.CashMonthlyOverride) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.CashMonthlyOverride, len(overrides))
-	for i := range overrides { o := overrides[i]; ptrs[i] = &o }
+	for i := range overrides {
+		o := overrides[i]
+		ptrs[i] = &o
+	}
 	m.overrides[key] = ptrs
 	return nil
 }
@@ -689,7 +723,10 @@ func (m *MockBudgetRepo) ListAllByScenario(tenantID, scenarioID uuid.UUID) ([]*m
 func (m *MockBudgetRepo) BatchUpsert(tenantID, scenarioID uuid.UUID, overrides []model.BudgetMonthlyOverride) error {
 	key := tenantID.String() + ":" + scenarioID.String()
 	ptrs := make([]*model.BudgetMonthlyOverride, len(overrides))
-	for i := range overrides { o := overrides[i]; ptrs[i] = &o }
+	for i := range overrides {
+		o := overrides[i]
+		ptrs[i] = &o
+	}
 	m.overrides[key] = ptrs
 	return nil
 }
@@ -697,15 +734,15 @@ func (m *MockBudgetRepo) BatchUpsert(tenantID, scenarioID uuid.UUID, overrides [
 // ── MockCapTableRepo ──────────────────────────────────────────────────────────
 
 type MockCapTableRepo struct {
-	companies       map[string]*model.CapTableCompany
-	shareClasses    map[string]*model.CapTableShareClass
-	shareholders    map[string]*model.CapTableShareholder
-	rounds          map[string]*model.CapTableRound
-	positions       map[string][]*model.CapTablePosition   // key = tenantID:roundID
-	plans           map[string]*model.StockOptionPlan
-	grants          map[string]*model.OptionGrant
-	valuations      map[string]*model.ValuationScenario
-	branches        map[string]*model.CapTableScenarioBranch
+	companies    map[string]*model.CapTableCompany
+	shareClasses map[string]*model.CapTableShareClass
+	shareholders map[string]*model.CapTableShareholder
+	rounds       map[string]*model.CapTableRound
+	positions    map[string][]*model.CapTablePosition // key = tenantID:roundID
+	plans        map[string]*model.StockOptionPlan
+	grants       map[string]*model.OptionGrant
+	valuations   map[string]*model.ValuationScenario
+	branches     map[string]*model.CapTableScenarioBranch
 }
 
 func NewMockCapTableRepo() *MockCapTableRepo {
@@ -724,7 +761,9 @@ func NewMockCapTableRepo() *MockCapTableRepo {
 
 func (m *MockCapTableRepo) GetCompany(tenantID, scenarioID uuid.UUID) (*model.CapTableCompany, error) {
 	c := m.companies[tenantID.String()+":"+scenarioID.String()]
-	if c == nil { return nil, errors.New("not found") }
+	if c == nil {
+		return nil, errors.New("not found")
+	}
 	return c, nil
 }
 func (m *MockCapTableRepo) UpsertCompany(company *model.CapTableCompany) error {
@@ -734,22 +773,29 @@ func (m *MockCapTableRepo) UpsertCompany(company *model.CapTableCompany) error {
 func (m *MockCapTableRepo) ListShareClasses(tenantID, scenarioID uuid.UUID) ([]*model.CapTableShareClass, error) {
 	var out []*model.CapTableShareClass
 	for _, sc := range m.shareClasses {
-		if sc.TenantID == tenantID && sc.ScenarioID == scenarioID { out = append(out, sc) }
+		if sc.TenantID == tenantID && sc.ScenarioID == scenarioID {
+			out = append(out, sc)
+		}
 	}
 	return out, nil
 }
 func (m *MockCapTableRepo) UpsertShareClass(sc *model.CapTableShareClass) error {
-	if sc.ID == uuid.Nil { sc.ID = uuid.New() }
+	if sc.ID == uuid.Nil {
+		sc.ID = uuid.New()
+	}
 	m.shareClasses[sc.TenantID.String()+":"+sc.ID.String()] = sc
 	return nil
 }
 func (m *MockCapTableRepo) DeleteShareClass(tenantID, id uuid.UUID) error {
-	delete(m.shareClasses, tenantID.String()+":"+id.String()); return nil
+	delete(m.shareClasses, tenantID.String()+":"+id.String())
+	return nil
 }
 func (m *MockCapTableRepo) ListShareholders(tenantID, scenarioID uuid.UUID) ([]*model.CapTableShareholder, error) {
 	var out []*model.CapTableShareholder
 	for _, sh := range m.shareholders {
-		if sh.TenantID == tenantID && sh.ScenarioID == scenarioID { out = append(out, sh) }
+		if sh.TenantID == tenantID && sh.ScenarioID == scenarioID {
+			out = append(out, sh)
+		}
 	}
 	return out, nil
 }
@@ -761,34 +807,44 @@ func (m *MockCapTableRepo) GetShareholder(tenantID, id uuid.UUID) (*model.CapTab
 	return sh, nil
 }
 func (m *MockCapTableRepo) CreateShareholder(sh *model.CapTableShareholder) error {
-	m.shareholders[sh.TenantID.String()+":"+sh.ID.String()] = sh; return nil
+	m.shareholders[sh.TenantID.String()+":"+sh.ID.String()] = sh
+	return nil
 }
 func (m *MockCapTableRepo) UpdateShareholder(sh *model.CapTableShareholder) error {
-	m.shareholders[sh.TenantID.String()+":"+sh.ID.String()] = sh; return nil
+	m.shareholders[sh.TenantID.String()+":"+sh.ID.String()] = sh
+	return nil
 }
 func (m *MockCapTableRepo) DeleteShareholder(tenantID, id uuid.UUID) error {
-	delete(m.shareholders, tenantID.String()+":"+id.String()); return nil
+	delete(m.shareholders, tenantID.String()+":"+id.String())
+	return nil
 }
 func (m *MockCapTableRepo) ListRounds(tenantID, scenarioID uuid.UUID) ([]*model.CapTableRound, error) {
 	var out []*model.CapTableRound
 	for _, r := range m.rounds {
-		if r.TenantID == tenantID && r.ScenarioID == scenarioID { out = append(out, r) }
+		if r.TenantID == tenantID && r.ScenarioID == scenarioID {
+			out = append(out, r)
+		}
 	}
 	return out, nil
 }
 func (m *MockCapTableRepo) GetRound(tenantID, id uuid.UUID) (*model.CapTableRound, error) {
 	r := m.rounds[tenantID.String()+":"+id.String()]
-	if r == nil { return nil, errors.New("not found") }
+	if r == nil {
+		return nil, errors.New("not found")
+	}
 	return r, nil
 }
 func (m *MockCapTableRepo) CreateRound(rnd *model.CapTableRound) error {
-	m.rounds[rnd.TenantID.String()+":"+rnd.ID.String()] = rnd; return nil
+	m.rounds[rnd.TenantID.String()+":"+rnd.ID.String()] = rnd
+	return nil
 }
 func (m *MockCapTableRepo) UpdateRound(rnd *model.CapTableRound) error {
-	m.rounds[rnd.TenantID.String()+":"+rnd.ID.String()] = rnd; return nil
+	m.rounds[rnd.TenantID.String()+":"+rnd.ID.String()] = rnd
+	return nil
 }
 func (m *MockCapTableRepo) DeleteRound(tenantID, id uuid.UUID) error {
-	delete(m.rounds, tenantID.String()+":"+id.String()); return nil
+	delete(m.rounds, tenantID.String()+":"+id.String())
+	return nil
 }
 func (m *MockCapTableRepo) ListPositionsByRound(tenantID, roundID uuid.UUID) ([]*model.CapTablePosition, error) {
 	return m.positions[tenantID.String()+":"+roundID.String()], nil
@@ -804,7 +860,9 @@ func (m *MockCapTableRepo) ListPositionsByScenario(tenantID, scenarioID uuid.UUI
 	var out []*model.CapTablePosition
 	for _, ps := range m.positions {
 		for _, p := range ps {
-			if p.TenantID == tenantID && roundIDs[p.RoundID] { out = append(out, p) }
+			if p.TenantID == tenantID && roundIDs[p.RoundID] {
+				out = append(out, p)
+			}
 		}
 	}
 	return out, nil
@@ -812,35 +870,47 @@ func (m *MockCapTableRepo) ListPositionsByScenario(tenantID, scenarioID uuid.UUI
 func (m *MockCapTableRepo) BatchUpsertPositions(tenantID, roundID uuid.UUID, positions []model.CapTablePosition) error {
 	key := tenantID.String() + ":" + roundID.String()
 	ptrs := make([]*model.CapTablePosition, len(positions))
-	for i := range positions { p := positions[i]; ptrs[i] = &p }
+	for i := range positions {
+		p := positions[i]
+		ptrs[i] = &p
+	}
 	m.positions[key] = ptrs
 	return nil
 }
 func (m *MockCapTableRepo) ListPlans(tenantID, scenarioID uuid.UUID) ([]*model.StockOptionPlan, error) {
 	var out []*model.StockOptionPlan
 	for _, p := range m.plans {
-		if p.TenantID == tenantID && p.ScenarioID == scenarioID { out = append(out, p) }
+		if p.TenantID == tenantID && p.ScenarioID == scenarioID {
+			out = append(out, p)
+		}
 	}
 	return out, nil
 }
 func (m *MockCapTableRepo) GetPlan(tenantID, id uuid.UUID) (*model.StockOptionPlan, error) {
 	p := m.plans[tenantID.String()+":"+id.String()]
-	if p == nil { return nil, errors.New("not found") }
+	if p == nil {
+		return nil, errors.New("not found")
+	}
 	return p, nil
 }
 func (m *MockCapTableRepo) CreatePlan(plan *model.StockOptionPlan) error {
-	m.plans[plan.TenantID.String()+":"+plan.ID.String()] = plan; return nil
+	m.plans[plan.TenantID.String()+":"+plan.ID.String()] = plan
+	return nil
 }
 func (m *MockCapTableRepo) UpdatePlan(plan *model.StockOptionPlan) error {
-	m.plans[plan.TenantID.String()+":"+plan.ID.String()] = plan; return nil
+	m.plans[plan.TenantID.String()+":"+plan.ID.String()] = plan
+	return nil
 }
 func (m *MockCapTableRepo) DeletePlan(tenantID, id uuid.UUID) error {
-	delete(m.plans, tenantID.String()+":"+id.String()); return nil
+	delete(m.plans, tenantID.String()+":"+id.String())
+	return nil
 }
 func (m *MockCapTableRepo) ListGrantsByPlan(tenantID, planID uuid.UUID) ([]*model.OptionGrant, error) {
 	var out []*model.OptionGrant
 	for _, g := range m.grants {
-		if g.TenantID == tenantID && g.PlanID == planID { out = append(out, g) }
+		if g.TenantID == tenantID && g.PlanID == planID {
+			out = append(out, g)
+		}
 	}
 	return out, nil
 }
@@ -854,7 +924,9 @@ func (m *MockCapTableRepo) ListGrantsByScenario(tenantID, scenarioID uuid.UUID) 
 	}
 	var out []*model.OptionGrant
 	for _, g := range m.grants {
-		if g.TenantID == tenantID && planIDs[g.PlanID] { out = append(out, g) }
+		if g.TenantID == tenantID && planIDs[g.PlanID] {
+			out = append(out, g)
+		}
 	}
 	return out, nil
 }
@@ -866,39 +938,51 @@ func (m *MockCapTableRepo) GetGrant(tenantID, id uuid.UUID) (*model.OptionGrant,
 	return g, nil
 }
 func (m *MockCapTableRepo) CreateGrant(grant *model.OptionGrant) error {
-	m.grants[grant.TenantID.String()+":"+grant.ID.String()] = grant; return nil
+	m.grants[grant.TenantID.String()+":"+grant.ID.String()] = grant
+	return nil
 }
 func (m *MockCapTableRepo) UpdateGrant(grant *model.OptionGrant) error {
-	m.grants[grant.TenantID.String()+":"+grant.ID.String()] = grant; return nil
+	m.grants[grant.TenantID.String()+":"+grant.ID.String()] = grant
+	return nil
 }
 func (m *MockCapTableRepo) DeleteGrant(tenantID, id uuid.UUID) error {
-	delete(m.grants, tenantID.String()+":"+id.String()); return nil
+	delete(m.grants, tenantID.String()+":"+id.String())
+	return nil
 }
 func (m *MockCapTableRepo) ListValuationScenarios(tenantID, scenarioID uuid.UUID) ([]*model.ValuationScenario, error) {
 	var out []*model.ValuationScenario
 	for _, v := range m.valuations {
-		if v.TenantID == tenantID && v.ScenarioID == scenarioID { out = append(out, v) }
+		if v.TenantID == tenantID && v.ScenarioID == scenarioID {
+			out = append(out, v)
+		}
 	}
 	return out, nil
 }
 func (m *MockCapTableRepo) GetValuationScenario(tenantID, id uuid.UUID) (*model.ValuationScenario, error) {
 	v := m.valuations[tenantID.String()+":"+id.String()]
-	if v == nil { return nil, errors.New("not found") }
+	if v == nil {
+		return nil, errors.New("not found")
+	}
 	return v, nil
 }
 func (m *MockCapTableRepo) CreateValuationScenario(vs *model.ValuationScenario) error {
-	m.valuations[vs.TenantID.String()+":"+vs.ID.String()] = vs; return nil
+	m.valuations[vs.TenantID.String()+":"+vs.ID.String()] = vs
+	return nil
 }
 func (m *MockCapTableRepo) UpdateValuationScenario(vs *model.ValuationScenario) error {
-	m.valuations[vs.TenantID.String()+":"+vs.ID.String()] = vs; return nil
+	m.valuations[vs.TenantID.String()+":"+vs.ID.String()] = vs
+	return nil
 }
 func (m *MockCapTableRepo) DeleteValuationScenario(tenantID, id uuid.UUID) error {
-	delete(m.valuations, tenantID.String()+":"+id.String()); return nil
+	delete(m.valuations, tenantID.String()+":"+id.String())
+	return nil
 }
 func (m *MockCapTableRepo) ListBranches(tenantID, scenarioID uuid.UUID) ([]*model.CapTableScenarioBranch, error) {
 	var out []*model.CapTableScenarioBranch
 	for _, b := range m.branches {
-		if b.TenantID == tenantID && b.ScenarioID == scenarioID { out = append(out, b) }
+		if b.TenantID == tenantID && b.ScenarioID == scenarioID {
+			out = append(out, b)
+		}
 	}
 	return out, nil
 }
@@ -910,21 +994,24 @@ func (m *MockCapTableRepo) GetBranch(tenantID, id uuid.UUID) (*model.CapTableSce
 	return b, nil
 }
 func (m *MockCapTableRepo) CreateBranch(branch *model.CapTableScenarioBranch) error {
-	m.branches[branch.TenantID.String()+":"+branch.ID.String()] = branch; return nil
+	m.branches[branch.TenantID.String()+":"+branch.ID.String()] = branch
+	return nil
 }
 func (m *MockCapTableRepo) UpdateBranch(branch *model.CapTableScenarioBranch) error {
-	m.branches[branch.TenantID.String()+":"+branch.ID.String()] = branch; return nil
+	m.branches[branch.TenantID.String()+":"+branch.ID.String()] = branch
+	return nil
 }
 func (m *MockCapTableRepo) DeleteBranch(tenantID, id uuid.UUID) error {
-	delete(m.branches, tenantID.String()+":"+id.String()); return nil
+	delete(m.branches, tenantID.String()+":"+id.String())
+	return nil
 }
 
 // ── MockBEPRepo ───────────────────────────────────────────────────────────────
 
 type MockBEPRepo struct {
 	snapshots       map[string]*model.BEPSnapshot
-	fixedLines      map[string][]*model.FixedCostLine      // key = tenantID:snapshotID
-	variableLines   map[string][]*model.VariableCostLine   // key = tenantID:snapshotID
+	fixedLines      map[string][]*model.FixedCostLine    // key = tenantID:snapshotID
+	variableLines   map[string][]*model.VariableCostLine // key = tenantID:snapshotID
 	sensitivityCfgs map[string]*model.SensitivityConfig
 	optPlans        map[string]*model.OptimisationPlan
 	fixedSavings    map[string][]*model.FixedCostSaving    // key = tenantID:planID
@@ -948,23 +1035,30 @@ func NewMockBEPRepo() *MockBEPRepo {
 func (m *MockBEPRepo) ListSnapshots(tenantID, scenarioID uuid.UUID) ([]*model.BEPSnapshot, error) {
 	var out []*model.BEPSnapshot
 	for _, s := range m.snapshots {
-		if s.TenantID == tenantID && s.ScenarioID == scenarioID { out = append(out, s) }
+		if s.TenantID == tenantID && s.ScenarioID == scenarioID {
+			out = append(out, s)
+		}
 	}
 	return out, nil
 }
 func (m *MockBEPRepo) CreateSnapshot(snap *model.BEPSnapshot) error {
-	m.snapshots[snap.TenantID.String()+":"+snap.ID.String()] = snap; return nil
+	m.snapshots[snap.TenantID.String()+":"+snap.ID.String()] = snap
+	return nil
 }
 func (m *MockBEPRepo) GetSnapshot(tenantID, id uuid.UUID) (*model.BEPSnapshot, error) {
 	s := m.snapshots[tenantID.String()+":"+id.String()]
-	if s == nil { return nil, errors.New("not found") }
+	if s == nil {
+		return nil, errors.New("not found")
+	}
 	return s, nil
 }
 func (m *MockBEPRepo) UpdateSnapshot(snap *model.BEPSnapshot) error {
-	m.snapshots[snap.TenantID.String()+":"+snap.ID.String()] = snap; return nil
+	m.snapshots[snap.TenantID.String()+":"+snap.ID.String()] = snap
+	return nil
 }
 func (m *MockBEPRepo) DeleteSnapshot(tenantID, id uuid.UUID) error {
-	delete(m.snapshots, tenantID.String()+":"+id.String()); return nil
+	delete(m.snapshots, tenantID.String()+":"+id.String())
+	return nil
 }
 func (m *MockBEPRepo) ListFixedCostLines(tenantID, snapshotID uuid.UUID) ([]*model.FixedCostLine, error) {
 	return m.fixedLines[tenantID.String()+":"+snapshotID.String()], nil
@@ -972,7 +1066,10 @@ func (m *MockBEPRepo) ListFixedCostLines(tenantID, snapshotID uuid.UUID) ([]*mod
 func (m *MockBEPRepo) BatchUpsertFixedCostLines(tenantID, snapshotID uuid.UUID, lines []model.FixedCostLine) error {
 	key := tenantID.String() + ":" + snapshotID.String()
 	ptrs := make([]*model.FixedCostLine, len(lines))
-	for i := range lines { l := lines[i]; ptrs[i] = &l }
+	for i := range lines {
+		l := lines[i]
+		ptrs[i] = &l
+	}
 	m.fixedLines[key] = ptrs
 	return nil
 }
@@ -982,42 +1079,56 @@ func (m *MockBEPRepo) ListVariableCostLines(tenantID, snapshotID uuid.UUID) ([]*
 func (m *MockBEPRepo) BatchUpsertVariableCostLines(tenantID, snapshotID uuid.UUID, lines []model.VariableCostLine) error {
 	key := tenantID.String() + ":" + snapshotID.String()
 	ptrs := make([]*model.VariableCostLine, len(lines))
-	for i := range lines { l := lines[i]; ptrs[i] = &l }
+	for i := range lines {
+		l := lines[i]
+		ptrs[i] = &l
+	}
 	m.variableLines[key] = ptrs
 	return nil
 }
 func (m *MockBEPRepo) ListSensitivityConfigs(tenantID, snapshotID uuid.UUID) ([]*model.SensitivityConfig, error) {
 	var out []*model.SensitivityConfig
 	for _, c := range m.sensitivityCfgs {
-		if c.TenantID == tenantID && c.SnapshotID == snapshotID { out = append(out, c) }
+		if c.TenantID == tenantID && c.SnapshotID == snapshotID {
+			out = append(out, c)
+		}
 	}
 	return out, nil
 }
 func (m *MockBEPRepo) UpsertSensitivityConfig(cfg *model.SensitivityConfig) error {
-	if cfg.ID == uuid.Nil { cfg.ID = uuid.New() }
+	if cfg.ID == uuid.Nil {
+		cfg.ID = uuid.New()
+	}
 	m.sensitivityCfgs[cfg.TenantID.String()+":"+cfg.ID.String()] = cfg
 	return nil
 }
 func (m *MockBEPRepo) CreateOptimisationPlan(p *model.OptimisationPlan) error {
-	m.optPlans[p.TenantID.String()+":"+p.ID.String()] = p; return nil
+	m.optPlans[p.TenantID.String()+":"+p.ID.String()] = p
+	return nil
 }
 func (m *MockBEPRepo) GetOptimisationPlan(tenantID, id uuid.UUID) (*model.OptimisationPlan, error) {
 	p := m.optPlans[tenantID.String()+":"+id.String()]
-	if p == nil { return nil, errors.New("not found") }
+	if p == nil {
+		return nil, errors.New("not found")
+	}
 	return p, nil
 }
 func (m *MockBEPRepo) ListOptimisationPlans(tenantID, snapshotID uuid.UUID) ([]*model.OptimisationPlan, error) {
 	var out []*model.OptimisationPlan
 	for _, p := range m.optPlans {
-		if p.TenantID == tenantID && p.SnapshotID == snapshotID { out = append(out, p) }
+		if p.TenantID == tenantID && p.SnapshotID == snapshotID {
+			out = append(out, p)
+		}
 	}
 	return out, nil
 }
 func (m *MockBEPRepo) UpdateOptimisationPlan(p *model.OptimisationPlan) error {
-	m.optPlans[p.TenantID.String()+":"+p.ID.String()] = p; return nil
+	m.optPlans[p.TenantID.String()+":"+p.ID.String()] = p
+	return nil
 }
 func (m *MockBEPRepo) DeleteOptimisationPlan(tenantID, id uuid.UUID) error {
-	delete(m.optPlans, tenantID.String()+":"+id.String()); return nil
+	delete(m.optPlans, tenantID.String()+":"+id.String())
+	return nil
 }
 func (m *MockBEPRepo) ListFixedCostSavings(tenantID, planID uuid.UUID) ([]*model.FixedCostSaving, error) {
 	return m.fixedSavings[tenantID.String()+":"+planID.String()], nil
@@ -1025,7 +1136,10 @@ func (m *MockBEPRepo) ListFixedCostSavings(tenantID, planID uuid.UUID) ([]*model
 func (m *MockBEPRepo) BatchUpsertFixedCostSavings(tenantID, planID uuid.UUID, savings []model.FixedCostSaving) error {
 	key := tenantID.String() + ":" + planID.String()
 	ptrs := make([]*model.FixedCostSaving, len(savings))
-	for i := range savings { s := savings[i]; ptrs[i] = &s }
+	for i := range savings {
+		s := savings[i]
+		ptrs[i] = &s
+	}
 	m.fixedSavings[key] = ptrs
 	return nil
 }
@@ -1035,7 +1149,10 @@ func (m *MockBEPRepo) ListVariableCostSavings(tenantID, planID uuid.UUID) ([]*mo
 func (m *MockBEPRepo) BatchUpsertVariableCostSavings(tenantID, planID uuid.UUID, savings []model.VariableCostSaving) error {
 	key := tenantID.String() + ":" + planID.String()
 	ptrs := make([]*model.VariableCostSaving, len(savings))
-	for i := range savings { s := savings[i]; ptrs[i] = &s }
+	for i := range savings {
+		s := savings[i]
+		ptrs[i] = &s
+	}
 	m.varSavings[key] = ptrs
 	return nil
 }
@@ -1045,7 +1162,10 @@ func (m *MockBEPRepo) ListPCGReviewItems(tenantID, planID uuid.UUID) ([]*model.P
 func (m *MockBEPRepo) BatchUpsertPCGReviewItems(tenantID, planID uuid.UUID, items []model.PCGReviewItem) error {
 	key := tenantID.String() + ":" + planID.String()
 	ptrs := make([]*model.PCGReviewItem, len(items))
-	for i := range items { it := items[i]; ptrs[i] = &it }
+	for i := range items {
+		it := items[i]
+		ptrs[i] = &it
+	}
 	m.pcgItems[key] = ptrs
 	return nil
 }

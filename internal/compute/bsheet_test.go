@@ -3,8 +3,8 @@ package compute
 import (
 	"testing"
 
-	"github.com/shopspring/decimal"
 	"ascenda/internal/model"
+	"github.com/shopspring/decimal"
 )
 
 func TestComputeBSheet(t *testing.T) {
@@ -15,14 +15,14 @@ func TestComputeBSheet(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		pnl        model.PnlReport
-		wcr        model.WCRReport
-		capex      model.CapexSummary
-		fiplan     model.FiplanReport
-		openBal    model.OpeningBalance
+		name        string
+		pnl         model.PnlReport
+		wcr         model.WCRReport
+		capex       model.CapexSummary
+		fiplan      model.FiplanReport
+		openBal     model.OpeningBalance
 		checkAssets func(*testing.T, model.BSheetReport)
-		checkLiab  func(*testing.T, model.BSheetReport)
+		checkLiab   func(*testing.T, model.BSheetReport)
 	}{
 		{
 			name: "basic balance sheet with simple data",
@@ -278,9 +278,9 @@ func TestBSheetInvariants(t *testing.T) {
 	}
 
 	wcr := model.WCRReport{
-		Customers:   model.WCRCustomers{TotalCustomers: [5]decimal.Decimal{decimal.NewFromInt(3000), decimal.NewFromInt(3500), decimal.NewFromInt(4000), decimal.NewFromInt(4500), decimal.NewFromInt(5000)}},
-		Inventory:   model.WCRInventory{InventoryValue: [5]decimal.Decimal{decimal.NewFromInt(200), decimal.NewFromInt(250), decimal.NewFromInt(300), decimal.NewFromInt(350), decimal.NewFromInt(400)}},
-		Suppliers:   model.WCRSuppliers{TotalSuppliers: [5]decimal.Decimal{decimal.NewFromInt(400), decimal.NewFromInt(500), decimal.NewFromInt(600), decimal.NewFromInt(700), decimal.NewFromInt(800)}},
+		Customers:    model.WCRCustomers{TotalCustomers: [5]decimal.Decimal{decimal.NewFromInt(3000), decimal.NewFromInt(3500), decimal.NewFromInt(4000), decimal.NewFromInt(4500), decimal.NewFromInt(5000)}},
+		Inventory:    model.WCRInventory{InventoryValue: [5]decimal.Decimal{decimal.NewFromInt(200), decimal.NewFromInt(250), decimal.NewFromInt(300), decimal.NewFromInt(350), decimal.NewFromInt(400)}},
+		Suppliers:    model.WCRSuppliers{TotalSuppliers: [5]decimal.Decimal{decimal.NewFromInt(400), decimal.NewFromInt(500), decimal.NewFromInt(600), decimal.NewFromInt(700), decimal.NewFromInt(800)}},
 		FiscalSocial: model.WCRFiscalSocial{TotalFiscalSocial: [5]decimal.Decimal{decimal.NewFromInt(300), decimal.NewFromInt(360), decimal.NewFromInt(420), decimal.NewFromInt(480), decimal.NewFromInt(540)}},
 	}
 

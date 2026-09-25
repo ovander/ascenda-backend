@@ -15,11 +15,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/config"
+	"ascenda/internal/service"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/config"
-	"ascenda/internal/service"
 )
 
 // ============================================================================
@@ -293,12 +293,12 @@ func TestAIHandler_ProHandlers_OverrideNarrationType(t *testing.T) {
 			// Send a request with NarrationType set to something different.
 			req := AIFeatureRequest{
 				Context: service.NarrationContext{
-					PlanName:        "Budget 2026",
-					ScenarioName:    "Base",
-					PeriodLabel:     "FY 2026",
-					Currency:        "EUR",
-					UserRole:        "owner",
-					NarrationType:   "plan_summary", // should be overridden
+					PlanName:      "Budget 2026",
+					ScenarioName:  "Base",
+					PeriodLabel:   "FY 2026",
+					Currency:      "EUR",
+					UserRole:      "owner",
+					NarrationType: "plan_summary", // should be overridden
 				},
 			}
 			body, _ := json.Marshal(req)

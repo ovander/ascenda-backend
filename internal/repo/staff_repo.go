@@ -3,10 +3,10 @@ package repo
 import (
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"ascenda/internal/model"
 )
 
 // StaffRepo handles staff-related data operations

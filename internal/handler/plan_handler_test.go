@@ -9,30 +9,30 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"ascenda/internal/dto"
 	"ascenda/internal/model"
+	"ascenda/internal/service"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
 	"github.com/ovander/backendkit/pagination"
-	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ── mockPlanService ───────────────────────────────────────────────────────────
 
 type mockPlanService struct {
-	listFn                 func(ctx context.Context, tenantID uuid.UUID, params pagination.Params) ([]model.BusinessPlan, int64, error)
-	createFn               func(ctx context.Context, tenantID, createdBy uuid.UUID, name, description, country string) (*model.BusinessPlan, error)
-	getPlanFn              func(ctx context.Context, tenantID, planID uuid.UUID) (*model.BusinessPlan, error)
-	updateFn               func(ctx context.Context, tenantID, planID uuid.UUID, name, description, status string) error
-	deleteFn               func(ctx context.Context, tenantID, planID uuid.UUID) error
-	transitionFn           func(ctx context.Context, tenantID, planID uuid.UUID, newStatus, callerRole string) error
-	getPlanImpactFn        func(ctx context.Context, tenantID, planID uuid.UUID) (*service.PlanImpact, error)
-	getScenarioImpactFn    func(ctx context.Context, tenantID, planID, scenarioID uuid.UUID) (*service.ScenarioImpact, error)
-	listScenariosFn        func(ctx context.Context, tenantID, planID uuid.UUID) ([]model.Scenario, error)
+	listFn              func(ctx context.Context, tenantID uuid.UUID, params pagination.Params) ([]model.BusinessPlan, int64, error)
+	createFn            func(ctx context.Context, tenantID, createdBy uuid.UUID, name, description, country string) (*model.BusinessPlan, error)
+	getPlanFn           func(ctx context.Context, tenantID, planID uuid.UUID) (*model.BusinessPlan, error)
+	updateFn            func(ctx context.Context, tenantID, planID uuid.UUID, name, description, status string) error
+	deleteFn            func(ctx context.Context, tenantID, planID uuid.UUID) error
+	transitionFn        func(ctx context.Context, tenantID, planID uuid.UUID, newStatus, callerRole string) error
+	getPlanImpactFn     func(ctx context.Context, tenantID, planID uuid.UUID) (*service.PlanImpact, error)
+	getScenarioImpactFn func(ctx context.Context, tenantID, planID, scenarioID uuid.UUID) (*service.ScenarioImpact, error)
+	listScenariosFn     func(ctx context.Context, tenantID, planID uuid.UUID) ([]model.Scenario, error)
 }
 
 func (m *mockPlanService) ListPlans(ctx context.Context, tenantID uuid.UUID, params pagination.Params) ([]model.BusinessPlan, int64, error) {

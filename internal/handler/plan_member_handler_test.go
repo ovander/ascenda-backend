@@ -9,14 +9,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,12 +24,12 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 type mockPlanMemberRepo struct {
-	createFunc          func(m *model.PlanMember) error
+	createFunc           func(m *model.PlanMember) error
 	getByPlanAndUserFunc func(tenantID, planID, userID uuid.UUID) (*model.PlanMember, error)
-	listByPlanFunc      func(tenantID, planID uuid.UUID) ([]*model.PlanMember, error)
-	listByUserFunc      func(tenantID, userID uuid.UUID) ([]*model.PlanMember, error)
-	updateFunc          func(m *model.PlanMember) error
-	deleteFunc          func(tenantID, planID, userID uuid.UUID) error
+	listByPlanFunc       func(tenantID, planID uuid.UUID) ([]*model.PlanMember, error)
+	listByUserFunc       func(tenantID, userID uuid.UUID) ([]*model.PlanMember, error)
+	updateFunc           func(m *model.PlanMember) error
+	deleteFunc           func(tenantID, planID, userID uuid.UUID) error
 }
 
 func (m *mockPlanMemberRepo) Create(member *model.PlanMember) error {

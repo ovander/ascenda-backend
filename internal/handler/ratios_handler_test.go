@@ -7,13 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ── mockRatiosService ─────────────────────────────────────────────────────
@@ -126,8 +126,8 @@ func TestRatiosHandler_GetChartData_Success(t *testing.T) {
 
 	expectedData := map[string]interface{}{
 		"ratios": map[string]float64{
-			"current":      2.0,
-			"quick":        1.8,
+			"current":        2.0,
+			"quick":          1.8,
 			"debt_to_equity": 1.5,
 		},
 		"years": []int{2024, 2025, 2026},

@@ -1,28 +1,28 @@
 package handler
 
 import (
-	"github.com/ovander/backendkit/buildinfo"
-	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 	"ascenda/internal/config"
 	"ascenda/internal/repo"
 	"ascenda/internal/service"
+	"github.com/ovander/backendkit/buildinfo"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // AdminHandlers groups system and user management handlers.
 type AdminHandlers struct {
-	Health     *HealthHandler
-	Auth       *AuthHandler
-	MagicLink  *MagicLinkHandler
-	User       *UserHandler
-	Tenant     *TenantHandler
-	Metadata   *MetadataHandler
-	AdminStats          *AdminStatsHandler
-	AdminUser           *AdminUserHandler
-	AdminOrg            *AdminOrgHandler
-	AdminCountryConfig  *AdminCountryConfigHandler
-	FeaturePolicy       *FeaturePolicyHandler
-	Metrics             *MetricsHandler
+	Health             *HealthHandler
+	Auth               *AuthHandler
+	MagicLink          *MagicLinkHandler
+	User               *UserHandler
+	Tenant             *TenantHandler
+	Metadata           *MetadataHandler
+	AdminStats         *AdminStatsHandler
+	AdminUser          *AdminUserHandler
+	AdminOrg           *AdminOrgHandler
+	AdminCountryConfig *AdminCountryConfigHandler
+	FeaturePolicy      *FeaturePolicyHandler
+	Metrics            *MetricsHandler
 }
 
 // PlanHandlers groups plan lifecycle handlers.
@@ -38,23 +38,23 @@ type PlanHandlers struct {
 
 // FinanceHandlers groups financial data and report handlers.
 type FinanceHandlers struct {
-	Product  *ProductHandler
-	Staff    *StaffHandler
-	Capex    *CapexHandler
-	Opex     *OpexHandler
-	PnL      *PnLHandler
-	FiPlan   *FiplanHandler
-	PnlCash  *PnlCashHandler
-	BSheet   *BSheetHandler
-	Ratios   *RatiosHandler
-	WCR      *WCRHandler
-	Cash     *CashHandler
-	Budget   *BudgetHandler
-	Graph    *GraphHandler
-	Report   *ReportHandler
-	CapTable        *CapTableHandler
-	PlanCapTable    *PlanCapTableHandler
-	BEP             *BEPHandler
+	Product      *ProductHandler
+	Staff        *StaffHandler
+	Capex        *CapexHandler
+	Opex         *OpexHandler
+	PnL          *PnLHandler
+	FiPlan       *FiplanHandler
+	PnlCash      *PnlCashHandler
+	BSheet       *BSheetHandler
+	Ratios       *RatiosHandler
+	WCR          *WCRHandler
+	Cash         *CashHandler
+	Budget       *BudgetHandler
+	Graph        *GraphHandler
+	Report       *ReportHandler
+	CapTable     *CapTableHandler
+	PlanCapTable *PlanCapTableHandler
+	BEP          *BEPHandler
 }
 
 // AIHandlers groups AI-powered narration handlers.
@@ -74,18 +74,18 @@ type HandlerBundle struct {
 func NewHandlerBundle(services *service.ServiceBundle, repos *repo.RepoBundle, db *gorm.DB, cfg *config.Config, logger *logrus.Entry) *HandlerBundle {
 	return &HandlerBundle{
 		Admin: AdminHandlers{
-			Health:     NewHealthHandler(db, logger),
-			Auth:       NewAuthHandler(cfg, services.Registration, repos.User, logger),
-			MagicLink:  NewMagicLinkHandler(services.MagicLink, cfg, logger),
-			User:       NewUserHandler(services.User, logger),
-			Tenant:     NewTenantHandler(services.Tenant, logger),
-			Metadata:   NewMetadataHandler(buildinfo.Version, buildinfo.BuildTime, buildinfo.GitCommit, logger),
+			Health:             NewHealthHandler(db, logger),
+			Auth:               NewAuthHandler(cfg, services.Registration, repos.User, logger),
+			MagicLink:          NewMagicLinkHandler(services.MagicLink, cfg, logger),
+			User:               NewUserHandler(services.User, logger),
+			Tenant:             NewTenantHandler(services.Tenant, logger),
+			Metadata:           NewMetadataHandler(buildinfo.Version, buildinfo.BuildTime, buildinfo.GitCommit, logger),
 			AdminStats:         NewAdminStatsHandler(services.Admin, logger),
 			AdminUser:          NewAdminUserHandler(services.AdminUser, logger),
 			AdminOrg:           NewAdminOrgHandler(services.Organization, logger),
 			AdminCountryConfig: NewAdminCountryConfigHandler(services.CountryRateConfig, logger),
 			FeaturePolicy:      NewFeaturePolicyHandler(services.FeaturePolicy, logger),
-			Metrics:    NewMetricsHandler(),
+			Metrics:            NewMetricsHandler(),
 		},
 		Plans: PlanHandlers{
 			Plan:             NewPlanHandler(services.Plan, services.Seed, logger),
@@ -97,23 +97,23 @@ func NewHandlerBundle(services *service.ServiceBundle, repos *repo.RepoBundle, d
 			Audit:            NewAuditHandler(repos.Audit, services.Snapshot, service.NewPlanAccessResolver(repos.Plan, repos.PlanMember, repos.Scenario), repos.Scenario, logger),
 		},
 		Finance: FinanceHandlers{
-			Product:  NewProductHandler(services.Product, logger),
-			Staff:    NewStaffHandler(services.Staff, logger),
-			Capex:    NewCapexHandler(services.Capex, logger),
-			Opex:     NewOpexHandler(services.Opex, logger),
-			PnL:      NewPnLHandler(services.PnL, logger),
-			FiPlan:   NewFiplanHandler(services.FiPlan, services.CapTable, logger),
-			PnlCash:  NewPnlCashHandler(services.PnlCash, logger),
-			BSheet:   NewBSheetHandler(services.BSheet, logger),
-			Ratios:   NewRatiosHandler(services.Ratios, logger),
-			WCR:      NewWCRHandler(services.WCR, logger),
-			Cash:     NewCashHandler(services.Cash, logger),
-			Budget:   NewBudgetHandler(services.Budget, logger),
-			Graph:    NewGraphHandler(services.Graph, logger),
-			Report:   NewReportHandler(services.Report, logger),
+			Product:      NewProductHandler(services.Product, logger),
+			Staff:        NewStaffHandler(services.Staff, logger),
+			Capex:        NewCapexHandler(services.Capex, logger),
+			Opex:         NewOpexHandler(services.Opex, logger),
+			PnL:          NewPnLHandler(services.PnL, logger),
+			FiPlan:       NewFiplanHandler(services.FiPlan, services.CapTable, logger),
+			PnlCash:      NewPnlCashHandler(services.PnlCash, logger),
+			BSheet:       NewBSheetHandler(services.BSheet, logger),
+			Ratios:       NewRatiosHandler(services.Ratios, logger),
+			WCR:          NewWCRHandler(services.WCR, logger),
+			Cash:         NewCashHandler(services.Cash, logger),
+			Budget:       NewBudgetHandler(services.Budget, logger),
+			Graph:        NewGraphHandler(services.Graph, logger),
+			Report:       NewReportHandler(services.Report, logger),
 			CapTable:     NewCapTableHandler(services.CapTable, logger),
-		PlanCapTable: NewPlanCapTableHandler(repos.PlanShareholder, logger),
-		BEP:          NewBEPHandler(services.BEP, logger),
+			PlanCapTable: NewPlanCapTableHandler(repos.PlanShareholder, logger),
+			BEP:          NewBEPHandler(services.BEP, logger),
 		},
 		AI: AIHandlers{
 			AI: NewAIHandler(

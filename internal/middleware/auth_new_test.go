@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // Integration-level tests for the auth middleware shim.
@@ -102,10 +102,10 @@ func TestMiddlewareRejects401WithoutToken(t *testing.T) {
 func TestSocrateClaimsStructure(t *testing.T) {
 	// Verify the SocrateClaims struct has the right JSON tags
 	claims := SocrateClaims{
-		TenantID: "",  // Empty for Socrate — user JWT carries "sub" via RegisteredClaims
+		TenantID: "", // Empty for Socrate — user JWT carries "sub" via RegisteredClaims
 		Email:    "user@socrate.com",
 		Name:     "User Name",
-		Role:     "",  // Empty, will default to "editor"
+		Role:     "", // Empty, will default to "editor"
 	}
 
 	assert.Empty(t, claims.TenantID)

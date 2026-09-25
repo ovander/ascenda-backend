@@ -39,7 +39,7 @@ type AntiDilutionType string
 
 const (
 	AntiDilutionNone           AntiDilutionType = "none"
-	AntiDilutionBroadWeighted  AntiDilutionType = "broad_weighted"  // most common for institutional rounds
+	AntiDilutionBroadWeighted  AntiDilutionType = "broad_weighted" // most common for institutional rounds
 	AntiDilutionNarrowWeighted AntiDilutionType = "narrow_weighted"
 	AntiDilutionFullRatchet    AntiDilutionType = "full_ratchet" // most investor-friendly
 )
@@ -162,7 +162,7 @@ type CapTableShareClass struct {
 	ParticipationCap    *decimal.Decimal      `gorm:"type:numeric(5,2)" json:"participationCap,omitempty"`
 	AntiDilution        AntiDilutionType      `gorm:"type:varchar(30);not null;default:'none'" json:"antiDilution"`
 	ConversionRatio     decimal.Decimal       `gorm:"type:numeric(10,6);default:1.000000" json:"conversionRatio"` // preferred→common
-	DividendRatePct     *decimal.Decimal      `gorm:"type:numeric(5,2)" json:"dividendRatePct,omitempty"` // cumulative dividend
+	DividendRatePct     *decimal.Decimal      `gorm:"type:numeric(5,2)" json:"dividendRatePct,omitempty"`         // cumulative dividend
 	SortOrder           int                   `gorm:"not null;default:0" json:"sortOrder"`
 }
 
@@ -202,14 +202,14 @@ type CapTableRound struct {
 	FinancingSourceType *string `gorm:"type:varchar(50)" json:"financingSourceType,omitempty"`
 
 	// Share mechanics
-	NominalValueCents int64           `gorm:"not null;default:1" json:"nominalValueCents"` // nominal at this phase
+	NominalValueCents int64           `gorm:"not null;default:1" json:"nominalValueCents"`                 // nominal at this phase
 	SplitCoefficient  decimal.Decimal `gorm:"type:numeric(10,6);default:1.000000" json:"splitCoefficient"` // 1 = no split
 	NewSharesCreated  int64           `gorm:"not null;default:0" json:"newSharesCreated"`
 
 	// Valuation inputs — user provides ONE of the two; engine derives the other
 	PreMoneyValuationK *decimal.Decimal `gorm:"type:numeric(15,2)" json:"preMoneyValuationK,omitempty"`
-	AmountRaisedK      decimal.Decimal  `gorm:"type:numeric(15,2)" json:"amountRaisedK"`  // k currency
-	PctGranted         decimal.Decimal  `gorm:"type:numeric(8,4)" json:"pctGranted"`       // % granted to new investors
+	AmountRaisedK      decimal.Decimal  `gorm:"type:numeric(15,2)" json:"amountRaisedK"` // k currency
+	PctGranted         decimal.Decimal  `gorm:"type:numeric(8,4)" json:"pctGranted"`     // % granted to new investors
 
 	// Share class for new shares
 	ShareClassType ShareClassType `gorm:"type:varchar(30);not null" json:"shareClassType"`
@@ -226,8 +226,8 @@ type CapTableRound struct {
 	// FiscalYearIndex is 0-based (0 = Year 1 … 4 = Year 5) and identifies which
 	// annual slot the amount has been pushed to. FiplanSynced is set to true after
 	// a successful sync and cleared on unlink.
-	FiscalYearIndex    *int             `gorm:"column:fiscal_year_index"          json:"fiscalYearIndex,omitempty"`
-	FiplanSynced       bool             `gorm:"not null;default:false"            json:"fiplanSynced"`
+	FiscalYearIndex *int `gorm:"column:fiscal_year_index"          json:"fiscalYearIndex,omitempty"`
+	FiplanSynced    bool `gorm:"not null;default:false"            json:"fiplanSynced"`
 	// FiplanSyncedAmountK is the AmountRaisedK value at the time of the last sync.
 	// If the round amount is later renegotiated, comparing this field with
 	// AmountRaisedK reveals the divergence without querying FiPlan.
@@ -241,7 +241,7 @@ type CapTableRound struct {
 	// has been written to opening_balance.share_capital and cash_and_securities.
 	// Mutually exclusive with FiplanSynced: a round either seeds the opening
 	// balance (past) or appears as a forecast resource (future), never both.
-	OpeningBalanceSynced       bool             `gorm:"not null;default:false"            json:"openingBalanceSynced"`
+	OpeningBalanceSynced        bool             `gorm:"not null;default:false"            json:"openingBalanceSynced"`
 	OpeningBalanceSyncedAmountK *decimal.Decimal `gorm:"type:numeric(15,2);column:opening_balance_synced_amount_k" json:"openingBalanceSyncedAmountK,omitempty"`
 	// IsOpeningBalanceDivergent is computed at read time (not stored).
 	IsOpeningBalanceDivergent bool `gorm:"-" json:"isOpeningBalanceDivergent"`
@@ -360,9 +360,9 @@ type ValuationScenario struct {
 	FinalInvestorPct  *decimal.Decimal `gorm:"type:numeric(8,4)" json:"finalInvestorPct,omitempty"`   // % at exit
 	ExitCompanyValueK *decimal.Decimal `gorm:"type:numeric(15,2)" json:"exitCompanyValueK,omitempty"` // exit valuation
 	MoneyMultiple     *decimal.Decimal `gorm:"type:numeric(10,4)" json:"moneyMultiple,omitempty"`
-	DiscountRatePct   *decimal.Decimal `gorm:"type:numeric(8,4)" json:"discountRatePct,omitempty"`  // for NPV
-	PreMoneyInputK    *decimal.Decimal `gorm:"type:numeric(15,2)" json:"preMoneyInputK,omitempty"`  // scenario D alt input
-	NewMoneyK         *decimal.Decimal `gorm:"type:numeric(15,2)" json:"newMoneyK,omitempty"`       // scenario D
+	DiscountRatePct   *decimal.Decimal `gorm:"type:numeric(8,4)" json:"discountRatePct,omitempty"` // for NPV
+	PreMoneyInputK    *decimal.Decimal `gorm:"type:numeric(15,2)" json:"preMoneyInputK,omitempty"` // scenario D alt input
+	NewMoneyK         *decimal.Decimal `gorm:"type:numeric(15,2)" json:"newMoneyK,omitempty"`      // scenario D
 
 	// ── Computed Outputs (re-derived on every read) ───────────────────────────
 	OutIRRPct         *decimal.Decimal `gorm:"type:numeric(8,4)" json:"outIrrPct,omitempty"`
@@ -405,9 +405,9 @@ func (CapTableScenarioBranch) TableName() string { return "cap_table_scenario_br
 
 // CapTableReport is the complete computed output of the Cap Table module.
 type CapTableReport struct {
-	IngeFi      IngeFiReport      `json:"ingeFi"`
-	StockOption StockOptionReport `json:"stockOption"`
-	FastValo    FastValoReport    `json:"fastValo"`
+	IngeFi      IngeFiReport        `json:"ingeFi"`
+	StockOption StockOptionReport   `json:"stockOption"`
+	FastValo    FastValoReport      `json:"fastValo"`
 	Warnings    []ValidationWarning `json:"warnings"`
 }
 
@@ -423,20 +423,20 @@ type IngeFiReport struct {
 
 // IngeFiPhase — computed state at one funding round.
 type IngeFiPhase struct {
-	PhaseNumber         int             `json:"phaseNumber"`
-	Label               string          `json:"label"`
-	TotalSharesBefore   int64           `json:"totalSharesBefore"`
-	TotalSharesAfter    int64           `json:"totalSharesAfter"`
-	PreMoneyValuationK  decimal.Decimal `json:"preMoneyValuationK"`
-	PostMoneyValuationK decimal.Decimal `json:"postMoneyValuationK"`
-	AmountRaisedK       decimal.Decimal `json:"amountRaisedK"`
-	SharePriceEur       decimal.Decimal `json:"sharePriceEur"`       // post-money / total shares after
-	NominalValueCents   int64           `json:"nominalValueCents"`
+	PhaseNumber         int                   `json:"phaseNumber"`
+	Label               string                `json:"label"`
+	TotalSharesBefore   int64                 `json:"totalSharesBefore"`
+	TotalSharesAfter    int64                 `json:"totalSharesAfter"`
+	PreMoneyValuationK  decimal.Decimal       `json:"preMoneyValuationK"`
+	PostMoneyValuationK decimal.Decimal       `json:"postMoneyValuationK"`
+	AmountRaisedK       decimal.Decimal       `json:"amountRaisedK"`
+	SharePriceEur       decimal.Decimal       `json:"sharePriceEur"` // post-money / total shares after
+	NominalValueCents   int64                 `json:"nominalValueCents"`
 	EmissionPremium     EmissionPremiumDetail `json:"emissionPremium"`
-	Goodwill            decimal.Decimal `json:"goodwill"`            // post-money - book equity
-	SplitCoefficient    decimal.Decimal `json:"splitCoefficient"`
-	ValuationGrowthPct  decimal.Decimal `json:"valuationGrowthPct"`  // (postN - postN-1) / postN-1
-	ValuationMultiple   decimal.Decimal `json:"valuationMultiple"`   // postN / postN-1
+	Goodwill            decimal.Decimal       `json:"goodwill"` // post-money - book equity
+	SplitCoefficient    decimal.Decimal       `json:"splitCoefficient"`
+	ValuationGrowthPct  decimal.Decimal       `json:"valuationGrowthPct"` // (postN - postN-1) / postN-1
+	ValuationMultiple   decimal.Decimal       `json:"valuationMultiple"`  // postN / postN-1
 
 	// Per-shareholder impacts
 	Positions []IngeFiShareholderPosition `json:"positions"`
@@ -467,7 +467,7 @@ type IngeFiShareholderPosition struct {
 	PctFullyDiluted decimal.Decimal `json:"pctFullyDiluted"` // incl. outstanding options
 	DilutionDelta   decimal.Decimal `json:"dilutionDelta"`   // pctBefore - pctAfter
 
-	ImpliedValueK   decimal.Decimal `json:"impliedValueK"`   // shares × price_per_share
+	ImpliedValueK   decimal.Decimal `json:"impliedValueK"` // shares × price_per_share
 	AmountInvestedK decimal.Decimal `json:"amountInvestedK"`
 }
 

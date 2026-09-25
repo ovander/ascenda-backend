@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/compute"
 	"ascenda/internal/model"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
+	"github.com/sirupsen/logrus"
 )
 
 // ReportService orchestrates full plan computation with optional caching.

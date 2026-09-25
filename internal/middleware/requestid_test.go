@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	"github.com/ovander/backendkit/ctxutil"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRequestIDMiddlewareGeneratesID(t *testing.T) {

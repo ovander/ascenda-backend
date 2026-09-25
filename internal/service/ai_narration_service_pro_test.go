@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
+	aiClient "ascenda/internal/pkg/ai"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	aiClient "ascenda/internal/pkg/ai"
 )
 
 // ============================================================================

@@ -38,17 +38,18 @@ func buildPlan(
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Reference plan for most tests:
-//   Year 1: FixedCosts = 600 k€, Revenue = 1 000 k€, Margin = 40 % → BEP = 1 500 k€  → LOSS
-//   Year 2: FixedCosts = 700 k€, Revenue = 2 000 k€, Margin = 42 % → BEP = 1 667 k€  → PROFIT
-//   Year 3: FixedCosts = 750 k€, Revenue = 2 500 k€, Margin = 44 % → BEP = 1 705 k€  → PROFIT
-//   Year 4: FixedCosts = 800 k€, Revenue = 3 000 k€, Margin = 46 % → BEP = 1 739 k€  → PROFIT
-//   Year 5: FixedCosts = 850 k€, Revenue = 3 500 k€, Margin = 48 % → BEP = 1 771 k€  → PROFIT
+//
+//	Year 1: FixedCosts = 600 k€, Revenue = 1 000 k€, Margin = 40 % → BEP = 1 500 k€  → LOSS
+//	Year 2: FixedCosts = 700 k€, Revenue = 2 000 k€, Margin = 42 % → BEP = 1 667 k€  → PROFIT
+//	Year 3: FixedCosts = 750 k€, Revenue = 2 500 k€, Margin = 44 % → BEP = 1 705 k€  → PROFIT
+//	Year 4: FixedCosts = 800 k€, Revenue = 3 000 k€, Margin = 46 % → BEP = 1 739 k€  → PROFIT
+//	Year 5: FixedCosts = 850 k€, Revenue = 3 500 k€, Margin = 48 % → BEP = 1 771 k€  → PROFIT
 func refPlan() *model.FullPlanOutput {
 	return buildPlan(
-		[5]int64{400_000, 480_000, 510_000, 540_000, 570_000}, // payroll
-		[5]int64{200_000, 220_000, 240_000, 260_000, 280_000}, // opex
+		[5]int64{400_000, 480_000, 510_000, 540_000, 570_000},           // payroll
+		[5]int64{200_000, 220_000, 240_000, 260_000, 280_000},           // opex
 		[5]int64{1_000_000, 2_000_000, 2_500_000, 3_000_000, 3_500_000}, // turnover
-		[5]float64{0.40, 0.42, 0.44, 0.46, 0.48},             // margin ratios
+		[5]float64{0.40, 0.42, 0.44, 0.46, 0.48},                        // margin ratios
 	)
 }
 

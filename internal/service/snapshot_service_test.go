@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestSnapshotRepoCreateAndGet(t *testing.T) {

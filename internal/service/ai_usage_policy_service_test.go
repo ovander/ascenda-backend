@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
 )
 
 // ============================================================================

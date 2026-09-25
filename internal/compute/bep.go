@@ -15,8 +15,8 @@
 package compute
 
 import (
-	"github.com/shopspring/decimal"
 	"ascenda/internal/model"
+	"github.com/shopspring/decimal"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,10 +24,10 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 var (
-	d100    = decimal.NewFromInt(100)
-	d12     = decimal.NewFromInt(12)
-	d10pct  = decimal.NewFromFloat(10.0) // low-margin warning threshold
-	dZero   = decimal.Zero
+	d100   = decimal.NewFromInt(100)
+	d12    = decimal.NewFromInt(12)
+	d10pct = decimal.NewFromFloat(10.0) // low-margin warning threshold
+	dZero  = decimal.Zero
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -236,7 +236,7 @@ func ComputeOptimisedBEP(
 	avgOrderValue *decimal.Decimal,
 	fixedSavingsTotal decimal.Decimal,
 	newTotalVarCostPerUnit decimal.Decimal, // post-savings sum of VariableCostLine amounts
-	varCostLinesDefined bool,               // false → no lines exist, margin stays at baseline
+	varCostLinesDefined bool, // false → no lines exist, margin stays at baseline
 ) model.OptimisedBEPReport {
 	report := model.OptimisedBEPReport{}
 
@@ -296,8 +296,8 @@ func ComputeOptimisedBEP(
 	report.MarginPct = model.OptimisedCostState{
 		Current:   baseMarginPct.Round(6),
 		Optimised: newMarginPct.Round(6),
-		DeltaAbs:  margDeltaAbs,                                // Δ pp
-		DeltaPct:  decimal.Zero,                                // not meaningful for percentages
+		DeltaAbs:  margDeltaAbs, // Δ pp
+		DeltaPct:  decimal.Zero, // not meaningful for percentages
 	}
 
 	// Var cost per unit state

@@ -117,8 +117,8 @@ type OpexSubcategoryResult struct {
 }
 
 type OpexLineResult struct {
-	LineID     OpexLineID         `json:"lineId"`
-	IsUserInput bool              `json:"isUserInput"`
-	CostDriver string             `json:"costDriver"`
-	Years      [5]decimal.Decimal `json:"years"`
+	LineID      OpexLineID         `json:"lineId"`
+	IsUserInput bool               `json:"isUserInput"`
+	CostDriver  string             `json:"costDriver"`
+	Years       [5]decimal.Decimal `json:"years"`
 }

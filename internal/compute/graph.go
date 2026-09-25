@@ -3,8 +3,8 @@ package compute
 import (
 	"fmt"
 
-	"github.com/shopspring/decimal"
 	"ascenda/internal/model"
+	"github.com/shopspring/decimal"
 )
 
 var monthAbbr = []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
@@ -48,8 +48,8 @@ func ComputeGraphs(output *model.FullPlanOutput) model.GraphsReport {
 
 	// Balance Sheet Structure (indices 1–5: Year 1–5, skipping opening index 0)
 	for i := 0; i < 5; i++ {
-		g.BalanceSheet.Equity[i]        = output.BSheet.Condensed.Liabilities.Equity[i+1]
-		g.BalanceSheet.LongTermDebt[i]  = output.BSheet.Condensed.Liabilities.LongTermDebt[i+1]
+		g.BalanceSheet.Equity[i] = output.BSheet.Condensed.Liabilities.Equity[i+1]
+		g.BalanceSheet.LongTermDebt[i] = output.BSheet.Condensed.Liabilities.LongTermDebt[i+1]
 		g.BalanceSheet.ShortTermDebt[i] = output.BSheet.Condensed.Liabilities.ShortTermDebt[i+1]
 	}
 
@@ -81,11 +81,11 @@ func ComputeGraphs(output *model.FullPlanOutput) model.GraphsReport {
 
 	// P&L Cascade (Revenue → Gross Margin → EBITDA → EBIT → Net Profit)
 	for i, py := range output.PnL.Years {
-		g.PnLCascade.Revenue[i]     = py.Sales
+		g.PnLCascade.Revenue[i] = py.Sales
 		g.PnLCascade.GrossMargin[i] = py.Sales.Sub(py.COGS)
-		g.PnLCascade.EBITDA[i]      = py.EBITDA
-		g.PnLCascade.EBIT[i]        = py.EBIT
-		g.PnLCascade.NetProfit[i]   = py.NetProfit
+		g.PnLCascade.EBITDA[i] = py.EBITDA
+		g.PnLCascade.EBIT[i] = py.EBIT
+		g.PnLCascade.NetProfit[i] = py.NetProfit
 	}
 
 	return g

@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"ascenda/internal/event"
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/event"
-	"ascenda/internal/model"
 )
 
 func newTestCapTableService() (*CapTableService, *MockCapTableRepo) {
@@ -69,8 +69,8 @@ func TestCapTable_UpsertShareClass_AssignsIDAndPersists(t *testing.T) {
 	ctx := context.Background()
 
 	sc := &model.CapTableShareClass{
-		ScenarioID:  scenarioID,
-		ClassType:   model.ShareClassCommon,
+		ScenarioID:   scenarioID,
+		ClassType:    model.ShareClassCommon,
 		VotingRights: true,
 	}
 	sc.TenantID = tenantID

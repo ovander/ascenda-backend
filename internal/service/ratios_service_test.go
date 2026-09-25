@@ -3,10 +3,10 @@ package service
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
 )
 
 // TestRatiosService_Constructor verifies NewRatiosService returns a non-nil service.

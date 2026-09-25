@@ -50,49 +50,49 @@ type WCRConfigSnapshot struct {
 
 // WCRReport is the computed output (not stored in DB).
 type WCRReport struct {
-	VATRate      decimal.Decimal    `json:"vatRate"`
-	Customers    WCRCustomers       `json:"customers"`
-	Inventory    WCRInventory       `json:"inventory"`
-	Suppliers    WCRSuppliers       `json:"suppliers"`
-	Summary      WCRSummary         `json:"summary"`
-	FiscalSocial WCRFiscalSocial    `json:"fiscalSocial"`
-	Adjustments  WCRAdjustments     `json:"adjustments"`
-	Adjusted     WCRAdjusted        `json:"adjusted"`
-	Charts       WCRCharts          `json:"charts"`
+	VATRate      decimal.Decimal `json:"vatRate"`
+	Customers    WCRCustomers    `json:"customers"`
+	Inventory    WCRInventory    `json:"inventory"`
+	Suppliers    WCRSuppliers    `json:"suppliers"`
+	Summary      WCRSummary      `json:"summary"`
+	FiscalSocial WCRFiscalSocial `json:"fiscalSocial"`
+	Adjustments  WCRAdjustments  `json:"adjustments"`
+	Adjusted     WCRAdjusted     `json:"adjusted"`
+	Charts       WCRCharts       `json:"charts"`
 	// EffectiveDSO = Σ(customerPct_k × days_k) — the weighted-average customer
 	// collection delay in days implied by the tranche configuration.
-	EffectiveDSO decimal.Decimal    `json:"effectiveDso"`
+	EffectiveDSO decimal.Decimal `json:"effectiveDso"`
 	// EffectiveDPO = Σ(supplierPct_k × days_k) — the weighted-average supplier
 	// payment delay in days implied by the tranche configuration.
-	EffectiveDPO decimal.Decimal    `json:"effectiveDpo"`
+	EffectiveDPO decimal.Decimal `json:"effectiveDpo"`
 	// ConfigSnapshot embeds the pct/days distribution for full auditability.
 	ConfigSnapshot WCRConfigSnapshot `json:"configSnapshot"`
 }
 
 type WCRCustomers struct {
-	SalesExclVAT   [5]decimal.Decimal   `json:"salesExclVat"`
-	ExportExclVAT  [5]decimal.Decimal   `json:"exportExclVat"`
-	SalesInclTax   [5]decimal.Decimal   `json:"salesInclTax"`
-	Tranches       [5][5]decimal.Decimal `json:"tranches"`
-	TotalCustomers [5]decimal.Decimal   `json:"totalCustomers"`
-	InitialTradeRecv decimal.Decimal    `json:"initialTradeRecv"`
+	SalesExclVAT     [5]decimal.Decimal    `json:"salesExclVat"`
+	ExportExclVAT    [5]decimal.Decimal    `json:"exportExclVat"`
+	SalesInclTax     [5]decimal.Decimal    `json:"salesInclTax"`
+	Tranches         [5][5]decimal.Decimal `json:"tranches"`
+	TotalCustomers   [5]decimal.Decimal    `json:"totalCustomers"`
+	InitialTradeRecv decimal.Decimal       `json:"initialTradeRecv"`
 }
 
 type WCRInventory struct {
-	COGSBase       [5]decimal.Decimal `json:"cogsBase"`
-	InventoryPct   [5]decimal.Decimal `json:"inventoryPct"`
-	InventoryValue [5]decimal.Decimal `json:"inventoryValue"`
-	InitialInventory decimal.Decimal  `json:"initialInventory"`
+	COGSBase         [5]decimal.Decimal `json:"cogsBase"`
+	InventoryPct     [5]decimal.Decimal `json:"inventoryPct"`
+	InventoryValue   [5]decimal.Decimal `json:"inventoryValue"`
+	InitialInventory decimal.Decimal    `json:"initialInventory"`
 }
 
 type WCRSuppliers struct {
-	COGSExclVAT    [5]decimal.Decimal   `json:"cogsExclVat"`
-	ExternalExclVAT [5]decimal.Decimal  `json:"externalExclVat"`
-	CapexExclVAT   [5]decimal.Decimal   `json:"capexExclVat"`
-	TotalInclVAT   [5]decimal.Decimal   `json:"totalInclVat"`
-	Tranches       [5][5]decimal.Decimal `json:"tranches"`
-	TotalSuppliers [5]decimal.Decimal   `json:"totalSuppliers"`
-	InitialTradePay decimal.Decimal     `json:"initialTradePay"`
+	COGSExclVAT     [5]decimal.Decimal    `json:"cogsExclVat"`
+	ExternalExclVAT [5]decimal.Decimal    `json:"externalExclVat"`
+	CapexExclVAT    [5]decimal.Decimal    `json:"capexExclVat"`
+	TotalInclVAT    [5]decimal.Decimal    `json:"totalInclVat"`
+	Tranches        [5][5]decimal.Decimal `json:"tranches"`
+	TotalSuppliers  [5]decimal.Decimal    `json:"totalSuppliers"`
+	InitialTradePay decimal.Decimal       `json:"initialTradePay"`
 }
 
 type WCRSummary struct {
@@ -137,10 +137,10 @@ type WCRAdjusted struct {
 }
 
 type WCRCharts struct {
-	Years          [5]int             `json:"years"`
-	CustomerWCR    [5]decimal.Decimal `json:"customerWcr"`
-	InventoryWCR   [5]decimal.Decimal `json:"inventoryWcr"`
-	SupplierWCR    [5]decimal.Decimal `json:"supplierWcr"`
+	Years           [5]int             `json:"years"`
+	CustomerWCR     [5]decimal.Decimal `json:"customerWcr"`
+	InventoryWCR    [5]decimal.Decimal `json:"inventoryWcr"`
+	SupplierWCR     [5]decimal.Decimal `json:"supplierWcr"`
 	FiscalSocialWCR [5]decimal.Decimal `json:"fiscalSocialWcr"`
-	WCRChange      [5]decimal.Decimal `json:"wcrChange"`
+	WCRChange       [5]decimal.Decimal `json:"wcrChange"`
 }

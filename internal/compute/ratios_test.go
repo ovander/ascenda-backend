@@ -3,16 +3,16 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestComputeRatios(t *testing.T) {
 	config := model.PlanConfig{
-		DiscountRate:       decimal.NewFromFloat(0.1),
-		CorporateTaxRate:   decimal.NewFromFloat(0.25),
-		EmployerTaxRate:    decimal.NewFromFloat(0.42),
+		DiscountRate:     decimal.NewFromFloat(0.1),
+		CorporateTaxRate: decimal.NewFromFloat(0.25),
+		EmployerTaxRate:  decimal.NewFromFloat(0.42),
 	}
 
 	tests := []struct {
@@ -31,25 +31,25 @@ func TestComputeRatios(t *testing.T) {
 			pnl: model.PnlReport{
 				Years: [5]model.PnlYear{
 					{
-						Sales:                decimal.NewFromInt(100000),
-						EBITDA:               decimal.NewFromInt(20000),
-						EBIT:                 decimal.NewFromInt(10000),
-						NetProfit:            decimal.NewFromInt(7500),
-						FinancialExpenses:    decimal.NewFromInt(1000),
+						Sales:             decimal.NewFromInt(100000),
+						EBITDA:            decimal.NewFromInt(20000),
+						EBIT:              decimal.NewFromInt(10000),
+						NetProfit:         decimal.NewFromInt(7500),
+						FinancialExpenses: decimal.NewFromInt(1000),
 					},
 					{
-						Sales:                decimal.NewFromInt(120000),
-						EBITDA:               decimal.NewFromInt(28800),
-						EBIT:                 decimal.NewFromInt(17280),
-						NetProfit:            decimal.NewFromInt(12960),
-						FinancialExpenses:    decimal.NewFromInt(1200),
+						Sales:             decimal.NewFromInt(120000),
+						EBITDA:            decimal.NewFromInt(28800),
+						EBIT:              decimal.NewFromInt(17280),
+						NetProfit:         decimal.NewFromInt(12960),
+						FinancialExpenses: decimal.NewFromInt(1200),
 					},
 					{
-						Sales:                decimal.NewFromInt(144000),
-						EBITDA:               decimal.NewFromInt(41472),
-						EBIT:                 decimal.NewFromInt(27648),
-						NetProfit:            decimal.NewFromInt(20736),
-						FinancialExpenses:    decimal.NewFromInt(1440),
+						Sales:             decimal.NewFromInt(144000),
+						EBITDA:            decimal.NewFromInt(41472),
+						EBIT:              decimal.NewFromInt(27648),
+						NetProfit:         decimal.NewFromInt(20736),
+						FinancialExpenses: decimal.NewFromInt(1440),
 					},
 					{},
 					{},
@@ -95,7 +95,7 @@ func TestComputeRatios(t *testing.T) {
 					decimal.NewFromInt(162668),
 				},
 			},
-			wcr:    model.WCRReport{},
+			wcr: model.WCRReport{},
 			fiplan: model.FiplanReport{
 				Plan: model.FiplanPlan{
 					Balance: model.FiplanBalance{
@@ -440,9 +440,9 @@ func TestComputeRatios(t *testing.T) {
 				Plan: model.FiplanPlan{
 					Balance: model.FiplanBalance{
 						CumulativeCash: [5]decimal.Decimal{
-							decimal.NewFromInt(40),    // Cumulative: 40
-							decimal.NewFromInt(40),    // Cumulative: 80
-							decimal.NewFromInt(40),    // Cumulative: 120 (>= 100, payback achieved)
+							decimal.NewFromInt(40), // Cumulative: 40
+							decimal.NewFromInt(40), // Cumulative: 80
+							decimal.NewFromInt(40), // Cumulative: 120 (>= 100, payback achieved)
 							decimal.NewFromInt(40),
 							decimal.NewFromInt(40),
 						},

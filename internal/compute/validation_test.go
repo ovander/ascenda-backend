@@ -3,17 +3,17 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestValidateOutput(t *testing.T) {
 	tests := []struct {
-		name                  string
-		output                model.FullPlanOutput
-		expectedWarningCount  int
-		expectedMinSeverity   string
+		name                 string
+		output               model.FullPlanOutput
+		expectedWarningCount int
+		expectedMinSeverity  string
 	}{
 		{
 			name: "balanced balance sheet",

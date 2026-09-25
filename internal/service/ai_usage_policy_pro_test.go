@@ -7,9 +7,9 @@ package service
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
 )
 
 // proLookup is a shorthand for the full default policy lookup table.

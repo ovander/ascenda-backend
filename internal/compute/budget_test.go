@@ -3,9 +3,9 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestComputeBudget1(t *testing.T) {
@@ -72,7 +72,7 @@ func TestComputeBudget1(t *testing.T) {
 			},
 			capex: model.CapexSummary{
 				Totals: model.CapexTotals{
-					TotalCapex: [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
+					TotalCapex:        [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
 					TotalDepreciation: [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
 				},
 			},
@@ -132,7 +132,7 @@ func TestComputeBudget1(t *testing.T) {
 			},
 			capex: model.CapexSummary{
 				Totals: model.CapexTotals{
-					TotalCapex:   [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
+					TotalCapex:        [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
 					TotalDepreciation: [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
 				},
 			},
@@ -194,7 +194,7 @@ func TestComputeBudget1(t *testing.T) {
 			},
 			capex: model.CapexSummary{
 				Totals: model.CapexTotals{
-					TotalCapex:   [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
+					TotalCapex:        [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
 					TotalDepreciation: [5]decimal.Decimal{decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero},
 				},
 			},

@@ -4,12 +4,12 @@ import (
 	"context"
 	"net/http"
 
+	"ascenda/internal/model"
+	"ascenda/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-	"ascenda/internal/model"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
 )
 
 // CapTableServicer defines the service interface the CapTableHandler depends on.

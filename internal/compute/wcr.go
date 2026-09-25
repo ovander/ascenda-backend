@@ -48,7 +48,7 @@ func ComputeWCR(
 	// Compute working capital percentages with 120-day tranche
 	wcComputed := model.WorkingCapitalComputed{
 		WorkingCapitalConfig: wcConfig,
-		CustomerPct120Days:   decimal.NewFromInt(1).
+		CustomerPct120Days: decimal.NewFromInt(1).
 			Sub(wcConfig.CustomerPct0Days).
 			Sub(wcConfig.CustomerPct30Days).
 			Sub(wcConfig.CustomerPct60Days).

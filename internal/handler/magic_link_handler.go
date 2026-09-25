@@ -6,10 +6,10 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/config"
-	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/service"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/sirupsen/logrus"
 )
 
 // MagicLinkHandler manages passwordless sign-in via email.

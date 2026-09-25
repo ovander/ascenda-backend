@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"ascenda/internal/model"
 )
 
 func TestComputeFiplan(t *testing.T) {
@@ -41,15 +41,15 @@ func TestComputeFiplan(t *testing.T) {
 	}
 
 	openingBal := model.OpeningBalance{
-		ScenarioID:      scenarioID,
+		ScenarioID:        scenarioID,
 		CashAndSecurities: decimal.NewFromInt(50000),
 	}
 
 	tests := []struct {
-		name         string
-		entries      []model.FiplanEntry
-		capex        model.CapexSummary
-		checkFiplan  func(*testing.T, model.FiplanReport)
+		name        string
+		entries     []model.FiplanEntry
+		capex       model.CapexSummary
+		checkFiplan func(*testing.T, model.FiplanReport)
 	}{
 		{
 			name: "sources and uses balancing",
@@ -96,7 +96,7 @@ func TestComputeFiplan(t *testing.T) {
 
 				// Year 1 resources: capital + loans + asset sales
 				expectedYear1Res := decimal.NewFromInt(10000).
-					Add(decimal.Zero).  // no new loans in this test
+					Add(decimal.Zero). // no new loans in this test
 					Add(decimal.NewFromInt(15000))
 				assertDecEq(t, expectedYear1Res, result.Plan.Resources.Total[1],
 					"Year 1 resources should be capital + asset sales")
@@ -497,11 +497,11 @@ func TestFiplanNewLoanRepaymentSchedule(t *testing.T) {
 	// The repayment schedule should reflect the instalment (100k / 5 = 20k) in Years 2-5.
 	// Within the 5-year plan window we see repayments for Y2, Y3, Y4 (indices 2, 3, 4).
 	expectedInstalment := decimal.NewFromInt(20_000)
-	assertDecEq(t, decimal.Zero,         result.Plan.Requirements.LoanRepayments[0], "Year 0: no repayment")
-	assertDecEq(t, decimal.Zero,         result.Plan.Requirements.LoanRepayments[1], "Year 1: no repayment (draw year)")
-	assertDecEq(t, expectedInstalment,    result.Plan.Requirements.LoanRepayments[2], "Year 2: first instalment")
-	assertDecEq(t, expectedInstalment,    result.Plan.Requirements.LoanRepayments[3], "Year 3: second instalment")
-	assertDecEq(t, expectedInstalment,    result.Plan.Requirements.LoanRepayments[4], "Year 4: third instalment")
+	assertDecEq(t, decimal.Zero, result.Plan.Requirements.LoanRepayments[0], "Year 0: no repayment")
+	assertDecEq(t, decimal.Zero, result.Plan.Requirements.LoanRepayments[1], "Year 1: no repayment (draw year)")
+	assertDecEq(t, expectedInstalment, result.Plan.Requirements.LoanRepayments[2], "Year 2: first instalment")
+	assertDecEq(t, expectedInstalment, result.Plan.Requirements.LoanRepayments[3], "Year 3: second instalment")
+	assertDecEq(t, expectedInstalment, result.Plan.Requirements.LoanRepayments[4], "Year 4: third instalment")
 }
 
 // TestFiplanOpeningDebtRepayment verifies that opening-balance debt is repaid
@@ -554,10 +554,10 @@ func TestFiplanGrantsNotInFinancingCashFlow(t *testing.T) {
 	}
 
 	entries := []model.FiplanEntry{
-		{LineID: model.FiplanSubsidies,     YearIndex: 1, Amount: decimal.NewFromInt(30_000)},
-		{LineID: model.FiplanOtherGrants,   YearIndex: 1, Amount: decimal.NewFromInt(20_000)},
+		{LineID: model.FiplanSubsidies, YearIndex: 1, Amount: decimal.NewFromInt(30_000)},
+		{LineID: model.FiplanOtherGrants, YearIndex: 1, Amount: decimal.NewFromInt(20_000)},
 		{LineID: model.FiplanRepayableGrants, YearIndex: 1, Amount: decimal.NewFromInt(10_000)},
-		{LineID: model.FiplanLTLoans,       YearIndex: 1, Amount: decimal.NewFromInt(50_000)},
+		{LineID: model.FiplanLTLoans, YearIndex: 1, Amount: decimal.NewFromInt(50_000)},
 	}
 
 	result := ComputeFiplan(entries, model.CapexSummary{}, model.PnlReport{}, model.WCRReport{},

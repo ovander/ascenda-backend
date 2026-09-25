@@ -10,15 +10,15 @@ import (
 	"sync"
 	"testing"
 
+	"ascenda/internal/event"
+	"ascenda/internal/model"
+	"ascenda/internal/repo"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/event"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
 )
 
 // ── minimal repo mocks ────────────────────────────────────────────────────────
@@ -122,15 +122,15 @@ func (r *stubPlanRepo) PurgeDemoPlans(tenantID uuid.UUID) error { return nil }
 // stubAuditRepo satisfies repo.AuditRepository — all operations are no-ops.
 type stubAuditRepo struct{}
 
-func (r *stubAuditRepo) Create(a *model.AuditLog) error                                    { return nil }
-func (r *stubAuditRepo) GetByID(tenantID, id uuid.UUID) (*model.AuditLog, error)           { return nil, nil }
+func (r *stubAuditRepo) Create(a *model.AuditLog) error                          { return nil }
+func (r *stubAuditRepo) GetByID(tenantID, id uuid.UUID) (*model.AuditLog, error) { return nil, nil }
 func (r *stubAuditRepo) ListByEntity(tenantID uuid.UUID, entityType string, entityID uuid.UUID) ([]*model.AuditLog, error) {
 	return nil, nil
 }
 func (r *stubAuditRepo) ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
 	return nil, nil
 }
-func (r *stubAuditRepo) CountByTenant(tenantID uuid.UUID) (int64, error)             { return 0, nil }
+func (r *stubAuditRepo) CountByTenant(tenantID uuid.UUID) (int64, error) { return 0, nil }
 func (r *stubAuditRepo) ListByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
 	return nil, nil
 }
@@ -147,12 +147,12 @@ func (r *stubAuditRepo) ListByUser(tenantID, userID uuid.UUID, offset, limit int
 // ── test factory ──────────────────────────────────────────────────────────────
 
 type scenarioTestBed struct {
-	svc         *PlanService
+	svc          *PlanService
 	scenarioRepo *inMemScenarioRepo
-	planRepo    *stubPlanRepo
+	planRepo     *stubPlanRepo
 	settingsRepo *MockSettingsRepo
-	tenantID    uuid.UUID
-	planID      uuid.UUID
+	tenantID     uuid.UUID
+	planID       uuid.UUID
 }
 
 func newScenarioTestBed(t *testing.T) *scenarioTestBed {

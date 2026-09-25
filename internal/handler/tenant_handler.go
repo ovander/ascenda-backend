@@ -3,11 +3,11 @@ package handler
 import (
 	"net/http"
 
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
+	"ascenda/internal/service"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
 )
 
 // TenantHandler handles tenant management operations.

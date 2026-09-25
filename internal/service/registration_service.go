@@ -8,21 +8,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/socrate"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // SocrateRegistrar can create a user in Socrate via two strategies:
 //
 //   - CreateUser  — forwards the caller's JWT already stored in ctx by AuthMiddleware
-//                   (mirrors GPWA's socrateContext pattern). Works when the inviter is
-//                   a Socrate admin. Used as the primary invite path in InviteUser.
+//     (mirrors GPWA's socrateContext pattern). Works when the inviter is
+//     a Socrate admin. Used as the primary invite path in InviteUser.
 //   - RegisterUser — uses the backend service-account (client_credentials) token.
-//                   Used for self-service registration where no user JWT is present.
+//     Used for self-service registration where no user JWT is present.
 //
 // Both methods are satisfied by *socrate.Client.
 type SocrateRegistrar interface {
@@ -40,10 +40,9 @@ var validCountries = map[string]bool{
 // slugRe strips characters that are not alphanumeric or hyphens.
 var slugRe = regexp.MustCompile(`[^a-z0-9-]+`)
 
-
 // RegistrationService handles self-service account creation.
 type RegistrationService struct {
-	socrateClient SocrateRegistrar   // nil → skip Socrate (local dev without IdP)
+	socrateClient SocrateRegistrar // nil → skip Socrate (local dev without IdP)
 	userRepo      repo.UserRepository
 	tenantRepo    repo.AdminTenantRepository
 	seedService   *SeedService

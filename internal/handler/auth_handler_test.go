@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/config"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/config"
 )
 
 func newTestAuthHandler() *AuthHandler {

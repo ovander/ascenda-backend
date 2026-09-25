@@ -245,8 +245,8 @@ func computeCapexSection(section *model.CashSection, capex model.CapexSummary, y
 	// Map asset categories to CashLineIDs (all 14 categories covered)
 	capexLineMap := map[model.AssetCategory]model.CashLineID{
 		// Tangible – land & buildings
-		model.AssetLand:              model.CashCapexLandBuilding,
-		model.AssetBuildings:         model.CashCapexLandBuilding,
+		model.AssetLand:      model.CashCapexLandBuilding,
+		model.AssetBuildings: model.CashCapexLandBuilding,
 		// Intangible – patents, R&D, setup
 		model.AssetIntangibleBusiness: model.CashCapexPatentsRD,
 		model.AssetSetupExpenses:      model.CashCapexPatentsRD,
@@ -254,15 +254,15 @@ func computeCapexSection(section *model.CashSection, capex model.CapexSummary, y
 		model.AssetRnDExpenses:        model.CashCapexPatentsRD,
 		model.AssetOtherIntangible:    model.CashCapexPatentsRD,
 		// Physical prototypes & equipment
-		model.AssetPrototypes:         model.CashCapexPrototypes,
-		model.AssetEquipmentTools:     model.CashCapexPrototypes,
+		model.AssetPrototypes:     model.CashCapexPrototypes,
+		model.AssetEquipmentTools: model.CashCapexPrototypes,
 		// IT, furniture, vehicles & other tangibles
-		model.AssetOfficeFurniture:    model.CashCapexITVehicles,
-		model.AssetComputerHWSW:       model.CashCapexITVehicles,
-		model.AssetVehicles:           model.CashCapexITVehicles,
-		model.AssetOtherTangible:      model.CashCapexITVehicles,
+		model.AssetOfficeFurniture: model.CashCapexITVehicles,
+		model.AssetComputerHWSW:    model.CashCapexITVehicles,
+		model.AssetVehicles:        model.CashCapexITVehicles,
+		model.AssetOtherTangible:   model.CashCapexITVehicles,
 		// Financial investments → land/building bucket (closest capital allocation)
-		model.AssetFinancial:          model.CashCapexLandBuilding,
+		model.AssetFinancial: model.CashCapexLandBuilding,
 	}
 
 	// Add capex categories (lump_m1 by default)

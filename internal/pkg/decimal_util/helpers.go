@@ -6,13 +6,13 @@ import (
 
 // Standard precision constants for financial calculations.
 var (
-	DivPrecision  int32 = 10 // Intermediate division precision
-	DisplayScale  int32 = 2  // Final rounding for display/storage
-	Zero                = decimal.Zero
-	One                 = decimal.NewFromInt(1)
-	Hundred             = decimal.NewFromInt(100)
-	Twelve              = decimal.NewFromInt(12)
-	ThreeSixtyFive      = decimal.NewFromInt(365)
+	DivPrecision   int32 = 10 // Intermediate division precision
+	DisplayScale   int32 = 2  // Final rounding for display/storage
+	Zero                 = decimal.Zero
+	One                  = decimal.NewFromInt(1)
+	Hundred              = decimal.NewFromInt(100)
+	Twelve               = decimal.NewFromInt(12)
+	ThreeSixtyFive       = decimal.NewFromInt(365)
 )
 
 // Sum returns the sum of a slice of decimals.

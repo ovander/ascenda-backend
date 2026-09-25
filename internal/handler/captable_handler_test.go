@@ -8,15 +8,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,37 +24,37 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 type mockCapTableService struct {
-	GetCompanyFunc               func(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.CapTableCompany, error)
-	UpsertCompanyFunc            func(ctx context.Context, company *model.CapTableCompany) error
-	GetCountryProfileFunc        func(code string) model.CapTableCountryProfile
-	ListShareClassesFunc         func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.CapTableShareClass, error)
-	UpsertShareClassFunc         func(ctx context.Context, sc *model.CapTableShareClass) error
-	DeleteShareClassFunc         func(ctx context.Context, tenantID, id uuid.UUID) error
-	ListShareholdersFunc         func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.CapTableShareholder, error)
-	CreateShareholderFunc        func(ctx context.Context, sh *model.CapTableShareholder) error
-	UpdateShareholderFunc        func(ctx context.Context, sh *model.CapTableShareholder) error
-	DeleteShareholderFunc        func(ctx context.Context, tenantID, id uuid.UUID) error
-	ListRoundsFunc               func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.CapTableRound, error)
-	CreateRoundFunc              func(ctx context.Context, rnd *model.CapTableRound) error
-	UpdateRoundFunc              func(ctx context.Context, rnd *model.CapTableRound) error
-	DeleteRoundFunc              func(ctx context.Context, tenantID, id uuid.UUID) error
-	ListPlansFunc                func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.StockOptionPlan, error)
-	CreatePlanFunc               func(ctx context.Context, plan *model.StockOptionPlan) error
-	UpdatePlanFunc               func(ctx context.Context, plan *model.StockOptionPlan) error
-	DeletePlanFunc               func(ctx context.Context, tenantID, id uuid.UUID) error
-	ListGrantsFunc               func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.OptionGrant, error)
-	CreateGrantFunc              func(ctx context.Context, grant *model.OptionGrant) error
-	UpdateGrantFunc              func(ctx context.Context, grant *model.OptionGrant) error
-	DeleteGrantFunc              func(ctx context.Context, tenantID, id uuid.UUID) error
-	ListValuationScenariosFunc   func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.ValuationScenario, error)
-	CreateValuationScenarioFunc  func(ctx context.Context, vs *model.ValuationScenario) error
-	UpdateValuationScenarioFunc  func(ctx context.Context, vs *model.ValuationScenario) error
-	DeleteValuationScenarioFunc  func(ctx context.Context, tenantID, id uuid.UUID) error
-	ComputeValuationScenarioFunc func(ctx context.Context, tenantID, id uuid.UUID) (*model.ValuationScenarioResult, error)
-	ListBranchesFunc             func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.CapTableScenarioBranch, error)
-	CreateBranchFunc             func(ctx context.Context, branch *model.CapTableScenarioBranch) error
-	UpdateBranchFunc             func(ctx context.Context, branch *model.CapTableScenarioBranch) error
-	GetReportFunc                func(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.CapTableReport, error)
+	GetCompanyFunc                    func(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.CapTableCompany, error)
+	UpsertCompanyFunc                 func(ctx context.Context, company *model.CapTableCompany) error
+	GetCountryProfileFunc             func(code string) model.CapTableCountryProfile
+	ListShareClassesFunc              func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.CapTableShareClass, error)
+	UpsertShareClassFunc              func(ctx context.Context, sc *model.CapTableShareClass) error
+	DeleteShareClassFunc              func(ctx context.Context, tenantID, id uuid.UUID) error
+	ListShareholdersFunc              func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.CapTableShareholder, error)
+	CreateShareholderFunc             func(ctx context.Context, sh *model.CapTableShareholder) error
+	UpdateShareholderFunc             func(ctx context.Context, sh *model.CapTableShareholder) error
+	DeleteShareholderFunc             func(ctx context.Context, tenantID, id uuid.UUID) error
+	ListRoundsFunc                    func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.CapTableRound, error)
+	CreateRoundFunc                   func(ctx context.Context, rnd *model.CapTableRound) error
+	UpdateRoundFunc                   func(ctx context.Context, rnd *model.CapTableRound) error
+	DeleteRoundFunc                   func(ctx context.Context, tenantID, id uuid.UUID) error
+	ListPlansFunc                     func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.StockOptionPlan, error)
+	CreatePlanFunc                    func(ctx context.Context, plan *model.StockOptionPlan) error
+	UpdatePlanFunc                    func(ctx context.Context, plan *model.StockOptionPlan) error
+	DeletePlanFunc                    func(ctx context.Context, tenantID, id uuid.UUID) error
+	ListGrantsFunc                    func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.OptionGrant, error)
+	CreateGrantFunc                   func(ctx context.Context, grant *model.OptionGrant) error
+	UpdateGrantFunc                   func(ctx context.Context, grant *model.OptionGrant) error
+	DeleteGrantFunc                   func(ctx context.Context, tenantID, id uuid.UUID) error
+	ListValuationScenariosFunc        func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.ValuationScenario, error)
+	CreateValuationScenarioFunc       func(ctx context.Context, vs *model.ValuationScenario) error
+	UpdateValuationScenarioFunc       func(ctx context.Context, vs *model.ValuationScenario) error
+	DeleteValuationScenarioFunc       func(ctx context.Context, tenantID, id uuid.UUID) error
+	ComputeValuationScenarioFunc      func(ctx context.Context, tenantID, id uuid.UUID) (*model.ValuationScenarioResult, error)
+	ListBranchesFunc                  func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]model.CapTableScenarioBranch, error)
+	CreateBranchFunc                  func(ctx context.Context, branch *model.CapTableScenarioBranch) error
+	UpdateBranchFunc                  func(ctx context.Context, branch *model.CapTableScenarioBranch) error
+	GetReportFunc                     func(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.CapTableReport, error)
 	SyncRoundToFiplanFunc             func(ctx context.Context, tenantID uuid.UUID, roundID uuid.UUID, fiscalYearIndex int) (*model.CapTableRound, error)
 	UnlinkFromFiplanFunc              func(ctx context.Context, tenantID uuid.UUID, roundID uuid.UUID) (*model.CapTableRound, error)
 	SyncRoundToOpeningBalanceFunc     func(ctx context.Context, tenantID, roundID uuid.UUID) (*model.CapTableRound, error)
@@ -609,10 +609,10 @@ func TestUpsertCapTableRounds_Create(t *testing.T) {
 	}
 
 	payload := map[string]interface{}{
-		"id":          "00000000-0000-0000-0000-000000000000",
-		"label":       "Seed",
-		"phaseNumber": 1,
-		"eventType":   "funding_round",
+		"id":            "00000000-0000-0000-0000-000000000000",
+		"label":         "Seed",
+		"phaseNumber":   1,
+		"eventType":     "funding_round",
 		"amountRaisedK": "100",
 	}
 	h := newCapTableHandler(svc)

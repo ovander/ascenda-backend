@@ -12,7 +12,7 @@ type MagicLinkToken struct {
 	ID          uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"-"`
 	Email       string     `gorm:"type:varchar(255);not null;index"               json:"-"`
 	TokenHash   string     `gorm:"type:varchar(64);not null;uniqueIndex"           json:"-"` // hex SHA-256
-	RedirectURL string     `gorm:"type:text"                                      json:"-"` // post-auth destination
+	RedirectURL string     `gorm:"type:text"                                      json:"-"`  // post-auth destination
 	ExpiresAt   time.Time  `gorm:"not null"                                       json:"-"`
 	UsedAt      *time.Time `gorm:"index"                                          json:"-"`
 	CreatedAt   time.Time  `gorm:"autoCreateTime"                                 json:"-"`

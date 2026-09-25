@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"math"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -227,15 +227,15 @@ const (
 // It is serialised directly as the HTTP response body — see the API contract
 // comment block above for consumer guidance.
 type ScenarioAnalysisResult struct {
-	Viability   ViabilityResult             `json:"viability"`
-	Projections ProjectionResult            `json:"projections"`
-	Risks       []Risk                      `json:"risks"`
-	RiskSummary RiskSummary                 `json:"risk_summary"` // global coherence signal (Sprint 3)
-	Drivers     []Driver                    `json:"drivers"`
-	Trends      Trends                      `json:"trends"`
-	Insights    TrendInsights               `json:"insights"`             // trend intelligence layer (Sprint 5)
-	Highlights  Highlights                  `json:"highlights"`           // AI-ready narrative layer (Sprint 6)
-	Metadata    *ScenarioAnalysisMetadata   `json:"metadata,omitempty"`   // versioning + scoring transparency
+	Viability   ViabilityResult           `json:"viability"`
+	Projections ProjectionResult          `json:"projections"`
+	Risks       []Risk                    `json:"risks"`
+	RiskSummary RiskSummary               `json:"risk_summary"` // global coherence signal (Sprint 3)
+	Drivers     []Driver                  `json:"drivers"`
+	Trends      Trends                    `json:"trends"`
+	Insights    TrendInsights             `json:"insights"`           // trend intelligence layer (Sprint 5)
+	Highlights  Highlights                `json:"highlights"`         // AI-ready narrative layer (Sprint 6)
+	Metadata    *ScenarioAnalysisMetadata `json:"metadata,omitempty"` // versioning + scoring transparency
 }
 
 // ScenarioAnalysisMetadata carries version and scoring-model identifiers.
@@ -307,14 +307,14 @@ type ViabilityResult struct {
 type ProjectionResult struct {
 	Revenue5Y       decimal.Decimal `json:"revenue_5y"`
 	EbitdaPeak      decimal.Decimal `json:"ebitda_peak"`
-	BreakEvenMonth  int             `json:"break_even_month"`   // 1-indexed; 0 = not_reached
-	BreakEvenStatus string          `json:"break_even_status"`  // reached | approaching | not_reached
-	BreakEvenMethod string          `json:"break_even_method"`  // economic_cash | pnl_approx | projected | ""
+	BreakEvenMonth  int             `json:"break_even_month"`  // 1-indexed; 0 = not_reached
+	BreakEvenStatus string          `json:"break_even_status"` // reached | approaching | not_reached
+	BreakEvenMethod string          `json:"break_even_method"` // economic_cash | pnl_approx | projected | ""
 	CashMin         decimal.Decimal `json:"cash_min"`
-	CashMinMonth    int             `json:"cash_min_month"`     // 1-indexed month of minimum cash
-	FundingRequired decimal.Decimal `json:"funding_required"`   // max(-CashMin, 0)
-	FundingMonth    int             `json:"funding_month"`      // 0 when no funding required
-	FundingUrgency  string          `json:"funding_urgency"`    // immediate | near_term | long_term | ""
+	CashMinMonth    int             `json:"cash_min_month"`   // 1-indexed month of minimum cash
+	FundingRequired decimal.Decimal `json:"funding_required"` // max(-CashMin, 0)
+	FundingMonth    int             `json:"funding_month"`    // 0 when no funding required
+	FundingUrgency  string          `json:"funding_urgency"`  // immediate | near_term | long_term | ""
 	// Advanced scoring metrics — intentionally exposed for transparency and
 	// tooling.  These are precomputed during projection extraction so that
 	// computeViability can reference them without re-deriving from raw data.
@@ -327,16 +327,16 @@ type ProjectionResult struct {
 
 // Risk describes a specific financial risk detected in the scenario.
 type Risk struct {
-	Type     string          `json:"type"`
-	Severity string          `json:"severity"`                    // high | medium | low
-	Urgency  string          `json:"urgency"`                     // immediate | near_term | long_term
-	Message  string          `json:"message"`                     // English — always populated
+	Type     string `json:"type"`
+	Severity string `json:"severity"` // high | medium | low
+	Urgency  string `json:"urgency"`  // immediate | near_term | long_term
+	Message  string `json:"message"`  // English — always populated
 	// MessageLocalized carries the same message in the plan's configured language.
 	// Omitted when the plan language is "en" (Message is already English).
 	// Consumers should prefer MessageLocalized when present.
-	MessageLocalized string  `json:"message_localized,omitempty"` // NEW — i18n
-	When     *int            `json:"when,omitempty"`              // 1-indexed month if time-specific
-	Value    decimal.Decimal `json:"value,omitempty"`
+	MessageLocalized string          `json:"message_localized,omitempty"` // NEW — i18n
+	When             *int            `json:"when,omitempty"`              // 1-indexed month if time-specific
+	Value            decimal.Decimal `json:"value,omitempty"`
 }
 
 // RiskSummary provides a global coherence signal over the full risk slice.
@@ -344,7 +344,7 @@ type Risk struct {
 // risk" when the aggregate picture is materially worse.
 type RiskSummary struct {
 	GlobalRiskLevel string `json:"global_risk_level"` // none | low | moderate | elevated | critical
-	RiskScore       int    `json:"risk_score"`         // weighted aggregate (high=3, med=2, low=1)
+	RiskScore       int    `json:"risk_score"`        // weighted aggregate (high=3, med=2, low=1)
 	RiskCount       int    `json:"risk_count"`
 }
 
@@ -353,14 +353,14 @@ type Driver struct {
 	// Code is a stable machine-readable identifier for this driver type.
 	// It is always populated and language-neutral.
 	// Use Code for localisation lookups and analytics.
-	Code      string `json:"code"`                        // NEW — stable i18n key
-	Name      string `json:"name"`                        // English label; kept for backward-compat
-	Impact    string `json:"impact"`                      // high | medium | low
-	Effect    string `json:"effect"`                      // English effect description
+	Code   string `json:"code"`   // NEW — stable i18n key
+	Name   string `json:"name"`   // English label; kept for backward-compat
+	Impact string `json:"impact"` // high | medium | low
+	Effect string `json:"effect"` // English effect description
 	// EffectLocalized carries the same effect in the plan's configured language.
 	// Omitted when the plan language is "en".
 	EffectLocalized string `json:"effect_localized,omitempty"` // NEW — i18n
-	RootCause bool   `json:"root_cause"`                  // true = root cause; false = symptom/consequence
+	RootCause       bool   `json:"root_cause"`                 // true = root cause; false = symptom/consequence
 }
 
 // candidateDriver is an internal struct used by identifyDrivers and rankDrivers.
@@ -633,18 +633,18 @@ func computeEbitdaPeak(pnl model.PnlReport) decimal.Decimal {
 // computeBreakEvenV2 determines when cumulative cash flow first turns positive
 // using a three-phase strategy:
 //
-//  Phase 1 (months 1–36): Uses CashReport.Economic.Total[m] — the most
-//  accurate monthly economic cash flow from the compute engine.
+//	Phase 1 (months 1–36): Uses CashReport.Economic.Total[m] — the most
+//	accurate monthly economic cash flow from the compute engine.
 //
-//  Phase 2 (months 37–60): Approximates from PnlReport.Years[3..4].CashFlow
-//  divided evenly over 12 months.  Less granular but covers the full horizon.
+//	Phase 2 (months 37–60): Approximates from PnlReport.Years[3..4].CashFlow
+//	divided evenly over 12 months.  Less granular but covers the full horizon.
 //
-//  Phase 3 (approaching): If no break-even is found in 60 months, uses a
-//  linear slope of the last 12 economic monthly values to project whether
-//  break-even is converging.  Dual guard prevents noise triggering:
-//    slope >= minBEPSlopeRevenueFraction * avgMonthlyRevenue  (proportional)
-//    slope >= minAbsoluteBEPSlope                             (absolute floor)
-//  Both must be satisfied.
+//	Phase 3 (approaching): If no break-even is found in 60 months, uses a
+//	linear slope of the last 12 economic monthly values to project whether
+//	break-even is converging.  Dual guard prevents noise triggering:
+//	  slope >= minBEPSlopeRevenueFraction * avgMonthlyRevenue  (proportional)
+//	  slope >= minAbsoluteBEPSlope                             (absolute floor)
+//	Both must be satisfied.
 //
 // Returns: (month 1-indexed, status, method).
 // month = 0 and method = "" when status is BEPNotReached.
@@ -709,7 +709,8 @@ func computeAvgMonthlyRevenue(pnl model.PnlReport) float64 {
 
 // linearSlope12 computes the ordinary-least-squares slope for a 12-element
 // time series with x-indices 0..11.  Pre-computed constants:
-//   x̄ = 5.5,  Σ(xᵢ − x̄)² = 143
+//
+//	x̄ = 5.5,  Σ(xᵢ − x̄)² = 143
 func linearSlope12(y [12]float64) float64 {
 	const xMean = 5.5
 	const xVar = 143.0 // Σ(i − 5.5)² for i = 0..11
@@ -831,11 +832,12 @@ func computeCashMin(cash model.CashReport) decimal.Decimal {
 // it using five independent scoring functions.
 //
 // The five components and their maximum contributions (sum = 100):
-//   scoreCashHealth       → max 30 pts
-//   scoreBreakEven        → max 25 pts
-//   scoreEbitdaMargin     → max 20 pts
-//   scoreRevenueRealism   → max 15 pts
-//   scoreBurnControl      → max 10 pts
+//
+//	scoreCashHealth       → max 30 pts
+//	scoreBreakEven        → max 25 pts
+//	scoreEbitdaMargin     → max 20 pts
+//	scoreRevenueRealism   → max 15 pts
+//	scoreBurnControl      → max 10 pts
 //
 // The function is pure and database-free.  The caller is responsible for
 // applying the viability cap when GlobalRiskLevel == "critical" (Sprint 3).
@@ -874,13 +876,15 @@ func clamp64(v, lo, hi float64) float64 {
 // balance relative to 5-year revenue.
 //
 // When revenue5Y ≥ minMeaningfulRevenue (relative branch):
-//   ratio = cashMin / revenue5Y
-//   score = 30 × (ratio − floor) / (ceiling − floor), clamped to [0, 30]
-//   anchor points: ratio ≤ −50% → 0 pts, ratio ≥ +10% → 30 pts
+//
+//	ratio = cashMin / revenue5Y
+//	score = 30 × (ratio − floor) / (ceiling − floor), clamped to [0, 30]
+//	anchor points: ratio ≤ −50% → 0 pts, ratio ≥ +10% → 30 pts
 //
 // When revenue5Y < minMeaningfulRevenue (absolute branch — avoids ratio explosion):
-//   score = 30 × (cashMin − absCeiling) / (absCeiling − absFloor), clamped to [0, 30]
-//   anchor points: cashMin ≤ −200K → 0 pts, cashMin ≥ +50K → 30 pts
+//
+//	score = 30 × (cashMin − absCeiling) / (absCeiling − absFloor), clamped to [0, 30]
+//	anchor points: cashMin ≤ −200K → 0 pts, cashMin ≥ +50K → 30 pts
 func scoreCashHealth(cashMin, rev5Y decimal.Decimal) float64 {
 	rev, _ := rev5Y.Float64()
 	cash, _ := cashMin.Float64()
@@ -908,9 +912,9 @@ func scoreBreakEven(bep int) float64 {
 // scoreEbitdaMargin returns a 0–20 score based on the year-5 EBITDA margin.
 // If peak EBITDA is never positive, score is 0 regardless of margin.
 //
-//   margin = ebitdaMarginY5 (precomputed decimal, year5.EBITDA / year5.Sales)
-//   score  = 10 + 10 × margin / 0.25,  clamped to [0, 20]
-//   anchor points: margin = −25% → 0, margin = 0% → 10 pts, margin = +25% → 20 pts
+//	margin = ebitdaMarginY5 (precomputed decimal, year5.EBITDA / year5.Sales)
+//	score  = 10 + 10 × margin / 0.25,  clamped to [0, 20]
+//	anchor points: margin = −25% → 0, margin = 0% → 10 pts, margin = +25% → 20 pts
 func scoreEbitdaMargin(ebitdaPeak, ebitdaMarginY5 decimal.Decimal) float64 {
 	// A scenario where EBITDA never turns positive earns no margin score.
 	if ebitdaPeak.LessThanOrEqual(decimal.Zero) {
@@ -923,8 +927,8 @@ func scoreEbitdaMargin(ebitdaPeak, ebitdaMarginY5 decimal.Decimal) float64 {
 // scoreRevenueRealism returns a 0–15 score that rewards modest growth and
 // penalises implausible hypergrowth.
 //
-//   score = 15 × (1 − maxYoYPct / 100),  clamped to [0, 15]
-//   anchor points: 0% growth → 15 pts, 100% growth → 0 pts, >100% → 0 pts
+//	score = 15 × (1 − maxYoYPct / 100),  clamped to [0, 15]
+//	anchor points: 0% growth → 15 pts, 100% growth → 0 pts, >100% → 0 pts
 //
 // Zero revenue (revenue5Y ≤ 0) always returns 0 — the business has no
 // commercial traction to score.
@@ -939,12 +943,14 @@ func scoreRevenueRealism(maxYoYPct float64, revenue5Y decimal.Decimal) float64 {
 // by measuring how much cash is consumed relative to total revenue.
 //
 // Relative branch (revenue5Y ≥ minMeaningfulRevenue):
-//   burnRatio = −cashMin / revenue5Y  (positive = cash consumed)
-//   score = 10 × (1 − burnRatio / 0.20),  clamped to [0, 10]
-//   anchor points: cashMin ≥ 0 → 10 pts, burn ratio = 20% → 0 pts
+//
+//	burnRatio = −cashMin / revenue5Y  (positive = cash consumed)
+//	score = 10 × (1 − burnRatio / 0.20),  clamped to [0, 10]
+//	anchor points: cashMin ≥ 0 → 10 pts, burn ratio = 20% → 0 pts
 //
 // Absolute branch (revenue5Y < minMeaningfulRevenue):
-//   cashMin ≥ 0 → 10 pts; cashMin = −50K → 0 pts; linear in between.
+//
+//	cashMin ≥ 0 → 10 pts; cashMin = −50K → 0 pts; linear in between.
 func scoreBurnControl(cashMin, rev5Y decimal.Decimal) float64 {
 	rev, _ := rev5Y.Float64()
 	cash, _ := cashMin.Float64()
@@ -1767,13 +1773,13 @@ func buildHighlights(result *ScenarioAnalysisResult) Highlights {
 // tree over (viability.Status, globalRiskLevel, bepStatus, rootCauseDriver).
 //
 // Branch map:
-//   1. strong  + none/low          → "Healthy scenario: …"
-//   2. strong  + moderate/elevated → "Strong viability (N/100) but …"
-//   3. moderate + rootCause driver → "[Driver] limits growth: …"
-//   4. moderate + no root cause    → "Moderate scenario: …"
-//   5. risky   + critical risk     → "Critical: N compounding risks …"
-//   6. risky   + BEP approaching   → "Approaching viability but …"
-//   7. risky   + other             → "Not fundable under current assumptions …"
+//  1. strong  + none/low          → "Healthy scenario: …"
+//  2. strong  + moderate/elevated → "Strong viability (N/100) but …"
+//  3. moderate + rootCause driver → "[Driver] limits growth: …"
+//  4. moderate + no root cause    → "Moderate scenario: …"
+//  5. risky   + critical risk     → "Critical: N compounding risks …"
+//  6. risky   + BEP approaching   → "Approaching viability but …"
+//  7. risky   + other             → "Not fundable under current assumptions …"
 func buildHeadline(result *ScenarioAnalysisResult) string {
 	v := result.Viability
 	rs := result.RiskSummary

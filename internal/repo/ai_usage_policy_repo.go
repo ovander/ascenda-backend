@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
 )
 
 // ============================================================================

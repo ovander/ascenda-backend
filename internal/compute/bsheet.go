@@ -261,19 +261,19 @@ func ComputeBSheet(
 	// ==================== ROUND ALL OUTPUT TO 2 d.p. ====================
 	r2 := roundBSheet6 // shorthand
 
-	detailedAssets.NoncurrentAssets   = r2(detailedAssets.NoncurrentAssets)
-	detailedAssets.Inventory          = r2(detailedAssets.Inventory)
+	detailedAssets.NoncurrentAssets = r2(detailedAssets.NoncurrentAssets)
+	detailedAssets.Inventory = r2(detailedAssets.Inventory)
 	detailedAssets.AccountsReceivable = r2(detailedAssets.AccountsReceivable)
-	detailedAssets.Cash               = r2(detailedAssets.Cash)
-	detailedAssets.TotalAssets        = r2(detailedAssets.TotalAssets)
+	detailedAssets.Cash = r2(detailedAssets.Cash)
+	detailedAssets.TotalAssets = r2(detailedAssets.TotalAssets)
 
-	detailedLiabilities.ShareCapital     = r2(detailedLiabilities.ShareCapital)
-	detailedLiabilities.NetProfit        = r2(detailedLiabilities.NetProfit)
+	detailedLiabilities.ShareCapital = r2(detailedLiabilities.ShareCapital)
+	detailedLiabilities.NetProfit = r2(detailedLiabilities.NetProfit)
 	detailedLiabilities.RetainedEarnings = r2(detailedLiabilities.RetainedEarnings)
-	detailedLiabilities.LongTermDebt     = r2(detailedLiabilities.LongTermDebt)
-	detailedLiabilities.TradePayables    = r2(detailedLiabilities.TradePayables)
-	detailedLiabilities.SocialTaxDebts   = r2(detailedLiabilities.SocialTaxDebts)
-	detailedLiabilities.OtherPayables    = r2(detailedLiabilities.OtherPayables)
+	detailedLiabilities.LongTermDebt = r2(detailedLiabilities.LongTermDebt)
+	detailedLiabilities.TradePayables = r2(detailedLiabilities.TradePayables)
+	detailedLiabilities.SocialTaxDebts = r2(detailedLiabilities.SocialTaxDebts)
+	detailedLiabilities.OtherPayables = r2(detailedLiabilities.OtherPayables)
 	detailedLiabilities.TotalLiabilities = r2(detailedLiabilities.TotalLiabilities)
 
 	for i := range result.Equity {
@@ -281,28 +281,28 @@ func ComputeBSheet(
 	}
 
 	condensedAssets.NoncurrentAssets = r2(condensedAssets.NoncurrentAssets)
-	condensedAssets.CurrentAssets    = r2(condensedAssets.CurrentAssets)
-	condensedAssets.Cash             = r2(condensedAssets.Cash)
-	condensedAssets.Total            = r2(condensedAssets.Total)
+	condensedAssets.CurrentAssets = r2(condensedAssets.CurrentAssets)
+	condensedAssets.Cash = r2(condensedAssets.Cash)
+	condensedAssets.Total = r2(condensedAssets.Total)
 
-	condensedLiabilities.Equity       = r2(condensedLiabilities.Equity)
+	condensedLiabilities.Equity = r2(condensedLiabilities.Equity)
 	condensedLiabilities.LongTermDebt = r2(condensedLiabilities.LongTermDebt)
 	condensedLiabilities.ShortTermDebt = r2(condensedLiabilities.ShortTermDebt)
-	condensedLiabilities.Total        = r2(condensedLiabilities.Total)
+	condensedLiabilities.Total = r2(condensedLiabilities.Total)
 
-	analysisData.Equity           = r2(analysisData.Equity)
-	analysisData.LongTermDebt     = r2(analysisData.LongTermDebt)
+	analysisData.Equity = r2(analysisData.Equity)
+	analysisData.LongTermDebt = r2(analysisData.LongTermDebt)
 	analysisData.PermanentCapital = r2(analysisData.PermanentCapital)
-	analysisData.ShortTermDebt    = r2(analysisData.ShortTermDebt)
-	analysisData.TotalSources     = r2(analysisData.TotalSources)
+	analysisData.ShortTermDebt = r2(analysisData.ShortTermDebt)
+	analysisData.TotalSources = r2(analysisData.TotalSources)
 	analysisData.NoncurrentAssets = r2(analysisData.NoncurrentAssets)
-	analysisData.CurrentAssets    = r2(analysisData.CurrentAssets)
-	analysisData.Cash             = r2(analysisData.Cash)
-	analysisData.TotalUses        = r2(analysisData.TotalUses)
-	analysisData.WorkingCapital   = r2(analysisData.WorkingCapital)
-	analysisData.WCR              = r2(analysisData.WCR)
-	analysisData.WCMinusWCR       = r2(analysisData.WCMinusWCR)
-	analysisData.NetDebt          = r2(analysisData.NetDebt)
+	analysisData.CurrentAssets = r2(analysisData.CurrentAssets)
+	analysisData.Cash = r2(analysisData.Cash)
+	analysisData.TotalUses = r2(analysisData.TotalUses)
+	analysisData.WorkingCapital = r2(analysisData.WorkingCapital)
+	analysisData.WCR = r2(analysisData.WCR)
+	analysisData.WCMinusWCR = r2(analysisData.WCMinusWCR)
+	analysisData.NetDebt = r2(analysisData.NetDebt)
 
 	capitalEmp.Employed = r2(capitalEmp.Employed)
 	capitalEmp.Invested = r2(capitalEmp.Invested)
@@ -311,24 +311,24 @@ func ComputeBSheet(
 
 	// Round chart fields (computed before rounding block — must be rounded here)
 	for i := range charts.AssetStructure {
-		charts.AssetStructure[i]    = charts.AssetStructure[i].Round(4)
+		charts.AssetStructure[i] = charts.AssetStructure[i].Round(4)
 		charts.LiabilityStructure[i] = charts.LiabilityStructure[i].Round(4)
 	}
 	charts.CapitalEmployed = r2(charts.CapitalEmployed)
 	charts.CapitalInvested = r2(charts.CapitalInvested)
-	charts.WCEmployed      = r2(charts.WCEmployed)
-	charts.WCInvested      = r2(charts.WCInvested)
+	charts.WCEmployed = r2(charts.WCEmployed)
+	charts.WCInvested = r2(charts.WCInvested)
 
 	// Assign computed structures to result
-	result.Detailed.Assets            = detailedAssets
-	result.Detailed.Liabilities       = detailedLiabilities
-	result.Condensed.Assets           = condensedAssets
-	result.Condensed.Liabilities      = condensedLiabilities
-	result.Analysis                   = analysisData
-	result.Capital                    = capitalEmp
-	result.WorkingCapital.Employed    = wcEmployed.Employed // fix: was result.WorkingCapital = wcEmployed
-	result.WorkingCapital.Invested    = wcInvested.Invested //      (wcInvested.Invested was discarded)
-	result.Charts                     = charts
+	result.Detailed.Assets = detailedAssets
+	result.Detailed.Liabilities = detailedLiabilities
+	result.Condensed.Assets = condensedAssets
+	result.Condensed.Liabilities = condensedLiabilities
+	result.Analysis = analysisData
+	result.Capital = capitalEmp
+	result.WorkingCapital.Employed = wcEmployed.Employed // fix: was result.WorkingCapital = wcEmployed
+	result.WorkingCapital.Invested = wcInvested.Invested //      (wcInvested.Invested was discarded)
+	result.Charts = charts
 
 	return result
 }

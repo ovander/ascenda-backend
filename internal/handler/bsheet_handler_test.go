@@ -7,13 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ── mockBSheetService ─────────────────────────────────────────────────────
@@ -125,12 +125,12 @@ func TestBSheetHandler_GetChartData_Success(t *testing.T) {
 
 	expectedData := map[string]interface{}{
 		"assets": map[string]float64{
-			"current":     2000.0,
-			"fixed":       3000.0,
+			"current": 2000.0,
+			"fixed":   3000.0,
 		},
 		"liabilities": map[string]float64{
-			"current":     500.0,
-			"long_term":   1500.0,
+			"current":   500.0,
+			"long_term": 1500.0,
 		},
 	}
 

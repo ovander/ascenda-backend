@@ -10,14 +10,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"ascenda/internal/middleware"
 	"ascenda/internal/model"
-	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/repo"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 // ── Test router with tier gate ────────────────────────────────────────────

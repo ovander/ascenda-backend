@@ -8,48 +8,48 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
+	"ascenda/internal/service"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/service"
-	"github.com/shopspring/decimal"
 )
 
 // ── mockBEPService ────────────────────────────────────────────────────────────
 
 type mockBEPService struct {
-	listSnapshotsFn           func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]*model.BEPSnapshot, error)
-	createSnapshotFn          func(ctx context.Context, snap *model.BEPSnapshot) error
-	getSnapshotFn             func(ctx context.Context, tenantID, id uuid.UUID) (*model.BEPSnapshot, error)
-	updateSnapshotFn          func(ctx context.Context, snap *model.BEPSnapshot) error
-	deleteSnapshotFn          func(ctx context.Context, tenantID, scenarioID, id uuid.UUID) error
-	listFixedCostLinesFn      func(ctx context.Context, tenantID, snapshotID uuid.UUID) ([]*model.FixedCostLine, error)
-	upsertFixedCostLinesFn    func(ctx context.Context, tenantID, snapshotID uuid.UUID, lines []model.FixedCostLine) error
-	listVariableCostLinesFn   func(ctx context.Context, tenantID, snapshotID uuid.UUID) ([]*model.VariableCostLine, error)
-	upsertVariableCostLinesFn func(ctx context.Context, tenantID, snapshotID uuid.UUID, lines []model.VariableCostLine) error
-	listSensitivityConfigsFn  func(ctx context.Context, tenantID, snapshotID uuid.UUID) ([]*model.SensitivityConfig, error)
-	upsertSensitivityConfigFn func(ctx context.Context, cfg *model.SensitivityConfig) error
-	getBEPReportFn            func(ctx context.Context, tenantID, snapshotID uuid.UUID) (*model.BEPReport, error)
-	getPCGAccountsFn          func() []model.PCGAccount
-	listOptimisationPlansFn   func(ctx context.Context, tenantID, snapshotID uuid.UUID) ([]*model.OptimisationPlan, error)
-	createOptimisationPlanFn  func(ctx context.Context, plan *model.OptimisationPlan) error
-	getOptimisationPlanFn     func(ctx context.Context, tenantID, id uuid.UUID) (*model.OptimisationPlan, error)
-	updateOptimisationPlanFn  func(ctx context.Context, plan *model.OptimisationPlan) error
-	deleteOptimisationPlanFn  func(ctx context.Context, tenantID, id uuid.UUID) error
-	listFixedCostSavingsFn    func(ctx context.Context, tenantID, planID uuid.UUID) ([]*model.FixedCostSaving, error)
-	upsertFixedCostSavingsFn  func(ctx context.Context, tenantID, planID uuid.UUID, savings []model.FixedCostSaving) error
-	listVariableCostSavingsFn func(ctx context.Context, tenantID, planID uuid.UUID) ([]*model.VariableCostSaving, error)
+	listSnapshotsFn             func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]*model.BEPSnapshot, error)
+	createSnapshotFn            func(ctx context.Context, snap *model.BEPSnapshot) error
+	getSnapshotFn               func(ctx context.Context, tenantID, id uuid.UUID) (*model.BEPSnapshot, error)
+	updateSnapshotFn            func(ctx context.Context, snap *model.BEPSnapshot) error
+	deleteSnapshotFn            func(ctx context.Context, tenantID, scenarioID, id uuid.UUID) error
+	listFixedCostLinesFn        func(ctx context.Context, tenantID, snapshotID uuid.UUID) ([]*model.FixedCostLine, error)
+	upsertFixedCostLinesFn      func(ctx context.Context, tenantID, snapshotID uuid.UUID, lines []model.FixedCostLine) error
+	listVariableCostLinesFn     func(ctx context.Context, tenantID, snapshotID uuid.UUID) ([]*model.VariableCostLine, error)
+	upsertVariableCostLinesFn   func(ctx context.Context, tenantID, snapshotID uuid.UUID, lines []model.VariableCostLine) error
+	listSensitivityConfigsFn    func(ctx context.Context, tenantID, snapshotID uuid.UUID) ([]*model.SensitivityConfig, error)
+	upsertSensitivityConfigFn   func(ctx context.Context, cfg *model.SensitivityConfig) error
+	getBEPReportFn              func(ctx context.Context, tenantID, snapshotID uuid.UUID) (*model.BEPReport, error)
+	getPCGAccountsFn            func() []model.PCGAccount
+	listOptimisationPlansFn     func(ctx context.Context, tenantID, snapshotID uuid.UUID) ([]*model.OptimisationPlan, error)
+	createOptimisationPlanFn    func(ctx context.Context, plan *model.OptimisationPlan) error
+	getOptimisationPlanFn       func(ctx context.Context, tenantID, id uuid.UUID) (*model.OptimisationPlan, error)
+	updateOptimisationPlanFn    func(ctx context.Context, plan *model.OptimisationPlan) error
+	deleteOptimisationPlanFn    func(ctx context.Context, tenantID, id uuid.UUID) error
+	listFixedCostSavingsFn      func(ctx context.Context, tenantID, planID uuid.UUID) ([]*model.FixedCostSaving, error)
+	upsertFixedCostSavingsFn    func(ctx context.Context, tenantID, planID uuid.UUID, savings []model.FixedCostSaving) error
+	listVariableCostSavingsFn   func(ctx context.Context, tenantID, planID uuid.UUID) ([]*model.VariableCostSaving, error)
 	upsertVariableCostSavingsFn func(ctx context.Context, tenantID, planID uuid.UUID, savings []model.VariableCostSaving) error
-	listPCGReviewItemsFn      func(ctx context.Context, tenantID, planID uuid.UUID) ([]*model.PCGReviewItem, error)
-	upsertPCGReviewItemsFn    func(ctx context.Context, tenantID, planID uuid.UUID, items []model.PCGReviewItem) error
-	getOptimisedBEPReportFn   func(ctx context.Context, tenantID, planID uuid.UUID) (*model.OptimisedBEPReport, error)
-	importFromPlanFn          func(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID, yearIndex int) (*model.BEPSnapshot, error)
-	previewFromPlanFn         func(ctx context.Context, tenantID, scenarioID uuid.UUID, yearIndex int) (*service.BEPPlanPreview, error)
-	getMultiYearBEPReportFn   func(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.MultiYearBEPReport, error)
+	listPCGReviewItemsFn        func(ctx context.Context, tenantID, planID uuid.UUID) ([]*model.PCGReviewItem, error)
+	upsertPCGReviewItemsFn      func(ctx context.Context, tenantID, planID uuid.UUID, items []model.PCGReviewItem) error
+	getOptimisedBEPReportFn     func(ctx context.Context, tenantID, planID uuid.UUID) (*model.OptimisedBEPReport, error)
+	importFromPlanFn            func(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID, yearIndex int) (*model.BEPSnapshot, error)
+	previewFromPlanFn           func(ctx context.Context, tenantID, scenarioID uuid.UUID, yearIndex int) (*service.BEPPlanPreview, error)
+	getMultiYearBEPReportFn     func(ctx context.Context, tenantID, scenarioID uuid.UUID) (*model.MultiYearBEPReport, error)
 }
 
 // Snapshots
@@ -335,9 +335,9 @@ func TestBEPHandler_CreateSnapshot_Success(t *testing.T) {
 	tenantID := uuid.New()
 	scenarioID := uuid.New()
 	snap := model.BEPSnapshot{
-		Label:                  "Q1 2024",
-		FixedCostsTotal:        decimal.NewFromInt(50000),
-		ContributionMarginPct:  decimal.NewFromInt(40),
+		Label:                 "Q1 2024",
+		FixedCostsTotal:       decimal.NewFromInt(50000),
+		ContributionMarginPct: decimal.NewFromInt(40),
 	}
 
 	svc := &mockBEPService{
@@ -459,9 +459,9 @@ func TestBEPHandler_UpdateSnapshot_Success(t *testing.T) {
 	scenarioID := uuid.New()
 	snapID := uuid.New()
 	snap := model.BEPSnapshot{
-		Label:                  "Q1 Updated",
-		FixedCostsTotal:        decimal.NewFromInt(60000),
-		ContributionMarginPct:  decimal.NewFromInt(45),
+		Label:                 "Q1 Updated",
+		FixedCostsTotal:       decimal.NewFromInt(60000),
+		ContributionMarginPct: decimal.NewFromInt(45),
 	}
 
 	svc := &mockBEPService{
@@ -653,10 +653,10 @@ func TestBEPHandler_ListVariableCostLines_Success(t *testing.T) {
 	snapID := uuid.New()
 	lines := []*model.VariableCostLine{
 		{
-			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
-			SnapshotID:   snapID,
-			Category:     model.VarCostMaterials,
-			Label:        "Raw materials",
+			TenantScoped:  model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+			SnapshotID:    snapID,
+			Category:      model.VarCostMaterials,
+			Label:         "Raw materials",
 			AmountPerUnit: decimal.NewFromFloat(5.5),
 		},
 	}
@@ -752,7 +752,7 @@ func TestBEPHandler_GetBEPReport_Success(t *testing.T) {
 	report := &model.BEPReport{
 		SnapshotID: snapID,
 		Core: model.BEPCoreResult{
-			BEPRevenue: &bepRev,
+			BEPRevenue:      &bepRev,
 			VariableCostPct: decimal.NewFromInt(60),
 		},
 	}
@@ -856,7 +856,7 @@ func TestBEPHandler_CreateOptimisationPlan_Success(t *testing.T) {
 	snapID := uuid.New()
 	userID := uuid.New()
 	plan := model.OptimisationPlan{
-		Name: "Headcount reduction",
+		Name:   "Headcount reduction",
 		Status: model.BEPPlanDraft,
 	}
 

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"ascenda/internal/model"
 )
 
 // AINarrationCacheRepository is the interface for persistent narration cache storage.

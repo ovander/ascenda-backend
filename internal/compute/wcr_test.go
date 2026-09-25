@@ -3,10 +3,10 @@ package compute
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestComputeWCR(t *testing.T) {
@@ -23,30 +23,30 @@ func TestComputeWCR(t *testing.T) {
 	}
 
 	wcConfig := model.WorkingCapitalConfig{
-		TenantScoped:          model.TenantScoped{TenantID: tenantID},
-		ScenarioID:            scenarioID,
-		CustomerPct0Days:      decimal.NewFromFloat(0.1),
-		CustomerPct30Days:     decimal.NewFromFloat(0.6),
-		CustomerPct60Days:     decimal.NewFromFloat(0.2),
-		CustomerPct90Days:     decimal.NewFromFloat(0.1),
-		SupplierPct0Days:      decimal.NewFromFloat(0.2),
-		SupplierPct30Days:     decimal.NewFromFloat(0.5),
-		SupplierPct60Days:     decimal.NewFromFloat(0.2),
-		SupplierPct90Days:     decimal.NewFromFloat(0.1),
-		InventoryPctYear1:     decimal.NewFromFloat(0.1),
-		InventoryPctYear2:     decimal.NewFromFloat(0.1),
-		InventoryPctYear3:     decimal.NewFromFloat(0.1),
-		InventoryPctYear4:     decimal.NewFromFloat(0.1),
-		InventoryPctYear5:     decimal.NewFromFloat(0.1),
+		TenantScoped:      model.TenantScoped{TenantID: tenantID},
+		ScenarioID:        scenarioID,
+		CustomerPct0Days:  decimal.NewFromFloat(0.1),
+		CustomerPct30Days: decimal.NewFromFloat(0.6),
+		CustomerPct60Days: decimal.NewFromFloat(0.2),
+		CustomerPct90Days: decimal.NewFromFloat(0.1),
+		SupplierPct0Days:  decimal.NewFromFloat(0.2),
+		SupplierPct30Days: decimal.NewFromFloat(0.5),
+		SupplierPct60Days: decimal.NewFromFloat(0.2),
+		SupplierPct90Days: decimal.NewFromFloat(0.1),
+		InventoryPctYear1: decimal.NewFromFloat(0.1),
+		InventoryPctYear2: decimal.NewFromFloat(0.1),
+		InventoryPctYear3: decimal.NewFromFloat(0.1),
+		InventoryPctYear4: decimal.NewFromFloat(0.1),
+		InventoryPctYear5: decimal.NewFromFloat(0.1),
 	}
 
 	openingBal := model.OpeningBalance{
-		TenantScoped:         model.TenantScoped{TenantID: tenantID},
-		ScenarioID:           scenarioID,
-		CustomerReceivables:  decimal.Zero,
-		Inventories:          decimal.Zero,
-		SupplierPayables:     decimal.Zero,
-		SocialAndTaxDebts:    decimal.Zero,
+		TenantScoped:        model.TenantScoped{TenantID: tenantID},
+		ScenarioID:          scenarioID,
+		CustomerReceivables: decimal.Zero,
+		Inventories:         decimal.Zero,
+		SupplierPayables:    decimal.Zero,
+		SocialAndTaxDebts:   decimal.Zero,
 	}
 
 	capex := model.CapexSummary{}
@@ -54,12 +54,12 @@ func TestComputeWCR(t *testing.T) {
 	pnl := model.PnlReport{}
 
 	tests := []struct {
-		name       string
-		entries    []model.WCREntry
-		revenue    model.ConsolidatedRevenue
-		opex       model.OpexSummary
-		staff      model.StaffPayrollSummary
-		checkWCR   func(*testing.T, model.WCRReport)
+		name     string
+		entries  []model.WCREntry
+		revenue  model.ConsolidatedRevenue
+		opex     model.OpexSummary
+		staff    model.StaffPayrollSummary
+		checkWCR func(*testing.T, model.WCRReport)
 	}{
 		{
 			name:    "standard WCR calculation with computed values",

@@ -3,8 +3,8 @@ package compute
 import (
 	"testing"
 
-	"github.com/shopspring/decimal"
 	"ascenda/internal/model"
+	"github.com/shopspring/decimal"
 )
 
 func TestComputeCapexSummary(t *testing.T) {

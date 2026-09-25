@@ -1,10 +1,10 @@
 package repo
 
 import (
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"ascenda/internal/model"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ func (r *CapTableRepo) GetCompany(tenantID, scenarioID uuid.UUID) (*model.CapTab
 // UpsertCompany creates or updates the company record.
 func (r *CapTableRepo) UpsertCompany(company *model.CapTableCompany) error {
 	return r.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "scenario_id"}},
+		Columns: []clause.Column{{Name: "scenario_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"company_name", "legal_form", "creation_date",
 			"currency", "currency_symbol", "nominal_value_cents",
@@ -63,7 +63,7 @@ func (r *CapTableRepo) ListShareClasses(tenantID, scenarioID uuid.UUID) ([]*mode
 // UpsertShareClass creates or updates a share class.
 func (r *CapTableRepo) UpsertShareClass(sc *model.CapTableShareClass) error {
 	return r.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "scenario_id"}, {Name: "class_type"}},
+		Columns: []clause.Column{{Name: "scenario_id"}, {Name: "class_type"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"label", "voting_rights", "voting_multiple",
 			"liquidation_pref", "liquidation_multiple", "participation_cap",
@@ -209,7 +209,7 @@ func (r *CapTableRepo) BatchUpsertPositions(tenantID, roundID uuid.UUID, positio
 		positions[i].RoundID = roundID
 	}
 	return r.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "round_id"}, {Name: "shareholder_id"}},
+		Columns: []clause.Column{{Name: "round_id"}, {Name: "shareholder_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"shares_before_split", "shares_after_split",
 			"new_shares_received", "shares_after_round",

@@ -3,14 +3,14 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 // SettingsService orchestrates settings CRUD operations.
@@ -117,11 +117,11 @@ func (s *SettingsService) UpdateOpeningBalance(ctx context.Context, tenantID, sc
 // happens for any scenario created before explicit WC settings were saved.
 // This is the single source of truth for default WC parameters.
 func wcConfigB2BDefaults(tenantID, scenarioID uuid.UUID) *model.WorkingCapitalConfig {
-	half   := decimal.NewFromFloat(0.5)
+	half := decimal.NewFromFloat(0.5)
 	tenPct := decimal.NewFromFloat(0.1)
 	return &model.WorkingCapitalConfig{
-		TenantScoped:      model.TenantScoped{TenantID: tenantID, ID: uuid.New()},
-		ScenarioID:        scenarioID,
+		TenantScoped: model.TenantScoped{TenantID: tenantID, ID: uuid.New()},
+		ScenarioID:   scenarioID,
 		// Payment tranches: 50 % at 30 days + 50 % at 60 days → DSO = DPO = 45 days
 		CustomerPct0Days:  decimal.Zero,
 		CustomerPct30Days: half,
@@ -234,17 +234,17 @@ func isZeroOpexPerHire(o *model.OpexPerHire) bool {
 func defaultOpexPerHire(tenantID, scenarioID uuid.UUID) *model.OpexPerHire {
 	d := func(s string) decimal.Decimal { v, _ := decimal.NewFromString(s); return v }
 	return &model.OpexPerHire{
-		TenantScoped:            model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
-		ScenarioID:              scenarioID,
-		PropertyRentals:         d("40000"),  // 40 000 € base annual rent (year 1)
-		PostageTelecom:          d("1000"),   // 1 000 €/person/year
-		SuppliesPurchases:       d("500"),    // 500 €/person/year
-		StudiesDocumentation:    d("300"),    // 300 €/person/year
-		InsuranceCostsPctSales:  d("0.005"),  // 0.5 % of sales
-		RoyaltyPaymentsPctSales: d("0.01"),   // 1 % of sales
-		TravelTransportation:    d("2000"),   // 2 000 €/person/year
-		MissionRepresentation:   d("1000"),   // 1 000 €/person/year
-		RecruitTrainingPctPayroll: d("0.03"), // 3 % of payroll
+		TenantScoped:              model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+		ScenarioID:                scenarioID,
+		PropertyRentals:           d("40000"), // 40 000 € base annual rent (year 1)
+		PostageTelecom:            d("1000"),  // 1 000 €/person/year
+		SuppliesPurchases:         d("500"),   // 500 €/person/year
+		StudiesDocumentation:      d("300"),   // 300 €/person/year
+		InsuranceCostsPctSales:    d("0.005"), // 0.5 % of sales
+		RoyaltyPaymentsPctSales:   d("0.01"),  // 1 % of sales
+		TravelTransportation:      d("2000"),  // 2 000 €/person/year
+		MissionRepresentation:     d("1000"),  // 1 000 €/person/year
+		RecruitTrainingPctPayroll: d("0.03"),  // 3 % of payroll
 	}
 }
 

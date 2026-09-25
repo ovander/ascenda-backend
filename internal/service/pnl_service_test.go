@@ -3,10 +3,10 @@ package service
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 // MockPnlRepo is a manual mock implementation for testing PnL entries
@@ -50,14 +50,14 @@ func TestPnlRepoListByScenario(t *testing.T) {
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
 			ScenarioID:   scenarioID,
 			LineID:       "operating_subsidy",
-			YearIndex:         1,
+			YearIndex:    1,
 			Amount:       decimal.NewFromInt(10000),
 		},
 		{
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
 			ScenarioID:   scenarioID,
 			LineID:       "operating_subsidy",
-			YearIndex:         2,
+			YearIndex:    2,
 			Amount:       decimal.NewFromInt(15000),
 		},
 	}
@@ -82,7 +82,7 @@ func TestPnlRepoScenarioIsolation(t *testing.T) {
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
 			ScenarioID:   scenario1,
 			LineID:       "operating_subsidy",
-			YearIndex:         1,
+			YearIndex:    1,
 			Amount:       decimal.NewFromInt(10000),
 		},
 	}
@@ -92,14 +92,14 @@ func TestPnlRepoScenarioIsolation(t *testing.T) {
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
 			ScenarioID:   scenario2,
 			LineID:       "financial_income",
-			YearIndex:         1,
+			YearIndex:    1,
 			Amount:       decimal.NewFromInt(5000),
 		},
 		{
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
 			ScenarioID:   scenario2,
 			LineID:       "financial_income",
-			YearIndex:         2,
+			YearIndex:    2,
 			Amount:       decimal.NewFromInt(7000),
 		},
 	}
@@ -137,7 +137,7 @@ func TestPnlRepoBatchUpsertOverwrite(t *testing.T) {
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
 			ScenarioID:   scenarioID,
 			LineID:       "operating_subsidy",
-			YearIndex:         1,
+			YearIndex:    1,
 			Amount:       decimal.NewFromInt(10000),
 		},
 	}
@@ -149,14 +149,14 @@ func TestPnlRepoBatchUpsertOverwrite(t *testing.T) {
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
 			ScenarioID:   scenarioID,
 			LineID:       "financial_income",
-			YearIndex:         1,
+			YearIndex:    1,
 			Amount:       decimal.NewFromInt(5000),
 		},
 		{
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
 			ScenarioID:   scenarioID,
 			LineID:       "financial_income",
-			YearIndex:         2,
+			YearIndex:    2,
 			Amount:       decimal.NewFromInt(7000),
 		},
 	}

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
 	"ascenda/internal/model"
+	"gorm.io/gorm"
 )
 
 // FeaturePolicyRepository is the persistence interface for feature policies.

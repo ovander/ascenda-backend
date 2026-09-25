@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
 )
 
 // planCfg returns a minimal PlanConfig for driver compute tests.
@@ -392,14 +392,14 @@ func TestApplyDriverCompute_SessionBased_VolumeAndEconomics(t *testing.T) {
 	//   TrainerCostPerSession = 400, VariableCostPerParticipant = 15
 	//   → UnitCost = 400 + 15 × 15 = 625
 	params := model.SessionBasedParams{
-		Sessions:               [5]model.FlexInt64{80, 80, 80, 80, 80},
-		ParticipantsPerSession: [5]decimal.Decimal{d("20"), d("20"), d("20"), d("20"), d("20")},
-		FillRate:               [5]decimal.Decimal{d("0.75"), d("0.75"), d("0.75"), d("0.75"), d("0.75")},
-		PricePerParticipant:    [5]decimal.Decimal{d("150"), d("150"), d("150"), d("150"), d("150")},
-		TrainerCount:           [5]decimal.Decimal{d("3"), d("3"), d("3"), d("3"), d("3")},
-		SessionsPerTrainer:     [5]model.FlexInt64{40, 40, 40, 40, 40},
-		UtilizationRate:        [5]decimal.Decimal{d("0.90"), d("0.90"), d("0.90"), d("0.90"), d("0.90")},
-		TrainerCostPerSession:  [5]decimal.Decimal{d("400"), d("400"), d("400"), d("400"), d("400")},
+		Sessions:                   [5]model.FlexInt64{80, 80, 80, 80, 80},
+		ParticipantsPerSession:     [5]decimal.Decimal{d("20"), d("20"), d("20"), d("20"), d("20")},
+		FillRate:                   [5]decimal.Decimal{d("0.75"), d("0.75"), d("0.75"), d("0.75"), d("0.75")},
+		PricePerParticipant:        [5]decimal.Decimal{d("150"), d("150"), d("150"), d("150"), d("150")},
+		TrainerCount:               [5]decimal.Decimal{d("3"), d("3"), d("3"), d("3"), d("3")},
+		SessionsPerTrainer:         [5]model.FlexInt64{40, 40, 40, 40, 40},
+		UtilizationRate:            [5]decimal.Decimal{d("0.90"), d("0.90"), d("0.90"), d("0.90"), d("0.90")},
+		TrainerCostPerSession:      [5]decimal.Decimal{d("400"), d("400"), d("400"), d("400"), d("400")},
 		VariableCostPerParticipant: [5]decimal.Decimal{d("15"), d("15"), d("15"), d("15"), d("15")},
 	}
 	product := driverProduct(model.DriverSessionBased, params)
@@ -435,14 +435,14 @@ func TestApplyDriverCompute_SessionBased_CapacityClamp(t *testing.T) {
 	// UnitPrice = 15 × 200 = 3 000
 	// UnitCost = 500 + 20 × 15 = 800
 	params := model.SessionBasedParams{
-		Sessions:               [5]model.FlexInt64{80, 80, 80, 80, 80},
-		ParticipantsPerSession: [5]decimal.Decimal{d("20"), d("20"), d("20"), d("20"), d("20")},
-		FillRate:               [5]decimal.Decimal{d("0.75"), d("0.75"), d("0.75"), d("0.75"), d("0.75")},
-		PricePerParticipant:    [5]decimal.Decimal{d("200"), d("200"), d("200"), d("200"), d("200")},
-		TrainerCount:           [5]decimal.Decimal{d("2"), d("2"), d("2"), d("2"), d("2")},
-		SessionsPerTrainer:     [5]model.FlexInt64{30, 30, 30, 30, 30},
-		UtilizationRate:        [5]decimal.Decimal{d("0.80"), d("0.80"), d("0.80"), d("0.80"), d("0.80")},
-		TrainerCostPerSession:  [5]decimal.Decimal{d("500"), d("500"), d("500"), d("500"), d("500")},
+		Sessions:                   [5]model.FlexInt64{80, 80, 80, 80, 80},
+		ParticipantsPerSession:     [5]decimal.Decimal{d("20"), d("20"), d("20"), d("20"), d("20")},
+		FillRate:                   [5]decimal.Decimal{d("0.75"), d("0.75"), d("0.75"), d("0.75"), d("0.75")},
+		PricePerParticipant:        [5]decimal.Decimal{d("200"), d("200"), d("200"), d("200"), d("200")},
+		TrainerCount:               [5]decimal.Decimal{d("2"), d("2"), d("2"), d("2"), d("2")},
+		SessionsPerTrainer:         [5]model.FlexInt64{30, 30, 30, 30, 30},
+		UtilizationRate:            [5]decimal.Decimal{d("0.80"), d("0.80"), d("0.80"), d("0.80"), d("0.80")},
+		TrainerCostPerSession:      [5]decimal.Decimal{d("500"), d("500"), d("500"), d("500"), d("500")},
 		VariableCostPerParticipant: [5]decimal.Decimal{d("20"), d("20"), d("20"), d("20"), d("20")},
 	}
 	product := driverProduct(model.DriverSessionBased, params)
@@ -471,14 +471,14 @@ func TestApplyDriverCompute_SessionBased_CapacityClamp(t *testing.T) {
 //	UnitCost  = 300 + 10 × 20 = 500 → COGS    = 60 × 500  =  30 000
 func TestApplyDriverCompute_SessionBased_RevenueE2E(t *testing.T) {
 	params := model.SessionBasedParams{
-		Sessions:               [5]model.FlexInt64{60, 60, 60, 60, 60},
-		ParticipantsPerSession: [5]decimal.Decimal{d("25"), d("25"), d("25"), d("25"), d("25")},
-		FillRate:               [5]decimal.Decimal{d("0.80"), d("0.80"), d("0.80"), d("0.80"), d("0.80")},
-		PricePerParticipant:    [5]decimal.Decimal{d("100"), d("100"), d("100"), d("100"), d("100")},
-		TrainerCount:           [5]decimal.Decimal{d("5"), d("5"), d("5"), d("5"), d("5")},
-		SessionsPerTrainer:     [5]model.FlexInt64{30, 30, 30, 30, 30},
-		UtilizationRate:        [5]decimal.Decimal{d("0.90"), d("0.90"), d("0.90"), d("0.90"), d("0.90")},
-		TrainerCostPerSession:  [5]decimal.Decimal{d("300"), d("300"), d("300"), d("300"), d("300")},
+		Sessions:                   [5]model.FlexInt64{60, 60, 60, 60, 60},
+		ParticipantsPerSession:     [5]decimal.Decimal{d("25"), d("25"), d("25"), d("25"), d("25")},
+		FillRate:                   [5]decimal.Decimal{d("0.80"), d("0.80"), d("0.80"), d("0.80"), d("0.80")},
+		PricePerParticipant:        [5]decimal.Decimal{d("100"), d("100"), d("100"), d("100"), d("100")},
+		TrainerCount:               [5]decimal.Decimal{d("5"), d("5"), d("5"), d("5"), d("5")},
+		SessionsPerTrainer:         [5]model.FlexInt64{30, 30, 30, 30, 30},
+		UtilizationRate:            [5]decimal.Decimal{d("0.90"), d("0.90"), d("0.90"), d("0.90"), d("0.90")},
+		TrainerCostPerSession:      [5]decimal.Decimal{d("300"), d("300"), d("300"), d("300"), d("300")},
 		VariableCostPerParticipant: [5]decimal.Decimal{d("10"), d("10"), d("10"), d("10"), d("10")},
 	}
 	product := driverProduct(model.DriverSessionBased, params)

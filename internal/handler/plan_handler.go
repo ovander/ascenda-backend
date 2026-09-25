@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/dto"
+	"ascenda/internal/service"
+	"github.com/go-chi/chi/v5"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
 	"github.com/ovander/backendkit/pagination"
-	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
 )
 
 // PlanHandler handles business plan operations.
@@ -80,7 +80,7 @@ type CreatePlanRequest struct {
 	// Country is an ISO 3166-1 alpha-2 code (e.g. "BE", "FR", "DE").
 	// Defaults to "BE" when omitted. Drives the initial statutory-rate defaults
 	// (corporate tax, VAT, employer contributions, etc.) for the plan config.
-	Country     string `json:"country"`
+	Country string `json:"country"`
 }
 
 // Create creates a new plan.

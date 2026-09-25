@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
 	"ascenda/internal/service"
+	"github.com/go-chi/chi/v5"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/sirupsen/logrus"
 )
 
 // FeaturePolicySvc is the interface the handler requires.

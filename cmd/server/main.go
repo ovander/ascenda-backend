@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"ascenda/internal/config"
 	sentry "github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
-	"ascenda/internal/config"
 )
 
 // shutdownTimeout is the maximum time we allow in-flight HTTP requests to

@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/socrate"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/socrate"
 )
 
 // ── mock SocrateRegistrar ─────────────────────────────────────────────────────

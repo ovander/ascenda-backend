@@ -9,16 +9,16 @@ import (
 type FiplanLineID string
 
 const (
-	FiplanDividends          FiplanLineID = "dividends"
-	FiplanGrantRepayments    FiplanLineID = "grant_repayments"
-	FiplanCapitalIncrease    FiplanLineID = "capital_increase"
+	FiplanDividends             FiplanLineID = "dividends"
+	FiplanGrantRepayments       FiplanLineID = "grant_repayments"
+	FiplanCapitalIncrease       FiplanLineID = "capital_increase"
 	FiplanCurrentAccountContrib FiplanLineID = "current_account_contrib"
-	FiplanSubsidies          FiplanLineID = "subsidies"
-	FiplanOtherGrants        FiplanLineID = "other_grants"
-	FiplanRepayableGrants    FiplanLineID = "repayable_grants"
-	FiplanLTLoans            FiplanLineID = "lt_loans"
-	FiplanAssetSales         FiplanLineID = "asset_sales"
-	FiplanDisposalGainsLosses FiplanLineID = "disposal_gains_losses"
+	FiplanSubsidies             FiplanLineID = "subsidies"
+	FiplanOtherGrants           FiplanLineID = "other_grants"
+	FiplanRepayableGrants       FiplanLineID = "repayable_grants"
+	FiplanLTLoans               FiplanLineID = "lt_loans"
+	FiplanAssetSales            FiplanLineID = "asset_sales"
+	FiplanDisposalGainsLosses   FiplanLineID = "disposal_gains_losses"
 )
 
 // AllFiplanInputLines lists all 10 user-input lines.
@@ -76,44 +76,44 @@ type FiplanRequirements struct {
 }
 
 type FiplanResources struct {
-	CapitalIncrease     [5]decimal.Decimal `json:"capitalIncrease"`
-	CurrentAccountCont  [5]decimal.Decimal `json:"currentAccountCont"`
-	PositiveCashFlow    [5]decimal.Decimal `json:"positiveCashFlow"`
-	Subsidies           [5]decimal.Decimal `json:"subsidies"`
-	OtherGrants         [5]decimal.Decimal `json:"otherGrants"`
-	RepayableGrants     [5]decimal.Decimal `json:"repayableGrants"`
-	LTLoans             [5]decimal.Decimal `json:"ltLoans"`
-	AssetSales          [5]decimal.Decimal `json:"assetSales"`
-	Total               [5]decimal.Decimal `json:"total"`
+	CapitalIncrease    [5]decimal.Decimal `json:"capitalIncrease"`
+	CurrentAccountCont [5]decimal.Decimal `json:"currentAccountCont"`
+	PositiveCashFlow   [5]decimal.Decimal `json:"positiveCashFlow"`
+	Subsidies          [5]decimal.Decimal `json:"subsidies"`
+	OtherGrants        [5]decimal.Decimal `json:"otherGrants"`
+	RepayableGrants    [5]decimal.Decimal `json:"repayableGrants"`
+	LTLoans            [5]decimal.Decimal `json:"ltLoans"`
+	AssetSales         [5]decimal.Decimal `json:"assetSales"`
+	Total              [5]decimal.Decimal `json:"total"`
 }
 
 type FiplanBalance struct {
-	AnnualBalance    [5]decimal.Decimal `json:"annualBalance"`
-	CumulativeCash   [5]decimal.Decimal `json:"cumulativeCash"`
-	BSheetCashCheck  [5]decimal.Decimal `json:"bsheetCashCheck"`
-	InitialCash      decimal.Decimal    `json:"initialCash"`
+	AnnualBalance   [5]decimal.Decimal `json:"annualBalance"`
+	CumulativeCash  [5]decimal.Decimal `json:"cumulativeCash"`
+	BSheetCashCheck [5]decimal.Decimal `json:"bsheetCashCheck"`
+	InitialCash     decimal.Decimal    `json:"initialCash"`
 }
 
 type FiplanCashFlow struct {
-	Operating  CashFlowOperating  `json:"operating"`
-	Investing  CashFlowInvesting  `json:"investing"`
-	Financing  CashFlowFinancing  `json:"financing"`
-	Summary    CashFlowSummary    `json:"summary"`
+	Operating CashFlowOperating `json:"operating"`
+	Investing CashFlowInvesting `json:"investing"`
+	Financing CashFlowFinancing `json:"financing"`
+	Summary   CashFlowSummary   `json:"summary"`
 }
 
 type CashFlowOperating struct {
-	NetProfit         [5]decimal.Decimal `json:"netProfit"`
-	Depreciation      [5]decimal.Decimal `json:"depreciation"`
-	DisposalGainLoss  [5]decimal.Decimal `json:"disposalGainLoss"`
-	CashFlowCAF       [5]decimal.Decimal `json:"cashFlowCaf"`
-	WCRChange         [5]decimal.Decimal `json:"wcrChange"`
-	OperatingFlows    [5]decimal.Decimal `json:"operatingFlows"`
+	NetProfit        [5]decimal.Decimal `json:"netProfit"`
+	Depreciation     [5]decimal.Decimal `json:"depreciation"`
+	DisposalGainLoss [5]decimal.Decimal `json:"disposalGainLoss"`
+	CashFlowCAF      [5]decimal.Decimal `json:"cashFlowCaf"`
+	WCRChange        [5]decimal.Decimal `json:"wcrChange"`
+	OperatingFlows   [5]decimal.Decimal `json:"operatingFlows"`
 }
 
 type CashFlowInvesting struct {
-	CapexOutflow      [5]decimal.Decimal `json:"capexOutflow"`
-	AssetDisposals    [5]decimal.Decimal `json:"assetDisposals"`
-	InvestmentFlows   [5]decimal.Decimal `json:"investmentFlows"`
+	CapexOutflow    [5]decimal.Decimal `json:"capexOutflow"`
+	AssetDisposals  [5]decimal.Decimal `json:"assetDisposals"`
+	InvestmentFlows [5]decimal.Decimal `json:"investmentFlows"`
 }
 
 type CashFlowFinancing struct {

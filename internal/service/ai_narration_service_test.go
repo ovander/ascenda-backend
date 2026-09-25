@@ -8,10 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	aiClient "ascenda/internal/pkg/ai"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	aiClient "ascenda/internal/pkg/ai"
 )
 
 // ============================================================================

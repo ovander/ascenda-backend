@@ -3,11 +3,11 @@ package repo
 import (
 	"time"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"ascenda/internal/model"
 )
 
 // FiplanRepo handles financial planning data operations

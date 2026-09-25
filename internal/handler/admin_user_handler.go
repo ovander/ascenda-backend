@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"strings"
 
+	"ascenda/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/socrate"
-	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
 )
 
 // AdminUserServicer interface for dependency injection.

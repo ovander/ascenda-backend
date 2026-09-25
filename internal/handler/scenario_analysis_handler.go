@@ -5,11 +5,11 @@ import (
 	"context"
 	"net/http"
 
+	"ascenda/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/service"
+	"github.com/sirupsen/logrus"
 )
 
 // ScenarioAnalysisSvcer is the narrow interface the handler depends on.

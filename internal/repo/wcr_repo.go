@@ -1,10 +1,10 @@
 package repo
 
 import (
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"ascenda/internal/model"
 )
 
 // WCRRepo handles working capital requirement data operations

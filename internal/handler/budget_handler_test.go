@@ -8,14 +8,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
+	"github.com/ovander/backendkit/apierror"
+	"github.com/ovander/backendkit/ctxutil"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ascenda/internal/model"
-	"github.com/ovander/backendkit/apierror"
-	"github.com/ovander/backendkit/ctxutil"
 )
 
 // ── mockBudgetService ─────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ func TestBudgetHandler_ListOverrides_Success(t *testing.T) {
 	scenarioID := uuid.New()
 	overrides := []model.BudgetMonthlyOverride{
 		{
-			Month: 1,
+			Month:  1,
 			Amount: decimal.NewFromInt(5000),
 		},
 	}
@@ -131,7 +131,7 @@ func TestBudgetHandler_UpdateOverrides_Success(t *testing.T) {
 	scenarioID := uuid.New()
 	overrides := []model.BudgetMonthlyOverride{
 		{
-			Month: 1,
+			Month:  1,
 			Amount: decimal.NewFromInt(7500),
 		},
 	}

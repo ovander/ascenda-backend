@@ -32,9 +32,9 @@ func ComputeOpexSummary(
 	lineResults := make(map[model.OpexLineID]model.OpexLineResult)
 	for _, lineConfig := range model.AllOpexLines {
 		lineResult := model.OpexLineResult{
-			LineID:    lineConfig.ID,
+			LineID:      lineConfig.ID,
 			IsUserInput: lineConfig.IsUserInput,
-			CostDriver: lineConfig.CostDriver,
+			CostDriver:  lineConfig.CostDriver,
 		}
 
 		// Get values for each year

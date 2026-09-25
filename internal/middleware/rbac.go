@@ -3,8 +3,8 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/sirupsen/logrus"
 	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
 )
 
 // Permission represents an action permission.
@@ -14,7 +14,7 @@ const (
 	PermViewPlan      Permission = "view:plan"
 	PermEditPlan      Permission = "edit:plan"
 	PermManagePlan    Permission = "manage:plan"
-	PermManageUsers   Permission = "manage:users"   // tenant-scoped user management (owner)
+	PermManageUsers   Permission = "manage:users" // tenant-scoped user management (owner)
 	PermManageTenant  Permission = "manage:tenant"
 	PermPlatformAdmin Permission = "platform:admin" // platform-wide admin (not tenant-scoped)
 	PermSelfService   Permission = "self:service"   // all authenticated users can access /users/me

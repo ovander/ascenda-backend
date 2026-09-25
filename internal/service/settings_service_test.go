@@ -3,10 +3,10 @@ package service
 import (
 	"testing"
 
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"ascenda/internal/model"
 )
 
 func TestSettingsRepoGetConfig(t *testing.T) {

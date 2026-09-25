@@ -3,13 +3,13 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // WCRService orchestrates working capital requirements CRUD and reporting.
@@ -38,7 +38,9 @@ func (s *WCRService) ListEntries(ctx context.Context, tenantID, scenarioID uuid.
 		return nil, apierror.Internal("failed to list wcr entries")
 	}
 	entries := make([]model.WCREntry, len(ptrEntries))
-	for i, e := range ptrEntries { entries[i] = *e }
+	for i, e := range ptrEntries {
+		entries[i] = *e
+	}
 	return entries, nil
 }
 
