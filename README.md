@@ -285,7 +285,7 @@ make test-cover      # coverage report → coverage.html
 make test-compute    # compute engine tests only
 ```
 
-Integration tests live in `internal/repo` behind the `integration` build tag and use [testcontainers-go](https://golang.testcontainers.org/) to spin up a real PostgreSQL instance — no manual setup beyond a running Docker daemon. Without Docker, point them at any empty PostgreSQL database with `TEST_DATABASE_URL=postgres://…` instead. Either way the schema is provisioned from the embedded SQL migrations. Run them with `make test-integration`; `make test` / `make test-short` do not include them.
+Integration tests live in `internal/repo` (repositories) and `internal/service` (snapshot restore) behind the `integration` build tag; the shared `internal/testdb` helper uses [testcontainers-go](https://golang.testcontainers.org/) to spin up a real PostgreSQL instance — no manual setup beyond a running Docker daemon. Without Docker, point them at any empty PostgreSQL database with `TEST_DATABASE_URL=postgres://…` instead. Either way the schema is provisioned from the embedded SQL migrations. Run them with `make test-integration`; `make test` / `make test-short` do not include them.
 
 ### Continuous integration
 
@@ -296,7 +296,7 @@ Integration tests live in `internal/repo` behind the `integration` build tag and
 | Build, vet, unit tests | `go build`, `go vet`, `go test -short -race` | blocking |
 | golangci-lint | `.golangci.yml` (standard linters); pull requests fail only on **new** issues (`--new-from-rev`), pushes to `main` report the full backlog | blocking on PRs |
 | gofmt | changed `.go` files must be gofmt-clean; the tree-wide count is reported on `main` | blocking on PRs |
-| Integration tests | `go test -tags integration ./internal/repo/...` (testcontainers) | blocking |
+| Integration tests | `go test -tags integration ./internal/repo/... ./internal/service/...` (testcontainers) | blocking |
 | govulncheck | reachable vulnerabilities in dependencies | blocking |
 | Docker image | `docker build` of the Dockerfile (no push) | blocking |
 

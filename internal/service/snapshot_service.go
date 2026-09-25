@@ -3,15 +3,16 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
 	"github.com/ovander/backendkit/pagination"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
 // SnapshotService orchestrates plan versioning and snapshots.
@@ -19,6 +20,7 @@ type SnapshotService struct {
 	snapshotRepo repo.SnapshotRepository
 	scenarioRepo repo.ScenarioRepository
 	sections     []SnapshotSection
+	restorer     ScenarioRestorer
 	emitter      *event.Emitter
 	logger       *logrus.Entry
 }
@@ -29,6 +31,7 @@ func NewSnapshotService(snapshotRepo repo.SnapshotRepository, repos *repo.RepoBu
 		snapshotRepo: snapshotRepo,
 		scenarioRepo: repos.Scenario,
 		sections:     registerSections(repos),
+		restorer:     &dbScenarioRestorer{db: repos.DB},
 		emitter:      emitter,
 		logger:       logger,
 	}
@@ -108,16 +111,17 @@ func (s *SnapshotService) Create(ctx context.Context, tenantID, scenarioID uuid.
 	return snapshot, nil
 }
 
-// Restore restores a scenario from one of its own snapshots.
+// Restore replaces the scenario's data with one of its own snapshots. The
+// restore is atomic: a failure leaves the scenario untouched, is returned to
+// the caller and emits no event.
 func (s *SnapshotService) Restore(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) error {
 	snapshot, err := s.getInScenario(tenantID, scenarioID, snapshotID)
 	if err != nil {
 		return err
 	}
 
-	// Deserialize and restore data
 	if err := s.restoreScenarioData(tenantID, snapshot.ScenarioID, snapshot.Data); err != nil {
-		s.logger.WithError(err).Error("failed to restore snapshot")
+		s.logger.WithError(err).WithField("snapshot_id", snapshotID).Error("failed to restore snapshot (rolled back)")
 		return apierror.Internal("failed to restore snapshot")
 	}
 
@@ -162,9 +166,9 @@ func (s *SnapshotService) CloneToScenario(ctx context.Context, tenantID, scenari
 		return apierror.NotFound("scenario", newScenarioID.String())
 	}
 
-	// Restore to new scenario
+	// Replace the target scenario's data with the snapshot, atomically.
 	if err := s.restoreScenarioData(tenantID, newScenarioID, snapshot.Data); err != nil {
-		s.logger.WithError(err).Error("failed to clone snapshot")
+		s.logger.WithError(err).WithField("snapshot_id", snapshotID).Error("failed to clone snapshot (rolled back)")
 		return apierror.Internal("failed to clone snapshot")
 	}
 
@@ -280,15 +284,16 @@ func (s *SnapshotService) CaptureScenarioData(tenantID, scenarioID uuid.UUID) (j
 
 // captureScenarioData iterates over registered sections to serialize all
 // scenario entities into a single JSON map. The output is backward-compatible
-// with the SnapshotData struct keys.
+// with the SnapshotData struct keys. A section that cannot be read fails the
+// capture: because a restore replaces the scenario with the snapshot, a
+// snapshot silently missing a section would wipe that section on restore.
 func (s *SnapshotService) captureScenarioData(tenantID, scenarioID uuid.UUID) (json.RawMessage, error) {
 	combined := make(map[string]json.RawMessage)
 
 	for _, section := range s.sections {
 		pairs, err := section.Capture(tenantID, scenarioID)
 		if err != nil {
-			s.logger.WithError(err).WithField("section", section.Name).Warn("snapshot capture failed for section")
-			continue
+			return nil, fmt.Errorf("capture %s: %w", section.Name, err)
 		}
 		for k, v := range pairs {
 			combined[k] = v
@@ -298,20 +303,17 @@ func (s *SnapshotService) captureScenarioData(tenantID, scenarioID uuid.UUID) (j
 	return json.Marshal(combined)
 }
 
-// restoreScenarioData parses the snapshot JSON into a key→RawMessage map
-// and delegates to each registered section for deserialization and repo writes.
+// restoreScenarioData parses the snapshot JSON into a key→RawMessage map and
+// hands it to the restorer, which replaces the scenario's data in one
+// transaction. Any error means nothing was changed.
 func (s *SnapshotService) restoreScenarioData(tenantID, scenarioID uuid.UUID, dataJSON json.RawMessage) error {
 	var data map[string]json.RawMessage
 	if err := json.Unmarshal(dataJSON, &data); err != nil {
+		return fmt.Errorf("parse snapshot data: %w", err)
+	}
+	if err := s.restorer.RestoreScenarioData(tenantID, scenarioID, data); err != nil {
 		return err
 	}
-
-	for _, section := range s.sections {
-		if err := section.Restore(tenantID, scenarioID, data); err != nil {
-			s.logger.WithError(err).WithField("section", section.Name).Warn("snapshot restore failed for section")
-		}
-	}
-
 	s.logger.WithField("scenario_id", scenarioID).Info("scenario data restored from snapshot")
 	return nil
 }
