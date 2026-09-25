@@ -192,6 +192,9 @@ func (r *mockUserRepoForOrg) GetByID(tenantID, userID uuid.UUID) (*model.User, e
 	return u, nil
 }
 
+func (r *mockUserRepoForOrg) GetPendingInviteByEmail(email string) (*model.User, error) {
+	return nil, errors.New("not found")
+}
 func (r *mockUserRepoForOrg) GetByExternalID(externalID string) (*model.User, error) {
 	return nil, errors.New("not found")
 }

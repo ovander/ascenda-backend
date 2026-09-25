@@ -1,5 +1,6 @@
--- Seed the default workspace tenant used when no tenant_id is present in the JWT.
--- The middleware falls back to this UUID: 00000000-0000-0000-0000-000000000001
+-- Seed the default workspace tenant used by the development-only fallback
+-- (TENANT_DEFAULT_FALLBACK=true) for users with no tenant_id claim and no user
+-- record. The middleware uses this UUID: 00000000-0000-0000-0000-000000000001
 -- ON CONFLICT ensures this is safe to run on existing databases.
 INSERT INTO tenants (id, name, slug, type, plan, is_active, ai_credits)
 VALUES (
