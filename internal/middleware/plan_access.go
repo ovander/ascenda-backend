@@ -3,30 +3,47 @@ package middleware
 import (
 	"net/http"
 
+	"ascenda/internal/repo"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/ovander/backendkit/ctxutil"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
 )
 
-// PlanAccessMiddleware checks plan-level permissions via plan_members table.
+// PlanAccessMiddleware checks plan-level permissions via plan_members table and
+// binds nested resources (scenarios) to the plan named in the URL.
 type PlanAccessMiddleware struct {
 	planRepo       repo.PlanRepository
 	planMemberRepo repo.PlanMemberRepository
+	scenarioRepo   repo.ScenarioRepository
 	logger         *logrus.Entry
 }
 
-func NewPlanAccessMiddleware(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository, logger *logrus.Entry) *PlanAccessMiddleware {
+func NewPlanAccessMiddleware(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository, scenarioRepo repo.ScenarioRepository, logger *logrus.Entry) *PlanAccessMiddleware {
 	return &PlanAccessMiddleware{
 		planRepo:       planRepo,
 		planMemberRepo: planMemberRepo,
+		scenarioRepo:   scenarioRepo,
 		logger:         logger,
 	}
 }
 
+// writeJSONError writes a minimal JSON error body in the API's envelope format.
+func writeJSONError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write([]byte(`{"error":{"code":"` + code + `","message":"` + message + `"}}`)) //nolint:errcheck
+}
+
 // RequirePlanAccess checks if user has any access (editor or viewer) to the plan.
 // Owner bypasses this check entirely.
+//
+// The plan-level role injected into the context is, in order:
+//   - "owner" for tenant owners (unchanged);
+//   - the plan_members role for explicit members;
+//   - "viewer" for any other tenant user on a demo plan (demo plans are readable
+//     by everyone in the tenant, but only members and owners may edit them);
+//   - otherwise the request is rejected with 403.
 func (m *PlanAccessMiddleware) RequirePlanAccess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -40,9 +57,7 @@ func (m *PlanAccessMiddleware) RequirePlanAccess(next http.Handler) http.Handler
 
 		// Admin has no plan access at all
 		if role == "admin" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"error":{"code":"forbidden","message":"admin role cannot access plans"}}`))
+			writeJSONError(w, http.StatusForbidden, "forbidden", "admin role cannot access plans")
 			return
 		}
 
@@ -63,30 +78,76 @@ func (m *PlanAccessMiddleware) RequirePlanAccess(next http.Handler) http.Handler
 
 		planID, err := uuid.Parse(planIDStr)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":{"code":"bad_request","message":"invalid plan ID"}}`))
+			writeJSONError(w, http.StatusBadRequest, "bad_request", "invalid plan ID")
 			return
 		}
 
-		// Demo plans are read-accessible to all authenticated users — no membership required.
-		if plan, err := m.planRepo.GetByID(tenantID, planID); err == nil && plan != nil && plan.IsDemo {
-			next.ServeHTTP(w, r)
-			return
-		}
-
+		// Explicit membership wins, on demo and regular plans alike.
 		member, err := m.planMemberRepo.GetByPlanAndUser(tenantID, planID, userID)
-		if err != nil || member == nil {
-			m.logger.WithField("user_id", userID).WithField("plan_id", planID).Warn("plan access denied")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"error":{"code":"forbidden","message":"no access to this plan"}}`))
+		if err == nil && member != nil {
+			ctx = ctxutil.WithUserRole(ctx, member.Role)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
-		// Inject the plan-level role into context so handlers can check it
-		ctx = ctxutil.WithUserRole(ctx, member.Role)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		// Demo plans are read-accessible to every tenant user — no membership
+		// required, but the effective role is viewer so RequirePlanEdit blocks
+		// writes. The tenant role must NOT leak through here: "editor" as a
+		// tenant role would otherwise grant write access to a plan the user was
+		// never granted (audit finding S-H1).
+		if plan, err := m.planRepo.GetByID(tenantID, planID); err == nil && plan != nil && plan.IsDemo {
+			ctx = ctxutil.WithUserRole(ctx, "viewer")
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		m.logger.WithField("user_id", userID).WithField("plan_id", planID).Warn("plan access denied")
+		writeJSONError(w, http.StatusForbidden, "forbidden", "no access to this plan")
+	})
+}
+
+// RequireScenarioInPlan verifies that the {scenarioId} in the URL belongs to
+// the {planId} in the URL (within the caller's tenant). Without this check a
+// user with access to any plan could read or write every scenario in the
+// tenant by pairing their plan ID with a foreign scenario ID, because the
+// data services are keyed on (tenant, scenario) only.
+//
+// Mount it on the "/{scenarioId}" subrouter, after RequirePlanAccess.
+// A mismatch is reported as 404 so that scenario IDs from other plans are not
+// confirmed to exist.
+func (m *PlanAccessMiddleware) RequireScenarioInPlan(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		planID, err := uuid.Parse(chi.URLParam(r, "planId"))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad_request", "invalid plan ID")
+			return
+		}
+		scenarioID, err := uuid.Parse(chi.URLParam(r, "scenarioId"))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad_request", "invalid scenario ID")
+			return
+		}
+
+		tenantID := ctxutil.GetTenantID(ctx)
+		scenario, err := m.scenarioRepo.GetByID(tenantID, scenarioID)
+		if err != nil || scenario == nil {
+			writeJSONError(w, http.StatusNotFound, "not_found", "scenario not found")
+			return
+		}
+		if scenario.PlanID != planID {
+			m.logger.WithFields(logrus.Fields{
+				"user_id":       ctxutil.GetUserID(ctx),
+				"plan_id":       planID,
+				"scenario_id":   scenarioID,
+				"scenario_plan": scenario.PlanID,
+			}).Warn("scenario does not belong to plan in URL — access denied")
+			writeJSONError(w, http.StatusNotFound, "not_found", "scenario not found")
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -104,8 +165,6 @@ func (m *PlanAccessMiddleware) RequirePlanEdit(next http.Handler) http.Handler {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"error":{"code":"forbidden","message":"editor access required"}}`))
+		writeJSONError(w, http.StatusForbidden, "forbidden", "editor access required")
 	})
 }

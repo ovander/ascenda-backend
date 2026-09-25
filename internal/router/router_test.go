@@ -5,14 +5,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"ascenda/internal/middleware"
 	"ascenda/internal/model"
-	"github.com/ovander/backendkit/ctxutil"
 	"ascenda/internal/repo"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/ovander/backendkit/ctxutil"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"gorm.io/gorm"
 )
 
 // ── Stub handler that returns 200 with handler name ───────────────
@@ -42,14 +43,40 @@ func (m *mockPlanRepo) GetByID(tenantID, planID uuid.UUID) (*model.BusinessPlan,
 func (m *mockPlanRepo) ListByTenant(tenantID uuid.UUID, page, limit int) ([]*model.BusinessPlan, error) {
 	return nil, nil
 }
-func (m *mockPlanRepo) Update(plan *model.BusinessPlan) error    { return nil }
-func (m *mockPlanRepo) Delete(tenantID, planID uuid.UUID) error  { return nil }
-func (m *mockPlanRepo) PurgeDemoPlans(tenantID uuid.UUID) error  { return nil }
+func (m *mockPlanRepo) Update(plan *model.BusinessPlan) error           { return nil }
+func (m *mockPlanRepo) Delete(tenantID, planID uuid.UUID) error         { return nil }
+func (m *mockPlanRepo) PurgeDemoPlans(tenantID uuid.UUID) error         { return nil }
 func (m *mockPlanRepo) CountByTenant(tenantID uuid.UUID) (int64, error) { return 0, nil }
 
 var _ repo.PlanRepository = (*mockPlanRepo)(nil)
 
 // ── Mock PlanMemberRepo ───────────────────────────────────────────
+
+// mockScenarioRepo satisfies repo.ScenarioRepository. Scenarios added via add()
+// are returned by GetByID; RequireScenarioInPlan uses it to bind {scenarioId}
+// to {planId}.
+type mockScenarioRepo struct {
+	scenarios map[uuid.UUID]*model.Scenario
+}
+
+func newMockScenarioRepo() *mockScenarioRepo {
+	return &mockScenarioRepo{scenarios: make(map[uuid.UUID]*model.Scenario)}
+}
+
+func (m *mockScenarioRepo) add(s *model.Scenario) { m.scenarios[s.ID] = s }
+
+func (m *mockScenarioRepo) Create(s *model.Scenario) error { m.scenarios[s.ID] = s; return nil }
+func (m *mockScenarioRepo) GetByID(tenantID, scenarioID uuid.UUID) (*model.Scenario, error) {
+	if s, ok := m.scenarios[scenarioID]; ok && s.TenantID == tenantID {
+		return s, nil
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+func (m *mockScenarioRepo) ListByPlan(tenantID, planID uuid.UUID) ([]*model.Scenario, error) {
+	return nil, nil
+}
+func (m *mockScenarioRepo) Update(s *model.Scenario) error              { return nil }
+func (m *mockScenarioRepo) Delete(tenantID, scenarioID uuid.UUID) error { return nil }
 
 type mockPlanMemberRepo struct {
 	members map[string]*model.PlanMember
@@ -100,12 +127,27 @@ func passthroughTenant(next http.Handler) http.Handler {
 
 // ── Build test router ─────────────────────────────────────────────
 
-func buildTestRouter(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository) *chi.Mux {
+// defaultScenarios registers the scenario the nested-route tests use
+// (22222222-… in plan 11111111-…, tenant 00000000-…-0001), mirroring what the
+// real ScenarioRepo would return.
+func defaultScenarios() *mockScenarioRepo {
+	sr := newMockScenarioRepo()
+	sr.add(&model.Scenario{
+		TenantScoped: model.TenantScoped{
+			ID:       uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+			TenantID: uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		},
+		PlanID: uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+	})
+	return sr
+}
+
+func buildTestRouter(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository, scenarioRepo repo.ScenarioRepository) *chi.Mux {
 	logger := logrus.NewEntry(logrus.New())
 
 	// Create real RBAC and PlanAccess middleware
 	rbacMW := middleware.NewRBACMiddleware(logger)
-	planAccessMW := middleware.NewPlanAccessMiddleware(planRepo, planMemberRepo, logger)
+	planAccessMW := middleware.NewPlanAccessMiddleware(planRepo, planMemberRepo, scenarioRepo, logger)
 
 	r := chi.NewRouter()
 
@@ -149,6 +191,7 @@ func buildTestRouter(planRepo repo.PlanRepository, planMemberRepo repo.PlanMembe
 						r.With(planAccessMW.RequirePlanEdit).Post("/", stubHandler("CreateScenario"))
 
 						r.Route("/{scenarioId}", func(r chi.Router) {
+							r.Use(planAccessMW.RequireScenarioInPlan)
 							r.Get("/", stubHandler("GetScenario"))
 
 							r.Route("/products", func(r chi.Router) {
@@ -184,7 +227,7 @@ func newReq(method, path, role string) *http.Request {
 // ── Tests ─────────────────────────────────────────────────────────
 
 func TestRouterHealthAndAuth(t *testing.T) {
-	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo())
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), defaultScenarios())
 
 	t.Run("GET /users/me returns 200 for any role", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -195,7 +238,7 @@ func TestRouterHealthAndAuth(t *testing.T) {
 }
 
 func TestRouterUserManagementRBAC(t *testing.T) {
-	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo())
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), defaultScenarios())
 
 	t.Run("owner can list users", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -218,7 +261,7 @@ func TestRouterUserManagementRBAC(t *testing.T) {
 }
 
 func TestRouterTenantRBAC(t *testing.T) {
-	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo())
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), defaultScenarios())
 
 	// GET /tenant/ — readable by all authenticated users (needed for tier gating).
 	for _, role := range []string{"owner", "editor", "reader", "admin", "user"} {
@@ -248,7 +291,7 @@ func TestRouterTenantRBAC(t *testing.T) {
 }
 
 func TestRouterPlanListAccessible(t *testing.T) {
-	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo())
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), defaultScenarios())
 
 	t.Run("any authenticated user can list plans", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -264,7 +307,7 @@ func TestRouterPlanListAccessible(t *testing.T) {
 }
 
 func TestRouterPlanCreateRBAC(t *testing.T) {
-	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo())
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), defaultScenarios())
 
 	t.Run("owner can create plan", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -292,7 +335,7 @@ func TestRouterPlanAccessMiddleware(t *testing.T) {
 
 	t.Run("owner bypasses plan access check", func(t *testing.T) {
 		repo := newMockPlanMemberRepo()
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 		// No plan_member entry — owner bypasses
 
 		w := httptest.NewRecorder()
@@ -303,7 +346,7 @@ func TestRouterPlanAccessMiddleware(t *testing.T) {
 
 	t.Run("admin blocked from plan access", func(t *testing.T) {
 		repo := newMockPlanMemberRepo()
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, newReq("GET", "/api/v1/plans/"+planID.String()+"/", "admin"))
@@ -318,7 +361,7 @@ func TestRouterPlanAccessMiddleware(t *testing.T) {
 			UserID:   userID,
 			Role:     "editor",
 		})
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, newReq("GET", "/api/v1/plans/"+planID.String()+"/", "user"))
@@ -327,7 +370,7 @@ func TestRouterPlanAccessMiddleware(t *testing.T) {
 
 	t.Run("user without membership denied", func(t *testing.T) {
 		repo := newMockPlanMemberRepo()
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, newReq("GET", "/api/v1/plans/"+planID.String()+"/", "user"))
@@ -342,7 +385,7 @@ func TestRouterPlanAccessMiddleware(t *testing.T) {
 			UserID:   userID,
 			Role:     "viewer",
 		})
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, newReq("GET", "/api/v1/plans/"+planID.String()+"/", "user"))
@@ -357,7 +400,7 @@ func TestRouterPlanAccessMiddleware(t *testing.T) {
 			UserID:   userID,
 			Role:     "viewer",
 		})
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, newReq("PUT", "/api/v1/plans/"+planID.String()+"/", "user"))
@@ -372,7 +415,7 @@ func TestRouterPlanAccessMiddleware(t *testing.T) {
 			UserID:   userID,
 			Role:     "editor",
 		})
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, newReq("PUT", "/api/v1/plans/"+planID.String()+"/", "user"))
@@ -386,7 +429,7 @@ func TestRouterNestedScenarioRoutes(t *testing.T) {
 
 	t.Run("owner can list scenarios", func(t *testing.T) {
 		repo := newMockPlanMemberRepo()
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		path := "/api/v1/plans/" + planID.String() + "/scenarios/"
 		w := httptest.NewRecorder()
@@ -397,7 +440,7 @@ func TestRouterNestedScenarioRoutes(t *testing.T) {
 
 	t.Run("owner can get scenario", func(t *testing.T) {
 		repo := newMockPlanMemberRepo()
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		path := "/api/v1/plans/" + planID.String() + "/scenarios/" + scenarioID.String() + "/"
 		w := httptest.NewRecorder()
@@ -408,7 +451,7 @@ func TestRouterNestedScenarioRoutes(t *testing.T) {
 
 	t.Run("owner can list products under scenario", func(t *testing.T) {
 		repo := newMockPlanMemberRepo()
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		path := "/api/v1/plans/" + planID.String() + "/scenarios/" + scenarioID.String() + "/products/"
 		w := httptest.NewRecorder()
@@ -419,7 +462,7 @@ func TestRouterNestedScenarioRoutes(t *testing.T) {
 
 	t.Run("owner can get settings config", func(t *testing.T) {
 		repo := newMockPlanMemberRepo()
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		path := "/api/v1/plans/" + planID.String() + "/scenarios/" + scenarioID.String() + "/settings/config"
 		w := httptest.NewRecorder()
@@ -436,7 +479,7 @@ func TestRouterNestedScenarioRoutes(t *testing.T) {
 		repo.Create(&model.PlanMember{
 			TenantID: tenantID, PlanID: planID, UserID: userID, Role: "viewer",
 		})
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		basePath := "/api/v1/plans/" + planID.String() + "/scenarios/" + scenarioID.String()
 
@@ -459,7 +502,7 @@ func TestRouterNestedScenarioRoutes(t *testing.T) {
 		repo.Create(&model.PlanMember{
 			TenantID: tenantID, PlanID: planID, UserID: userID, Role: "editor",
 		})
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		path := "/api/v1/plans/" + planID.String() + "/scenarios/" + scenarioID.String() + "/products/"
 		w := httptest.NewRecorder()
@@ -476,7 +519,7 @@ func TestRouterNestedScenarioRoutes(t *testing.T) {
 		repo.Create(&model.PlanMember{
 			TenantID: tenantID, PlanID: planID, UserID: userID, Role: "viewer",
 		})
-		r := buildTestRouter(newMockPlanRepo(), repo)
+		r := buildTestRouter(newMockPlanRepo(), repo, defaultScenarios())
 
 		path := "/api/v1/plans/" + planID.String() + "/scenarios/" + scenarioID.String() + "/products/"
 		w := httptest.NewRecorder()
@@ -485,8 +528,38 @@ func TestRouterNestedScenarioRoutes(t *testing.T) {
 	})
 }
 
+// TestRouterScenarioMustBelongToPlan covers audit finding S-H1: a scenario ID
+// from another plan (or a nonexistent one) must not be reachable through a plan
+// the caller has access to — even for the tenant owner.
+func TestRouterScenarioMustBelongToPlan(t *testing.T) {
+	planID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	otherPlan := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	foreignScenario := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+
+	scenarios := defaultScenarios()
+	scenarios.add(&model.Scenario{
+		TenantScoped: model.TenantScoped{ID: foreignScenario, TenantID: uuid.MustParse("00000000-0000-0000-0000-000000000001")},
+		PlanID:       otherPlan,
+	})
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), scenarios)
+
+	for _, path := range []string{
+		"/api/v1/plans/" + planID.String() + "/scenarios/" + foreignScenario.String() + "/",
+		"/api/v1/plans/" + planID.String() + "/scenarios/" + foreignScenario.String() + "/products/",
+		"/api/v1/plans/" + planID.String() + "/scenarios/" + foreignScenario.String() + "/settings/config",
+		"/api/v1/plans/" + planID.String() + "/scenarios/" + uuid.New().String() + "/",
+	} {
+		t.Run("owner blocked from "+path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, newReq("GET", path, "owner"))
+			assert.Equal(t, 404, w.Code)
+			assert.Empty(t, w.Header().Get("X-Handler"), "handler must not run")
+		})
+	}
+}
+
 func TestRouterNonExistentRoute(t *testing.T) {
-	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo())
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), defaultScenarios())
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, newReq("GET", "/api/v1/nonexistent", "owner"))
@@ -496,7 +569,7 @@ func TestRouterNonExistentRoute(t *testing.T) {
 
 func TestRouterAdminCannotAccessBusinessRoutes(t *testing.T) {
 	planID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
-	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo())
+	r := buildTestRouter(newMockPlanRepo(), newMockPlanMemberRepo(), defaultScenarios())
 
 	routes := []string{
 		"/api/v1/plans/" + planID.String() + "/",

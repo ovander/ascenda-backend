@@ -53,42 +53,42 @@ func (m *mockSnapshotService) Create(ctx context.Context, tenantID, scenarioID u
 	return nil, apierror.Internal("create not implemented")
 }
 
-func (m *mockSnapshotService) Get(ctx context.Context, tenantID, snapshotID uuid.UUID) (*model.PlanSnapshot, error) {
+func (m *mockSnapshotService) Get(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) (*model.PlanSnapshot, error) {
 	if m.getFn != nil {
 		return m.getFn(ctx, tenantID, snapshotID)
 	}
 	return nil, apierror.Internal("get not implemented")
 }
 
-func (m *mockSnapshotService) GetData(ctx context.Context, tenantID, snapshotID uuid.UUID) (json.RawMessage, error) {
+func (m *mockSnapshotService) GetData(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) (json.RawMessage, error) {
 	if m.getDataFn != nil {
 		return m.getDataFn(ctx, tenantID, snapshotID)
 	}
 	return nil, apierror.Internal("get data not implemented")
 }
 
-func (m *mockSnapshotService) Restore(ctx context.Context, tenantID, snapshotID uuid.UUID) error {
+func (m *mockSnapshotService) Restore(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) error {
 	if m.restoreFn != nil {
 		return m.restoreFn(ctx, tenantID, snapshotID)
 	}
 	return apierror.Internal("restore not implemented")
 }
 
-func (m *mockSnapshotService) CloneToScenario(ctx context.Context, tenantID, snapshotID, newScenarioID uuid.UUID) error {
+func (m *mockSnapshotService) CloneToScenario(ctx context.Context, tenantID, scenarioID, snapshotID, newScenarioID uuid.UUID) error {
 	if m.cloneFn != nil {
 		return m.cloneFn(ctx, tenantID, snapshotID, newScenarioID)
 	}
 	return apierror.Internal("clone not implemented")
 }
 
-func (m *mockSnapshotService) Diff(ctx context.Context, tenantID, snapshot1ID, snapshot2ID uuid.UUID) (map[string]interface{}, error) {
+func (m *mockSnapshotService) Diff(ctx context.Context, tenantID, scenarioID, snapshot1ID, snapshot2ID uuid.UUID) (map[string]interface{}, error) {
 	if m.diffFn != nil {
 		return m.diffFn(ctx, tenantID, snapshot1ID, snapshot2ID)
 	}
 	return nil, apierror.Internal("diff not implemented")
 }
 
-func (m *mockSnapshotService) Delete(ctx context.Context, tenantID, snapshotID uuid.UUID) error {
+func (m *mockSnapshotService) Delete(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) error {
 	if m.deleteFn != nil {
 		return m.deleteFn(ctx, tenantID, snapshotID)
 	}

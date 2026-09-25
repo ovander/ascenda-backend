@@ -447,7 +447,8 @@ Three levels of access control are enforced:
 
 1. **Platform role** — `platform:admin` for cross-tenant admin routes
 2. **Tenant role** — `owner`, `admin`, `editor`, `viewer` for tenant-level operations
-3. **Plan membership** — users must be a member of a plan with a sufficient role (`view`, `edit`, `manage`) to access plan-scoped routes
+3. **Plan membership** — users must be a member of a plan (`editor` or `viewer`) to access plan-scoped routes; tenant owners have access to every plan in their tenant. Non-members get read-only (`viewer`) access to demo plans.
+4. **Scenario binding** — `PlanAccessMiddleware.RequireScenarioInPlan` verifies that `{scenarioId}` belongs to `{planId}` before any scenario-scoped handler runs, and snapshot operations are scoped to the scenario in the URL (clone targets must be in the same plan)
 
 ### Graceful Shutdown
 

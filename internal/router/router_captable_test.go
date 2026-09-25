@@ -32,7 +32,7 @@ import (
 func buildTierGatedRouter(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository) *chi.Mux {
 	logger := logrus.NewEntry(logrus.New())
 	rbacMW := middleware.NewRBACMiddleware(logger)
-	planAccessMW := middleware.NewPlanAccessMiddleware(planRepo, planMemberRepo, logger)
+	planAccessMW := middleware.NewPlanAccessMiddleware(planRepo, planMemberRepo, newMockScenarioRepo(), logger)
 	tierGateMW := middleware.NewTierGateMiddleware(logger)
 
 	r := chi.NewRouter()
