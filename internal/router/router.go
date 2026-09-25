@@ -25,6 +25,7 @@ func NewRouter(
 	planAccessMW *middleware.PlanAccessMiddleware,
 	tierGateMW *middleware.TierGateMiddleware,
 	aiAccessMW *middleware.AIAccessMiddleware,
+	scopeMW *middleware.ResourceScopeMiddleware,
 	loggerMW *middleware.LoggerMiddleware,
 	recoverMW *middleware.RecoverMiddleware,
 	requestIDMW *middleware.RequestIDMiddleware,
@@ -293,25 +294,29 @@ func NewRouter(
 						r.Route("/products", func(r chi.Router) {
 							r.Get("/", handlers.Finance.Product.List)
 							r.With(planAccessMW.RequirePlanEdit).Post("/", handlers.Finance.Product.Create)
-							r.Get("/{productId}", handlers.Finance.Product.Get)
-							r.With(planAccessMW.RequirePlanEdit).Put("/{productId}", handlers.Finance.Product.Update)
-							r.With(planAccessMW.RequirePlanEdit).Delete("/{productId}", handlers.Finance.Product.Delete)
-							r.Get("/{productId}/assumptions", handlers.Finance.Product.GetAssumptions)
-							r.With(planAccessMW.RequirePlanEdit).Put("/{productId}/assumptions", handlers.Finance.Product.UpdateAssumptions)
-							r.Get("/{productId}/volumes", handlers.Finance.Product.GetVolumes)
-							r.With(planAccessMW.RequirePlanEdit).Put("/{productId}/volumes", handlers.Finance.Product.UpdateVolumes)
-							r.Get("/{productId}/margins", handlers.Finance.Product.GetMargins)
-							r.With(planAccessMW.RequirePlanEdit).Put("/{productId}/margins", handlers.Finance.Product.UpdateMargins)
 
-							// Business Driver Framework: derived volumes + assumptions for typed drivers.
-							r.Get("/{productId}/driver/bundle", handlers.Finance.Product.GetDerivedBundle)
+							// Consolidated revenue uses report timeout + report rate limit.
+							r.With(reportTimeout, reportLimiter.Handler).Get("/revenue/consolidated", handlers.Finance.Product.GetConsolidatedRevenue)
 
-							// Revenue endpoints use report timeout + report rate limit
-							r.Group(func(r chi.Router) {
-								r.Use(reportTimeout)
-								r.Use(reportLimiter.Handler)
-								r.Get("/{productId}/revenue", handlers.Finance.Product.GetRevenueByProduct)
-								r.Get("/revenue/consolidated", handlers.Finance.Product.GetConsolidatedRevenue)
+							// Every route addressing one product is guarded: {productId} must
+							// belong to {scenarioId} (the product service is keyed on tenant+id).
+							r.Route("/{productId}", func(r chi.Router) {
+								r.Use(scopeMW.RequireProductInScenario)
+								r.Get("/", handlers.Finance.Product.Get)
+								r.With(planAccessMW.RequirePlanEdit).Put("/", handlers.Finance.Product.Update)
+								r.With(planAccessMW.RequirePlanEdit).Delete("/", handlers.Finance.Product.Delete)
+								r.Get("/assumptions", handlers.Finance.Product.GetAssumptions)
+								r.With(planAccessMW.RequirePlanEdit).Put("/assumptions", handlers.Finance.Product.UpdateAssumptions)
+								r.Get("/volumes", handlers.Finance.Product.GetVolumes)
+								r.With(planAccessMW.RequirePlanEdit).Put("/volumes", handlers.Finance.Product.UpdateVolumes)
+								r.Get("/margins", handlers.Finance.Product.GetMargins)
+								r.With(planAccessMW.RequirePlanEdit).Put("/margins", handlers.Finance.Product.UpdateMargins)
+
+								// Business Driver Framework: derived volumes + assumptions for typed drivers.
+								r.Get("/driver/bundle", handlers.Finance.Product.GetDerivedBundle)
+
+								// Per-product revenue uses report timeout + report rate limit.
+								r.With(reportTimeout, reportLimiter.Handler).Get("/revenue", handlers.Finance.Product.GetRevenueByProduct)
 							})
 						})
 
@@ -482,6 +487,7 @@ func NewRouter(
 						r.With(planAccessMW.RequirePlanEdit).Post("/snapshots", handlers.Finance.BEP.CreateSnapshot)
 
 						r.Route("/snapshots/{snapshotId}", func(r chi.Router) {
+							r.Use(scopeMW.RequireBEPSnapshotInScenario) // {snapshotId} must belong to {scenarioId}
 							r.Get("/", handlers.Finance.BEP.GetSnapshot)
 							r.With(planAccessMW.RequirePlanEdit).Put("/", handlers.Finance.BEP.UpdateSnapshot)
 							r.With(planAccessMW.RequirePlanEdit).Delete("/", handlers.Finance.BEP.DeleteSnapshot)
@@ -508,7 +514,10 @@ func NewRouter(
 							r.Get("/plans", handlers.Finance.BEP.ListOptimisationPlans)
 							r.With(planAccessMW.RequirePlanEdit).Post("/plans", handlers.Finance.BEP.CreateOptimisationPlan)
 
-							r.Route("/plans/{planId}", func(r chi.Router) {
+							// Optimisation plans use their own param name so the financial
+							// {planId} above is never shadowed; the guard binds it to {snapshotId}.
+							r.Route("/plans/{optPlanId}", func(r chi.Router) {
+								r.Use(scopeMW.RequireOptimisationPlanInSnapshot)
 								r.Get("/", handlers.Finance.BEP.GetOptimisationPlan)
 								r.With(planAccessMW.RequirePlanEdit).Put("/", handlers.Finance.BEP.UpdateOptimisationPlan)
 								r.With(planAccessMW.RequirePlanEdit).Delete("/", handlers.Finance.BEP.DeleteOptimisationPlan)
@@ -550,40 +559,40 @@ func NewRouter(
 						// Shareholders
 						r.Get("/shareholders", handlers.Finance.CapTable.ListShareholders)
 						r.With(planAccessMW.RequirePlanEdit).Put("/shareholders", handlers.Finance.CapTable.UpsertShareholders)
-						r.With(planAccessMW.RequirePlanEdit).Delete("/shareholders/{id}", handlers.Finance.CapTable.DeleteShareholder)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableShareholder, "id")).Delete("/shareholders/{id}", handlers.Finance.CapTable.DeleteShareholder)
 
 						// Funding rounds
 						r.Get("/rounds", handlers.Finance.CapTable.ListCapTableRounds)
 						r.With(planAccessMW.RequirePlanEdit).Put("/rounds", handlers.Finance.CapTable.UpsertCapTableRounds)
-						r.With(planAccessMW.RequirePlanEdit).Delete("/rounds/{id}", handlers.Finance.CapTable.DeleteCapTableRound)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableRound, "id")).Delete("/rounds/{id}", handlers.Finance.CapTable.DeleteCapTableRound)
 						// FiPlan sync — one-way push of a round's AmountRaisedK → capital_increase line
-						r.With(planAccessMW.RequirePlanEdit).Post("/rounds/{roundId}/sync-to-fiplan", handlers.Finance.CapTable.SyncRoundToFiplan)
-						r.With(planAccessMW.RequirePlanEdit).Delete("/rounds/{roundId}/sync-to-fiplan", handlers.Finance.CapTable.UnlinkFromFiplan)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableRound, "roundId")).Post("/rounds/{roundId}/sync-to-fiplan", handlers.Finance.CapTable.SyncRoundToFiplan)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableRound, "roundId")).Delete("/rounds/{roundId}/sync-to-fiplan", handlers.Finance.CapTable.UnlinkFromFiplan)
 						// Opening balance sync — founding capital (capital social bloqué avant immatriculation)
-						r.With(planAccessMW.RequirePlanEdit).Post("/rounds/{roundId}/sync-to-opening-balance", handlers.Finance.CapTable.SyncRoundToOpeningBalance)
-						r.With(planAccessMW.RequirePlanEdit).Delete("/rounds/{roundId}/sync-to-opening-balance", handlers.Finance.CapTable.UnsyncRoundFromOpeningBalance)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableRound, "roundId")).Post("/rounds/{roundId}/sync-to-opening-balance", handlers.Finance.CapTable.SyncRoundToOpeningBalance)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableRound, "roundId")).Delete("/rounds/{roundId}/sync-to-opening-balance", handlers.Finance.CapTable.UnsyncRoundFromOpeningBalance)
 
 						// Stock option plans
 						r.Get("/option-plans", handlers.Finance.CapTable.ListOptionPlans)
 						r.With(planAccessMW.RequirePlanEdit).Put("/option-plans", handlers.Finance.CapTable.UpsertOptionPlans)
-						r.With(planAccessMW.RequirePlanEdit).Delete("/option-plans/{id}", handlers.Finance.CapTable.DeleteOptionPlan)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableOptionPlan, "id")).Delete("/option-plans/{id}", handlers.Finance.CapTable.DeleteOptionPlan)
 
 						// Option grants
 						r.Get("/option-grants", handlers.Finance.CapTable.ListOptionGrants)
 						r.With(planAccessMW.RequirePlanEdit).Put("/option-grants", handlers.Finance.CapTable.UpsertOptionGrants)
-						r.With(planAccessMW.RequirePlanEdit).Delete("/option-grants/{id}", handlers.Finance.CapTable.DeleteOptionGrant)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableOptionGrant, "id")).Delete("/option-grants/{id}", handlers.Finance.CapTable.DeleteOptionGrant)
 
 						// FastValo scenarios
 						r.Get("/valuation", handlers.Finance.CapTable.ListValuationScenarios)
 						r.With(planAccessMW.RequirePlanEdit).Post("/valuation", handlers.Finance.CapTable.CreateValuationScenario)
-						r.With(planAccessMW.RequirePlanEdit).Put("/valuation/{id}", handlers.Finance.CapTable.UpdateValuationScenario)
-						r.With(planAccessMW.RequirePlanEdit).Delete("/valuation/{id}", handlers.Finance.CapTable.DeleteValuationScenario)
-						r.Post("/valuation/{id}/compute", handlers.Finance.CapTable.ComputeValuationScenario)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableValuation, "id")).Put("/valuation/{id}", handlers.Finance.CapTable.UpdateValuationScenario)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableValuation, "id")).Delete("/valuation/{id}", handlers.Finance.CapTable.DeleteValuationScenario)
+						r.With(scopeMW.RequireCapTableEntityInScenario(middleware.CapTableValuation, "id")).Post("/valuation/{id}/compute", handlers.Finance.CapTable.ComputeValuationScenario)
 
 						// Scenario branches
 						r.Get("/branches", handlers.Finance.CapTable.ListCapTableBranches)
 						r.With(planAccessMW.RequirePlanEdit).Post("/branches", handlers.Finance.CapTable.CreateCapTableBranch)
-						r.With(planAccessMW.RequirePlanEdit).Put("/branches/{id}", handlers.Finance.CapTable.UpdateCapTableBranch)
+						r.With(planAccessMW.RequirePlanEdit, scopeMW.RequireCapTableEntityInScenario(middleware.CapTableBranch, "id")).Put("/branches/{id}", handlers.Finance.CapTable.UpdateCapTableBranch)
 
 						// Computed reports (report timeout already applied above)
 						r.Group(func(r chi.Router) {

@@ -89,8 +89,10 @@ func (h *BEPHandler) snapshotID(r *http.Request) (uuid.UUID, error) {
 	return parseUUIDParam(chi.URLParam(r, "snapshotId"))
 }
 
+// planIDParam reads the BEP optimisation plan ID. The route uses {optPlanId}
+// so the financial plan's {planId} higher up the tree is never shadowed.
 func (h *BEPHandler) planIDParam(r *http.Request) (uuid.UUID, error) {
-	return parseUUIDParam(chi.URLParam(r, "planId"))
+	return parseUUIDParam(chi.URLParam(r, "optPlanId"))
 }
 
 // ─── Snapshots ────────────────────────────────────────────────────────────────

@@ -150,6 +150,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	planAccessMW := middleware.NewPlanAccessMiddleware(repos.Plan, repos.PlanMember, repos.Scenario, log)
 	tierGateMW := middleware.NewTierGateMiddleware(log)
 	aiAccessMW := middleware.NewAIAccessMiddleware(services.AIUsagePolicy, log)
+	scopeMW := middleware.NewResourceScopeMiddleware(repos.Product, repos.BEP, repos.CapTable, log)
 	loggerMW := middleware.NewLoggerMiddleware(log.Logger)
 	recoverMW := middleware.NewRecoverMiddleware(log.Logger)
 	requestIDMW := middleware.NewRequestIDMiddleware()
@@ -161,7 +162,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	// 10. Router
 	// =========================================================================
 	r := router.NewRouter(
-		handlers, authMW, tenantMW, rbacMW, planAccessMW, tierGateMW, aiAccessMW,
+		handlers, authMW, tenantMW, rbacMW, planAccessMW, tierGateMW, aiAccessMW, scopeMW,
 		loggerMW, recoverMW, requestIDMW, securityMW, log,
 		cfg.AllowedOrigins,
 		cfg.MaxRequestBodyBytes,
