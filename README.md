@@ -274,6 +274,8 @@ The database is organised around four top-level concepts:
 
 Key tables: `tenants`, `users`, `plans`, `plan_members`, `scenarios`, `products`, `staff_headcounts`, `staff_salaries`, `staff_incentives`, `capex_entries`, `opex_entries`, `pnl_entries`, `fiplan_entries`, `wcr_entries`, `cash_overrides`, `budget_overrides`, `bep_snapshots`, `cap_table_*`, `scenario_snapshots`, `audit_log`, `ai_usage`.
 
+Deletes cascade through the hierarchy (migration `000016`): removing a plan removes its scenarios and members; removing a scenario removes every row keyed on it (settings, products and their assumptions, staff, entries, snapshots, BEP snapshots with their cost lines, optimisation plans and savings, cap-table rounds, shareholders, positions, option plans and grants). `audit_logs` is deliberately not linked, so history outlives its subject.
+
 ---
 
 ## Running Tests
