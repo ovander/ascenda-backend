@@ -61,36 +61,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: false
 
-      # Formatting is enforced on the files a pull request touches. The rest of
-      # the tree still carries historical drift; once a tree-wide `gofmt -w .`
-      # has landed, replace this step with `test -z "$(gofmt -l .)"`.
-      - name: gofmt on changed files
-        if: github.event_name == 'pull_request'
+      # The whole tree is gofmt-clean since the tree-wide reformat; any file
+      # that drifts fails the build, on pull requests and on main alike.
+      - name: gofmt (whole tree)
         run: |
-          files=$(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}"...HEAD -- '*.go' | grep -v '^vendor/' || true)
-          if [ -z "$files" ]; then echo "no Go files changed"; exit 0; fi
-          unformatted=$(gofmt -l $files)
+          unformatted=$(gofmt -l . | grep -v '^vendor/' || true)
           if [ -n "$unformatted" ]; then
-            echo "::error::gofmt: the following changed files are not formatted:"
+            echo "::error::gofmt: the following files are not formatted (run: gofmt -w .):"
             echo "$unformatted"
             gofmt -d $unformatted
             exit 1
           fi
-          echo "all changed Go files are gofmt-clean"
-
-      - name: gofmt (whole tree, informational)
-        if: github.event_name != 'pull_request'
-        run: |
-          count=$(gofmt -l . | wc -l | tr -d ' ')
-          echo "unformatted files in tree: $count"
+          echo "tree is gofmt-clean"
 
   integration:
     name: Database integration tests (testcontainers)

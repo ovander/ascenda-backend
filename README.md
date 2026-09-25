@@ -297,7 +297,7 @@ Integration tests live in `internal/repo` (repositories) and `internal/service` 
 |---|---|---|
 | Build, vet, unit tests | `go build`, `go vet`, `go test -short -race` | blocking |
 | golangci-lint | `.golangci.yml` (standard linters); pull requests fail only on **new** issues (`--new-from-rev`), pushes to `main` report the full backlog | blocking on PRs |
-| gofmt | changed `.go` files must be gofmt-clean; the tree-wide count is reported on `main` | blocking on PRs |
+| gofmt | the whole tree must be gofmt-clean (`gofmt -l .` empty); `.git-blame-ignore-revs` hides the one-off reformat from `git blame` | blocking |
 | Integration tests | `go test -tags integration ./internal/repo/... ./internal/service/...` (testcontainers) | blocking |
 | govulncheck | reachable vulnerabilities in dependencies | blocking |
 | Docker image | `docker build` of the Dockerfile (no push) | blocking |
@@ -506,6 +506,7 @@ make test-compute       # compute package tests only
 
 make lint               # golangci-lint
 make fmt                # gofmt + goimports
+git config blame.ignoreRevsFile .git-blame-ignore-revs   # once per clone: skip the tree-wide reformat in git blame
 make vet                # go vet
 
 make migrate-up         # apply pending migrations
