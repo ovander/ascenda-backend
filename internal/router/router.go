@@ -220,7 +220,8 @@ func NewRouter(
 				r.With(rbacMW.RequirePermission(middleware.PermManageTenant)).Put("/", handlers.Admin.Tenant.Update)
 			})
 
-		// Audit trail — tenant-scoped, all authenticated users can read.
+		// Audit trail — scoped by AuditHandler to the plans the caller can access
+		// (owners see the whole tenant); entries of other plans read as 404.
 		r.Route("/audit", func(r chi.Router) {
 			r.Get("/", handlers.Plans.Audit.List)
 			r.Post("/export", handlers.Plans.Audit.RecordExport)

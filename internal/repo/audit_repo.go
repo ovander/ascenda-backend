@@ -50,6 +50,32 @@ func (r *AuditRepo) CountByTenant(tenantID uuid.UUID) (int64, error) {
 	return count, err
 }
 
+// ListByTenantAndEntities retrieves audit logs whose entity_id is in entityIDs.
+func (r *AuditRepo) ListByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
+	if len(entityIDs) == 0 {
+		return []*model.AuditLog{}, nil
+	}
+	var logs []*model.AuditLog
+	err := r.db.Where("tenant_id = ? AND entity_id IN ?", tenantID, entityIDs).
+		Offset(offset).
+		Limit(limit).
+		Order("created_at DESC").
+		Find(&logs).Error
+	return logs, err
+}
+
+// CountByTenantAndEntities counts audit logs whose entity_id is in entityIDs.
+func (r *AuditRepo) CountByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID) (int64, error) {
+	if len(entityIDs) == 0 {
+		return 0, nil
+	}
+	var count int64
+	err := r.db.Model(&model.AuditLog{}).
+		Where("tenant_id = ? AND entity_id IN ?", tenantID, entityIDs).
+		Count(&count).Error
+	return count, err
+}
+
 // GetByID retrieves a single audit log entry by its primary key within a tenant.
 func (r *AuditRepo) GetByID(tenantID, entryID uuid.UUID) (*model.AuditLog, error) {
 	var log model.AuditLog

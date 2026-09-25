@@ -158,6 +158,12 @@ func (r *mockAuditRepo) ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*
 }
 func (r *mockAuditRepo) CountByTenant(tenantID uuid.UUID) (int64, error)                             { return 0, nil }
 func (r *mockAuditRepo) GetByID(tenantID, entryID uuid.UUID) (*model.AuditLog, error)               { return nil, nil }
+func (r *mockAuditRepo) ListByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
+	return nil, nil
+}
+func (r *mockAuditRepo) CountByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID) (int64, error) {
+	return 0, nil
+}
 func (r *mockAuditRepo) ListByEntityID(tenantID, entityID uuid.UUID) ([]*model.AuditLog, error)     { return nil, nil }
 func (r *mockAuditRepo) ListByUser(tenantID, userID uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
 	return nil, nil

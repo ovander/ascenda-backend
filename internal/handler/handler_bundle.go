@@ -94,7 +94,7 @@ func NewHandlerBundle(services *service.ServiceBundle, repos *repo.RepoBundle, d
 			Settings:         NewSettingsHandler(services.Settings, logger),
 			Snapshot:         NewSnapshotHandler(services.Snapshot, logger),
 			PlanMember:       NewPlanMemberHandler(repos.PlanMember, logger),
-			Audit:            NewAuditHandler(repos.Audit, services.Snapshot, logger),
+			Audit:            NewAuditHandler(repos.Audit, services.Snapshot, service.NewPlanAccessResolver(repos.Plan, repos.PlanMember, repos.Scenario), repos.Scenario, logger),
 		},
 		Finance: FinanceHandlers{
 			Product:  NewProductHandler(services.Product, logger),
