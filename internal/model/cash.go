@@ -53,10 +53,10 @@ type CashMonthlyOverride struct {
 	TenantScoped
 	ScenarioID uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
 	LineID     CashLineID      `gorm:"type:varchar(100);not null" json:"lineId"`
-	YearIndex  int             `gorm:"not null" json:"yearIndex"`          // 1-3
-	Month      int             `gorm:"not null" json:"month"`              // 1-12
-	SubIndex   int             `gorm:"not null;default:0" json:"subIndex"` // product/role index
-	Amount     decimal.Decimal `gorm:"type:numeric(15,2)" json:"amount"`
+	YearIndex  int             `gorm:"type:integer;not null" json:"yearIndex"`          // 1-3
+	Month      int             `gorm:"type:integer;not null" json:"month"`              // 1-12
+	SubIndex   int             `gorm:"type:integer;not null;default:0" json:"subIndex"` // product/role index
+	Amount     decimal.Decimal `gorm:"type:numeric(15,2);not null;default:0" json:"amount"`
 }
 
 func (CashMonthlyOverride) TableName() string {
