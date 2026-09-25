@@ -26,6 +26,7 @@ func TestCompetitionParams_Validate(t *testing.T) {
 		"wins+top10 above cuts": {func(p *CompetitionParams) { p.Wins[2], p.Cuts[2], p.Events[2] = 3, 2, 5 }, "year 3: wins plus top-10 finishes (3) exceed cuts made (2)"},
 		"negative events":       {func(p *CompetitionParams) { p.Events[1] = -1 }, "year 2: events must not be negative"},
 		"negative travel":       {func(p *CompetitionParams) { p.TravelPerEvent[4] = decimal.NewFromInt(-5) }, "year 5: travelPerEvent must not be negative"},
+		"negative coach fee":    {func(p *CompetitionParams) { p.CoachAnnualFee[3] = decimal.NewFromInt(-1) }, "year 4: coachAnnualFee must not be negative"},
 		"share above one":       {func(p *CompetitionParams) { p.CoachShare[0] = decimal.NewFromInt(7) }, "year 1: coachShare must be a fraction between 0 and 1"},
 		"shares together above 1": {func(p *CompetitionParams) {
 			p.CaddieShare[0], p.CoachShare[0] = decimal.NewFromFloat(0.6), decimal.NewFromFloat(0.5)

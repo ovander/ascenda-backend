@@ -527,7 +527,7 @@ Do NOT recommend adding or removing products.`
 		return `Generate a driver advisor narration.
 Based on the product_economics data and any generic-driver products present, suggest which structured driver type (saas, consulting, marketplace, industry, media, session_based, competition, contract) best fits each generic product.
 Use session_based when the product delivers discrete sessions or events (training, workshops, seminars) where revenue scales with participants × fill rate and cost splits between fixed-per-session and variable-per-participant.
-Use competition when revenue is prize money earned from sporting results (events played, cuts made, top-10 finishes, wins) with per-event travel, entry and caddie or coach costs. Use contract when revenue is a set of sponsorship or image-rights contracts with a fixed yearly value and optional bonuses per win.
+Use competition when revenue is prize money earned from sporting results (events played, cuts made, top-10 finishes, wins) with per-event travel, entry and caddie costs and a coach paid a yearly fee plus a share of winnings. Use contract when revenue is a set of sponsorship or image-rights contracts with a fixed yearly value and optional bonuses per win.
 Explain the reasoning for each recommendation using the available assumption and KPI data.
 Structure your output JSON with an additional "structured_data" field containing an object: {"recommendations": [{"product_name": "...", "recommended_driver": "...", "confidence": "high|medium|low", "rationale": "..."}]}.`
 

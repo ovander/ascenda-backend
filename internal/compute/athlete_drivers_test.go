@@ -4,8 +4,9 @@ package compute
 // forecast of a touring golf professional (spreadsheet model, three career
 // scenarios). Inputs are the spreadsheet's assumptions; expected values are
 // the spreadsheet's own results: prize money (main circuit + other events),
-// per-event costs (entry, travel, caddie fixed + share of winnings), and
-// sponsorship and image-rights revenue including the bonus per win.
+// direct costs (entry, travel, caddie fixed + share of winnings per event,
+// and the coach's annual fee), and sponsorship and image-rights revenue
+// including the bonus per win.
 
 import (
 	"encoding/json"
@@ -38,6 +39,7 @@ type referenceScenario struct {
 	tours                                   [5]tourEconomics
 	events, cuts, top10s, wins              [5]int64
 	other, entry, travel, caddieFix, caddie [5]float64
+	coachAnnual                             [5]float64
 	sponsoring, image                       []contractRow
 	// expected spreadsheet results
 	expGains, expCosts, expSponsoring, expImage [5]float64
@@ -52,6 +54,7 @@ var referenceScenarios = []referenceScenario{
 		other: [5]float64{1776.67, 2000, 2000, 2000, 0},
 		entry: [5]float64{350, 300, 300, 300, 0}, travel: [5]float64{1100, 2100, 2100, 2200, 3800},
 		caddieFix: [5]float64{0, 1000, 1000, 1200, 2000}, caddie: [5]float64{0, 0.07, 0.07, 0.07, 0.08},
+		coachAnnual: [5]float64{8000, 14000, 14000, 15000, 30000},
 		sponsoring: []contractRow{
 			{[5]float64{0, 6000, 6000, 6000, 30000}, 500},
 			{[5]float64{0, 4000, 4000, 4000, 5000}, 0},
@@ -59,7 +62,7 @@ var referenceScenarios = []referenceScenario{
 		},
 		image:         []contractRow{{[5]float64{0, 0, 0, 0, 10000}, 0}},
 		expGains:      [5]float64{40689.67, 36500, 53500, 132000, 246000},
-		expCosts:      [5]float64{30450, 77355, 85345, 98040, 170480},
+		expCosts:      [5]float64{30450 + 8000, 77355 + 14000, 85345 + 14000, 98040 + 15000, 170480 + 30000},
 		expSponsoring: [5]float64{0, 10000, 10000, 10500, 45000},
 		expImage:      [5]float64{0, 0, 0, 0, 10000},
 	},
@@ -71,6 +74,7 @@ var referenceScenarios = []referenceScenario{
 		other: [5]float64{1776.67, 2000, 3000, 0, 0},
 		entry: [5]float64{350, 300, 300, 0, 0}, travel: [5]float64{1100, 2200, 2300, 3800, 4000},
 		caddieFix: [5]float64{0, 1200, 1300, 2000, 2200}, caddie: [5]float64{0, 0.07, 0.07, 0.08, 0.08},
+		coachAnnual: [5]float64{8000, 15000, 18000, 30000, 35000},
 		sponsoring: []contractRow{
 			{[5]float64{0, 6000, 6000, 30000, 50000}, 1000},
 			{[5]float64{0, 4000, 4000, 5000, 5000}, 0},
@@ -78,7 +82,7 @@ var referenceScenarios = []referenceScenario{
 		},
 		image:         []contractRow{{[5]float64{0, 0, 0, 10000, 25000}, 0}},
 		expGains:      [5]float64{40689.67, 56000, 138000, 258000, 450000},
-		expCosts:      [5]float64{30450, 92720, 111060, 171440, 209600},
+		expCosts:      [5]float64{30450 + 8000, 92720 + 15000, 111060 + 18000, 171440 + 30000, 209600 + 35000},
 		expSponsoring: [5]float64{0, 10000, 11000, 45000, 85000},
 		expImage:      [5]float64{0, 0, 0, 10000, 25000},
 	},
@@ -90,6 +94,7 @@ var referenceScenarios = []referenceScenario{
 		other: [5]float64{1776.67, 3000, 0, 0, 0},
 		entry: [5]float64{350, 300, 0, 0, 0}, travel: [5]float64{1100, 2300, 3800, 4200, 4500},
 		caddieFix: [5]float64{0, 1300, 2000, 2200, 2500}, caddie: [5]float64{0, 0.07, 0.08, 0.08, 0.09},
+		coachAnnual: [5]float64{8000, 18000, 30000, 40000, 50000},
 		sponsoring: []contractRow{
 			{[5]float64{0, 6000, 30000, 50000, 70000}, 2000},
 			{[5]float64{0, 4000, 5000, 5000, 5000}, 0},
@@ -97,7 +102,7 @@ var referenceScenarios = []referenceScenario{
 		},
 		image:         []contractRow{{[5]float64{0, 0, 10000, 25000, 40000}, 0}},
 		expGains:      [5]float64{40689.67, 145000, 360000, 920000, 1010000},
-		expCosts:      [5]float64{30450, 103750, 179600, 252800, 286900},
+		expCosts:      [5]float64{30450 + 8000, 103750 + 18000, 179600 + 30000, 252800 + 40000, 286900 + 50000},
 		expSponsoring: [5]float64{0, 12000, 45000, 89000, 129000},
 		expImage:      [5]float64{0, 0, 10000, 25000, 40000},
 	},
@@ -113,6 +118,7 @@ func (s referenceScenario) competitionParams() model.CompetitionParams {
 		p.OtherPrizeMoney[y] = decf(s.other[y])
 		p.EntryFeePerEvent[y], p.TravelPerEvent[y] = decf(s.entry[y]), decf(s.travel[y])
 		p.CaddieFeePerEvent[y], p.CaddieShare[y] = decf(s.caddieFix[y]), decf(s.caddie[y])
+		p.CoachAnnualFee[y] = decf(s.coachAnnual[y])
 	}
 	return p
 }
@@ -170,7 +176,7 @@ func TestAthleteDrivers_ReproduceReferenceForecast(t *testing.T) {
 
 			for y := 0; y < 5; y++ {
 				assertCents(t, s.expGains[y], prizeRevenue[y], "year %d prize money", y+1)
-				assertCents(t, s.expCosts[y], prizeCosts[y], "year %d per-event costs", y+1)
+				assertCents(t, s.expCosts[y], prizeCosts[y], "year %d direct costs", y+1)
 				assertCents(t, s.expSponsoring[y], sponsoringRevenue[y], "year %d sponsoring", y+1)
 				assertCents(t, s.expImage[y], imageRevenue[y], "year %d image rights", y+1)
 				assert.True(t, sponsoringCosts[y].IsZero(), "contracts carry no direct cost")
@@ -179,18 +185,40 @@ func TestAthleteDrivers_ReproduceReferenceForecast(t *testing.T) {
 	}
 }
 
-func TestCompetitionDriver_CoachCostWorksLikeCaddie(t *testing.T) {
+func TestCompetitionDriver_CoachIsAnnualFeePlusShareOfWinnings(t *testing.T) {
 	var p model.CompetitionParams
 	p.Events[0], p.Cuts[0], p.Wins[0] = 10, 5, 1
 	p.PrizePerWin[0], p.PrizePerCut[0] = decf(40000), decf(2000) // gains = 40 000 + 4 × 2 000 = 48 000
 	p.CaddieFeePerEvent[0], p.CaddieShare[0] = decf(1000), decf(0.07)
-	p.CoachFeePerEvent[0], p.CoachShare[0] = decf(500), decf(0.05)
+	p.CoachAnnualFee[0], p.CoachShare[0] = decf(12000), decf(0.05)
 
 	revenue, costs := revenueOf(t, product(t, "Prize", model.DriverCompetition, p), DriverContext{})
 
 	assertCents(t, 48000, revenue[0], "gains")
-	// 10 × (1 000 + 500) + 12 % × 48 000
-	assertCents(t, 15000+5760, costs[0], "caddie and coach: fixed per event plus share of winnings")
+	// caddie 10 × 1 000, coach 12 000 for the year, shares 12 % × 48 000
+	assertCents(t, 10000+12000+5760, costs[0], "caddie per event, coach per year, both plus a share of winnings")
+}
+
+func TestCompetitionDriver_LegacyPerEventCoachFeeKeepsItsCost(t *testing.T) {
+	// Parameters saved by the first version of the driver carry a coach fee
+	// per event; it is costed as fee × events on top of the annual fee.
+	raw := []byte(`{"events":[8,0,0,0,0],"cuts":[4,0,0,0,0],"prizePerCut":[1000,0,0,0,0],"coachFeePerEvent":[500,0,0,0,0]}`)
+	p := model.Product{TenantScoped: model.TenantScoped{ID: uuid.New()}, DriverType: model.DriverCompetition, DriverParams: raw}
+
+	revenue, costs := revenueOf(t, p, DriverContext{})
+
+	assertCents(t, 4000, revenue[0], "gains")
+	assertCents(t, 4000, costs[0], "8 events × 500 legacy coach fee")
+}
+
+func TestCompetitionDriver_CoachPaidInAYearWithoutEventsIsKept(t *testing.T) {
+	var p model.CompetitionParams
+	p.CoachAnnualFee[1] = decf(9000)
+
+	revenue, costs := revenueOf(t, product(t, "Prize", model.DriverCompetition, p), DriverContext{})
+
+	assert.True(t, revenue[1].IsZero())
+	assertCents(t, 9000, costs[1], "the coach's annual fee is a cost even without events")
 }
 
 func TestCompetitionDriver_OtherPrizeMoneyWithoutEventsIsKept(t *testing.T) {
