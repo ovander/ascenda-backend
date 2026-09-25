@@ -29,6 +29,14 @@ type Config struct {
 	// MetricsEnabled exposes GET /metrics (Prometheus) when true.
 	MetricsEnabled bool
 
+	// AllowDefaultTenantFallback lets the tenant middleware provision users
+	// whose JWT carries no tenant_id and who have no user record into the
+	// seeded default workspace tenant. This is a local-development convenience
+	// only: in any other environment such requests are rejected with 403.
+	// Env: TENANT_DEFAULT_FALLBACK. Default: true in development, false otherwise.
+	// Validate() refuses to start in production when it is enabled.
+	AllowDefaultTenantFallback bool
+
 	Socrate SocrateConfig
 	AI      AIConfig
 	DBPool  DBPoolConfig
@@ -48,13 +56,13 @@ type SocrateConfig struct {
 
 // AIConfig holds AI service configuration.
 type AIConfig struct {
-	Provider      string   // "openai" or "claude"
+	Provider      string // "openai" or "claude"
 	APIKey        string
 	Model         string
 	AllowedModels []string // optional allow-list for Claude models
 	MaxTokens     int
 	Temperature   float64
-	Timeout       int  // HTTP timeout in seconds
+	Timeout       int // HTTP timeout in seconds
 	EnableCache   bool
 }
 
@@ -91,6 +99,13 @@ func load() *Config {
 	}
 	autoMigrate := envOrDefault("DB_AUTO_MIGRATE", autoMigrateDefault) == "true"
 
+	// TENANT_DEFAULT_FALLBACK: only defaults to true for local development.
+	tenantFallbackDefault := "false"
+	if env == "development" {
+		tenantFallbackDefault = "true"
+	}
+	allowDefaultTenant := envOrDefault("TENANT_DEFAULT_FALLBACK", tenantFallbackDefault) == "true"
+
 	// Parse AI_ALLOWED_MODELS into a slice.
 	var allowedModels []string
 	if raw := envOrDefault("AI_ALLOWED_MODELS", ""); raw != "" {
@@ -110,15 +125,16 @@ func load() *Config {
 	}
 
 	return &Config{
-		Env:                 env,
-		Port:                envOrDefaultInt("PORT", 8080),
-		LogLevel:            envOrDefault("LOG_LEVEL", ""),
-		DatabaseURL:         envOrDefault("DATABASE_URL", "postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable"),
-		AllowedOrigins:      origins,
-		AppBaseURL:          envOrDefault("APP_BASE_URL", "http://localhost:8080"),
-		AutoMigrate:         autoMigrate,
-		MaxRequestBodyBytes: int64(envOrDefaultInt("MAX_REQUEST_BODY_BYTES", 1<<20)), // 1 MiB
-		MetricsEnabled:      envOrDefault("METRICS_ENABLED", "false") == "true",
+		Env:                        env,
+		Port:                       envOrDefaultInt("PORT", 8080),
+		LogLevel:                   envOrDefault("LOG_LEVEL", ""),
+		DatabaseURL:                envOrDefault("DATABASE_URL", "postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable"),
+		AllowedOrigins:             origins,
+		AppBaseURL:                 envOrDefault("APP_BASE_URL", "http://localhost:8080"),
+		AutoMigrate:                autoMigrate,
+		MaxRequestBodyBytes:        int64(envOrDefaultInt("MAX_REQUEST_BODY_BYTES", 1<<20)), // 1 MiB
+		MetricsEnabled:             envOrDefault("METRICS_ENABLED", "false") == "true",
+		AllowDefaultTenantFallback: allowDefaultTenant,
 
 		Socrate: SocrateConfig{
 			BaseURL:      envOrDefault("SOCRATE_BASE_URL", ""),
@@ -177,6 +193,10 @@ func (c *Config) Validate() error {
 		}
 		if c.Socrate.RedirectURL == "" {
 			errs = append(errs, "SOCRATE_REDIRECT_URL")
+		}
+		if c.AllowDefaultTenantFallback {
+			// Hard error: the fallback places unknown users into a shared tenant.
+			errs = append(errs, "TENANT_DEFAULT_FALLBACK must not be enabled in production")
 		}
 		if c.AutoMigrate {
 			// Warn — not a hard error, but operators should be aware.

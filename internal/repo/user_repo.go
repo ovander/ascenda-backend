@@ -45,6 +45,20 @@ func (r *UserRepo) GetByEmail(tenantID uuid.UUID, email string) (*model.User, er
 	return &user, nil
 }
 
+// GetPendingInviteByEmail returns the oldest unclaimed invitation (empty
+// external_id) for the given email, matched case-insensitively across tenants.
+func (r *UserRepo) GetPendingInviteByEmail(email string) (*model.User, error) {
+	var user model.User
+	err := r.db.
+		Where("LOWER(email) = LOWER(?) AND (external_id = '' OR external_id IS NULL)", email).
+		Order("created_at ASC").
+		First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (r *UserRepo) ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*model.User, int64, error) {
 	var users []*model.User
 	var total int64

@@ -171,6 +171,9 @@ func (m *mockAdminUserRepo) GetByID(_ uuid.UUID, id uuid.UUID) (*model.User, err
 	}
 	return u, nil
 }
+func (m *mockAdminUserRepo) GetPendingInviteByEmail(email string) (*model.User, error) {
+	return nil, errors.New("not found")
+}
 func (m *mockAdminUserRepo) GetByExternalID(extID string) (*model.User, error) {
 	u, ok := m.byExternalID[extID]
 	if !ok {

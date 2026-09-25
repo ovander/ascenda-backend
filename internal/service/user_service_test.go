@@ -49,6 +49,15 @@ func (m *MockUserRepo) GetByEmail(tenantID uuid.UUID, email string) (*model.User
 	return m.users[tenantID.String()+":email:"+email], nil
 }
 
+func (m *MockUserRepo) GetPendingInviteByEmail(email string) (*model.User, error) {
+	for _, u := range m.users {
+		if u.ExternalID == "" && u.Email == email {
+			return u, nil
+		}
+	}
+	return nil, &notFoundErr{}
+}
+
 func (m *MockUserRepo) ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*model.User, int64, error) {
 	var result []*model.User
 	for _, u := range m.users {

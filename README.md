@@ -223,6 +223,7 @@ make docker-compose-down   # stops everything
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | auto from `APP_ENV` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable` |
 | `DB_AUTO_MIGRATE` | Run migrations on startup | `true` |
+| `TENANT_DEFAULT_FALLBACK` | Provision users with no tenant claim and no user record into the seeded default workspace. **Development only** — the server refuses to start in production when enabled. | `true` in `development`, else `false` |
 | `DB_MAX_OPEN_CONNS` | Max open DB connections | `25` |
 | `DB_MAX_IDLE_CONNS` | Max idle DB connections | `5` |
 | `DB_CONN_MAX_LIFETIME` | Connection max lifetime (seconds) | `3600` |
@@ -414,7 +415,13 @@ POST /api/v1/audit/export                                             # record e
 
 ### Multi-tenancy
 
-Every database query is scoped to a `tenant_id` extracted from the JWT and stored in the request context via `ctxutil.WithTenantID` / `ctxutil.GetTenantID`. The middleware rejects requests where the tenant claim is missing or invalid before they reach handlers.
+Every database query is scoped to a `tenant_id` stored in the request context via `ctxutil.WithTenantID` / `ctxutil.GetTenantID`. The tenant middleware (`internal/middleware/tenant.go`) resolves it in this order, with the Ascenda `users` record as the source of truth:
+
+1. JWT role `admin` → platform operator, no tenant context.
+2. A `users` record matching the JWT subject → its `tenant_id`, role and plan apply. A `tenant_id` claim that disagrees with the record is logged and ignored. Deactivated users get `403`.
+3. No record, but a pending invitation (empty `external_id`) matches the user's e-mail → the invitation is claimed.
+4. No record, but the JWT carries a `tenant_id` of an existing tenant → the user is provisioned there (first member becomes `owner`, others `editor`).
+5. Otherwise the request is rejected with `403` (`account is not linked to a workspace`). Only when `TENANT_DEFAULT_FALLBACK=true` (development) is the user provisioned into the seeded default workspace instead.
 
 ### Rate Limiting
 

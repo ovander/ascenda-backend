@@ -51,6 +51,11 @@ type UserRepository interface {
 	GetByID(tenantID, userID uuid.UUID) (*model.User, error)
 	GetByExternalID(externalID string) (*model.User, error)
 	GetByEmail(tenantID uuid.UUID, email string) (*model.User, error)
+	// GetPendingInviteByEmail returns the oldest user record matching email
+	// (case-insensitive) that has not yet been linked to an identity-provider
+	// account (empty external_id), across all tenants. Used by the tenant
+	// middleware to claim an invitation on the invitee's first login.
+	GetPendingInviteByEmail(email string) (*model.User, error)
 	ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*model.User, int64, error)
 	Update(user *model.User) error
 	CountByTenant(tenantID uuid.UUID) (int64, error)
