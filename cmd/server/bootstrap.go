@@ -151,6 +151,11 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	tierGateMW := middleware.NewTierGateMiddleware(log)
 	aiAccessMW := middleware.NewAIAccessMiddleware(services.AIUsagePolicy, log)
 	scopeMW := middleware.NewResourceScopeMiddleware(repos.Product, repos.BEP, repos.CapTable, log)
+	trustedProxies, err := middleware.ParseTrustedProxies(cfg.TrustedProxyCIDRs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid TRUSTED_PROXY_CIDRS: %w", err)
+	}
+	mwLog.WithField("trusted_proxies", cfg.TrustedProxyCIDRs).Info("rate limiter client-IP resolution configured")
 	loggerMW := middleware.NewLoggerMiddleware(log.Logger)
 	recoverMW := middleware.NewRecoverMiddleware(log.Logger)
 	requestIDMW := middleware.NewRequestIDMiddleware()
@@ -167,6 +172,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 		cfg.AllowedOrigins,
 		cfg.MaxRequestBodyBytes,
 		cfg.MetricsEnabled,
+		trustedProxies,
 	)
 
 	// Wrap outermost handler with Sentry HTTP middleware when DSN is set.

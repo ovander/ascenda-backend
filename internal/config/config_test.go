@@ -49,3 +49,11 @@ func TestValidate_RefusesDefaultTenantFallbackInProduction(t *testing.T) {
 	cfg.AllowDefaultTenantFallback = false
 	assert.NoError(t, cfg.Validate())
 }
+
+func TestTrustedProxyCIDRs(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDRS", "")
+	assert.Equal(t, []string{"127.0.0.1/32", "::1/128"}, Load().TrustedProxyCIDRs, "default trusts loopback only")
+
+	t.Setenv("TRUSTED_PROXY_CIDRS", " 10.0.0.0/8 , 192.168.1.5 ,")
+	assert.Equal(t, []string{"10.0.0.0/8", "192.168.1.5"}, Load().TrustedProxyCIDRs)
+}

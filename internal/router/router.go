@@ -34,6 +34,7 @@ func NewRouter(
 	allowedOrigins []string,
 	maxBodyBytes int64,
 	metricsEnabled bool,
+	trustedProxies middleware.TrustedProxies,
 ) *chi.Mux {
 	r := chi.NewRouter()
 
@@ -59,9 +60,20 @@ func NewRouter(
 	// Raising this value above WriteTimeout would cause ERR_EMPTY_RESPONSE.
 	aiTimeout := middleware.TimeoutMiddleware(120 * time.Second)
 
-	// Rate limiters
-	generalLimiter := middleware.NewRateLimiter(100, 20) // 100 req/s, burst 20
-	reportLimiter := middleware.NewRateLimiter(10, 5)    // 10 req/s, burst 5
+	// Rate limiters. Every limiter falls back to the client IP when its
+	// preferred key is unavailable — none of them passes requests through.
+	//
+	//   authLimiter     — all /auth routes, per client IP (token exchange, refresh, logout).
+	//   signupLimiter   — /auth/register and /auth/magic-link, per client IP; these
+	//                     create IdP accounts / send e-mail, so a small burst then a
+	//                     slow refill (1 request every 5 s) is enough for humans.
+	//   generalLimiter  — authenticated API, per user (JWT subject).
+	//   reportLimiter   — compute-heavy reports and AI, per tenant (fair share between
+	//                     workspaces), falling back to user then IP.
+	authLimiter := middleware.NewRateLimiter(20, 10, middleware.KeyByClientIP(trustedProxies), trustedProxies)
+	signupLimiter := middleware.NewRateLimiter(0.2, 5, middleware.KeyByClientIP(trustedProxies), trustedProxies)
+	generalLimiter := middleware.NewRateLimiter(100, 20, middleware.KeyByUser, trustedProxies) // 100 req/s, burst 20 per user
+	reportLimiter := middleware.NewRateLimiter(10, 5, middleware.KeyByTenant, trustedProxies)  // 10 req/s, burst 5 per tenant
 
 	// Health check routes (no auth required)
 	r.Route("/health", func(r chi.Router) {
@@ -81,10 +93,12 @@ func NewRouter(
 		logger.WithField("phase", "router").Info("Prometheus /metrics endpoint enabled")
 	}
 
-	// Auth routes (no tenant context required)
+	// Auth routes (no tenant context required) — rate-limited per client IP.
 	r.Route("/auth", func(r chi.Router) {
-		// Self-service registration — unauthenticated, rate-limited.
-		r.With(middleware.NewRateLimiter(5, 2).Handler).Post("/register", handlers.Admin.Auth.Register)
+		r.Use(authLimiter.Handler)
+
+		// Self-service registration — unauthenticated, strictly rate-limited.
+		r.With(signupLimiter.Handler).Post("/register", handlers.Admin.Auth.Register)
 		r.Post("/login", handlers.Admin.Auth.Login)
 		r.Post("/callback", handlers.Admin.Auth.Callback)
 		r.Post("/refresh", handlers.Admin.Auth.Refresh)
@@ -93,7 +107,7 @@ func NewRouter(
 		// Passwordless magic-link sign-in.
 		// POST /auth/magic-link   — request a sign-in link (always 202, anti-enumeration).
 		// GET  /auth/magic-link/verify — browser follows link from email; redirects to Socrate PKCE flow.
-		r.With(middleware.NewRateLimiter(5, 2).Handler).Post("/magic-link", handlers.Admin.MagicLink.Send)
+		r.With(signupLimiter.Handler).Post("/magic-link", handlers.Admin.MagicLink.Send)
 		r.Get("/magic-link/verify", handlers.Admin.MagicLink.Verify)
 	})
 

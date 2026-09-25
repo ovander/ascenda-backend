@@ -29,6 +29,13 @@ type Config struct {
 	// MetricsEnabled exposes GET /metrics (Prometheus) when true.
 	MetricsEnabled bool
 
+	// TrustedProxyCIDRs lists the reverse proxies whose X-Forwarded-For /
+	// X-Real-IP headers are trusted when deriving the client IP for rate
+	// limiting. Requests from any other peer are keyed on the TCP peer address.
+	// Env: TRUSTED_PROXY_CIDRS (comma-separated CIDRs or IPs).
+	// Default: loopback only, matching a reverse proxy on the same host.
+	TrustedProxyCIDRs []string
+
 	// AllowDefaultTenantFallback lets the tenant middleware provision users
 	// whose JWT carries no tenant_id and who have no user record into the
 	// seeded default workspace tenant. This is a local-development convenience
@@ -116,6 +123,14 @@ func load() *Config {
 		}
 	}
 
+	// Parse TRUSTED_PROXY_CIDRS, trimming whitespace from each entry.
+	var trustedProxies []string
+	for _, c := range strings.Split(envOrDefault("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128"), ",") {
+		if t := strings.TrimSpace(c); t != "" {
+			trustedProxies = append(trustedProxies, t)
+		}
+	}
+
 	// Parse CORS_ORIGINS, trimming whitespace from each entry.
 	var origins []string
 	for _, o := range strings.Split(envOrDefault("CORS_ORIGINS", "http://localhost:5173"), ",") {
@@ -135,6 +150,7 @@ func load() *Config {
 		MaxRequestBodyBytes:        int64(envOrDefaultInt("MAX_REQUEST_BODY_BYTES", 1<<20)), // 1 MiB
 		MetricsEnabled:             envOrDefault("METRICS_ENABLED", "false") == "true",
 		AllowDefaultTenantFallback: allowDefaultTenant,
+		TrustedProxyCIDRs:          trustedProxies,
 
 		Socrate: SocrateConfig{
 			BaseURL:      envOrDefault("SOCRATE_BASE_URL", ""),
