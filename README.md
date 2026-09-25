@@ -223,6 +223,7 @@ make docker-compose-down   # stops everything
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | auto from `APP_ENV` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable` |
 | `DB_AUTO_MIGRATE` | Run migrations on startup | `true` |
+| `TRUSTED_PROXY_CIDRS` | Reverse proxies whose `X-Forwarded-For` / `X-Real-IP` are trusted for rate-limiting client IPs (comma-separated CIDRs or IPs) | `127.0.0.1/32,::1/128` |
 | `TENANT_DEFAULT_FALLBACK` | Provision users with no tenant claim and no user record into the seeded default workspace. **Development only** — the server refuses to start in production when enabled. | `true` in `development`, else `false` |
 | `DB_MAX_OPEN_CONNS` | Max open DB connections | `25` |
 | `DB_MAX_IDLE_CONNS` | Max idle DB connections | `5` |
@@ -425,7 +426,16 @@ Every database query is scoped to a `tenant_id` stored in the request context vi
 
 ### Rate Limiting
 
-A per-tenant token-bucket limiter (`internal/middleware/ratelimit.go`) is applied to all compute-heavy endpoints. Default: **10 req/s, burst 10**. Idle tenant entries are evicted after 10 minutes to bound memory usage.
+Keyed token-bucket limiters (`internal/middleware/ratelimit.go`) protect four groups of routes. A limiter never passes a request through unkeyed: when its preferred key is missing it falls back to the next one, ending with the client IP.
+
+| Routes | Key | Limit |
+|---|---|---|
+| `/auth/*` | client IP | 20 req/s, burst 10 |
+| `POST /auth/register`, `POST /auth/magic-link` | client IP | 1 req / 5 s, burst 5 |
+| `/api/v1/*` (authenticated) | user (JWT subject) | 100 req/s, burst 20 |
+| reports, graphs, cap-table/BEP reports, `/ai/*` | tenant → user → IP | 10 req/s, burst 5 |
+
+The client IP is the TCP peer unless the peer is listed in `TRUSTED_PROXY_CIDRS` (default: loopback, i.e. a reverse proxy on the same host), in which case the rightmost non-proxy `X-Forwarded-For` entry (or `X-Real-IP`) is used. Idle buckets are evicted after 10 minutes to bound memory usage.
 
 The `/graphs/annual/all` batch endpoint was specifically introduced so that the graphs dashboard can fetch all 7 annual charts in a single HTTP request — avoiding burst exhaustion when charts were previously fetched in parallel.
 
