@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
@@ -34,17 +35,25 @@ func newCascadeFixture(t *testing.T, db *gorm.DB) cascadeFixture {
 	tenant := makeTenant(t, db)
 	owner := makeOwner(t, db, tenant.ID)
 	plan := makePlan(t, db, tenant.ID, owner.ID)
-	scen := makeScenario(t, db, tenant.ID, plan.ID)
-	f := cascadeFixture{tenantID: tenant.ID, planID: plan.ID, scenID: scen.ID}
+	return populatePlan(t, db, tenant.ID, owner.ID, plan.ID)
+}
 
-	scoped := func() model.TenantScoped { return model.TenantScoped{ID: uuid.New(), TenantID: tenant.ID} }
+// populatePlan gives plan one scenario with a row in every dependent table
+// family and one plan member, and returns the fixture describing it.
+func populatePlan(t *testing.T, db *gorm.DB, tenantID, ownerID, planID uuid.UUID) cascadeFixture {
+	t.Helper()
+	scen := makeScenario(t, db, tenantID, planID)
+	f := cascadeFixture{tenantID: tenantID, planID: planID, scenID: scen.ID}
+	owner := &model.User{ID: ownerID}
+
+	scoped := func() model.TenantScoped { return model.TenantScoped{ID: uuid.New(), TenantID: tenantID} }
 	mustCreate := func(v interface{}) {
 		t.Helper()
 		require.NoError(t, db.Create(v).Error, "%T", v)
 	}
 
 	// Plan level
-	mustCreate(&model.PlanMember{ID: uuid.New(), TenantID: tenant.ID, PlanID: plan.ID, UserID: uuid.New(), Role: "editor", GrantedBy: owner.ID})
+	mustCreate(&model.PlanMember{ID: uuid.New(), TenantID: tenantID, PlanID: planID, UserID: uuid.New(), Role: "editor", GrantedBy: owner.ID})
 
 	// Settings / entries
 	mustCreate(&model.PlanConfig{TenantScoped: scoped(), ScenarioID: scen.ID, ForecastStart: time.Now()})
@@ -78,6 +87,37 @@ func newCascadeFixture(t *testing.T, db *gorm.DB) cascadeFixture {
 	mustCreate(&model.OptionGrant{TenantScoped: scoped(), PlanID: sop.ID, ShareholderID: sh.ID, RoundID: round.ID})
 
 	return f
+}
+
+// TestCascade_PurgeDemoPlansRemovesDemoHierarchyOnly checks PurgeDemoPlans
+// through the same cascade: the demo plan and every row under it are gone,
+// while a real plan of the same tenant keeps all of its data.
+func TestCascade_PurgeDemoPlansRemovesDemoHierarchyOnly(t *testing.T) {
+	db := testDB(t)
+	tenant := makeTenant(t, db)
+	owner := makeOwner(t, db, tenant.ID)
+	demo := populatePlan(t, db, tenant.ID, owner.ID, makeDemoPlan(t, db, tenant.ID, owner.ID).ID)
+	real := populatePlan(t, db, tenant.ID, owner.ID, makePlan(t, db, tenant.ID, owner.ID).ID)
+
+	for _, tbl := range dependentTables {
+		require.Equal(t, int64(2), countRows(t, db, tbl.model, tenant.ID), "fixture should have two %s rows", tbl.name)
+	}
+
+	require.NoError(t, repo.NewPlanRepo(db).PurgeDemoPlans(tenant.ID))
+
+	require.Equal(t, int64(1), countRows(t, db, &model.BusinessPlan{}, tenant.ID))
+	require.Equal(t, int64(1), countRows(t, db, &model.Scenario{}, tenant.ID))
+	require.Equal(t, int64(1), countRows(t, db, &model.PlanMember{}, tenant.ID))
+	for _, tbl := range dependentTables {
+		var n int64
+		require.NoError(t, db.Model(tbl.model).Where("tenant_id = ?", tenant.ID).Count(&n).Error)
+		require.Equal(t, int64(1), n, "%s must keep the real plan's row only", tbl.name)
+	}
+	var survivor model.Scenario
+	require.NoError(t, db.Where("tenant_id = ?", tenant.ID).First(&survivor).Error)
+	assert.Equal(t, real.scenID, survivor.ID, "the surviving scenario is the real plan's")
+	_, err := repo.NewPlanRepo(db).GetByID(tenant.ID, demo.planID)
+	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 }
 
 // dependentTables lists every table the fixture populated below the scenario,

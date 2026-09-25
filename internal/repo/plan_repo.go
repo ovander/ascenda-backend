@@ -1,9 +1,9 @@
 package repo
 
 import (
+	"ascenda/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"ascenda/internal/model"
 )
 
 // PlanRepo handles business plan data operations
@@ -70,99 +70,15 @@ func (r *PlanRepo) Delete(tenantID, planID uuid.UUID) error {
 	return nil
 }
 
-// PurgeDemoPlans deletes all demo plans for a tenant and every child record
-// they own (scenarios, products, staff, capex, opex, settings, members …).
-// All deletes run inside a single transaction in dependency order so they
-// are safe whether or not the database has FK constraints.
+// PurgeDemoPlans deletes every demo plan of the tenant. The foreign keys
+// added by migration 000016 cascade from business_plans to scenarios, plan
+// members and plan shareholders, and from scenarios to every scenario-scoped
+// table (settings, products and their children, staff, entries, overrides,
+// reports, plan snapshots, the BEP and cap-table hierarchies), so one
+// statement removes the whole hierarchy atomically. Nothing to purge is not
+// an error.
 func (r *PlanRepo) PurgeDemoPlans(tenantID uuid.UUID) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Collect scenario IDs that belong to demo plans.
-		var scenarioIDs []uuid.UUID
-		if err := tx.Raw(
-			`SELECT s.id FROM scenarios s
-			 JOIN business_plans p ON p.id = s.plan_id
-			 WHERE p.tenant_id = ? AND p.is_demo = true`, tenantID,
-		).Scan(&scenarioIDs).Error; err != nil {
-			return err
-		}
-
-		if len(scenarioIDs) > 0 {
-			// 2. Products first — child tables (assumptions, volumes, margins) depend on product_id.
-			var productIDs []uuid.UUID
-			if err := tx.Raw(
-				`SELECT id FROM products WHERE tenant_id = ? AND scenario_id IN (?)`,
-				tenantID, scenarioIDs,
-			).Scan(&productIDs).Error; err != nil {
-				return err
-			}
-			if len(productIDs) > 0 {
-				for _, tbl := range []string{
-					"product_assumptions",
-					"product_sales_volumes",
-					"product_distributor_margins",
-				} {
-					if err := tx.Exec(
-						`DELETE FROM `+tbl+` WHERE tenant_id = ? AND product_id IN (?)`,
-						tenantID, productIDs,
-					).Error; err != nil {
-						return err
-					}
-				}
-				if err := tx.Exec(
-					`DELETE FROM products WHERE tenant_id = ? AND id IN (?)`,
-					tenantID, productIDs,
-				).Error; err != nil {
-					return err
-				}
-			}
-
-			// 3. All other scenario-scoped tables.
-			// Use SAVEPOINT per table so a missing table doesn't abort the transaction.
-			for _, tbl := range []string{
-				"plan_configs", "opening_balances", "working_capital_configs",
-				"opex_per_hire", "capex_per_hire", "multi_year_adjustments",
-				"staff_headcounts", "staff_salaries", "staff_incentives",
-				"capex_entries", "opex_manual_entries",
-				"pnl_manual_entries", "fiplan_entries", "pnl_cash_entries",
-				"wcr_entries", "cash_monthly_overrides", "budget_monthly_overrides",
-				"reports", "plan_snapshots",
-				"bep_snapshots", "bep_fixed_cost_lines", "bep_variable_cost_lines",
-				"bep_sensitivity_configs", "bep_pcg_review_items",
-			} {
-				sp := "sp_purge_" + tbl
-				_ = tx.Exec("SAVEPOINT " + sp).Error
-				if err := tx.Exec(
-					`DELETE FROM `+tbl+` WHERE tenant_id = ? AND scenario_id IN (?)`,
-					tenantID, scenarioIDs,
-				).Error; err != nil {
-					_ = tx.Exec("ROLLBACK TO SAVEPOINT " + sp).Error
-				} else {
-					_ = tx.Exec("RELEASE SAVEPOINT " + sp).Error
-				}
-			}
-
-			// 4. Delete the scenarios themselves.
-			if err := tx.Exec(
-				`DELETE FROM scenarios WHERE tenant_id = ? AND id IN (?)`,
-				tenantID, scenarioIDs,
-			).Error; err != nil {
-				return err
-			}
-		}
-
-		// 5. Delete plan_members, then the plans.
-		if err := tx.Exec(
-			`DELETE FROM plan_members WHERE plan_id IN
-			 (SELECT id FROM business_plans WHERE tenant_id = ? AND is_demo = true)`,
-			tenantID,
-		).Error; err != nil {
-			return err
-		}
-
-		return tx.Exec(
-			`DELETE FROM business_plans WHERE tenant_id = ? AND is_demo = true`, tenantID,
-		).Error
-	})
+	return r.db.Where("tenant_id = ? AND is_demo = true", tenantID).Delete(&model.BusinessPlan{}).Error
 }
 
 // ScenarioRepo handles scenario data operations
