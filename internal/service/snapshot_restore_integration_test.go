@@ -235,3 +235,70 @@ func TestSnapshotRestore_CloneReplacesTargetAndKeepsSource(t *testing.T) {
 	}
 	assert.Equal(t, source, f.state(t, f.scenID), "source scenario untouched")
 }
+
+// ── CloneScenario ────────────────────────────────────────────────────────────
+
+func (f *restoreFixture) planService(t *testing.T) *PlanService {
+	t.Helper()
+	logger := logrus.NewEntry(logrus.New())
+	logger.Logger.SetLevel(logrus.PanicLevel)
+	emitter := event.NewEmitter(logger)
+	t.Cleanup(emitter.Close)
+	return NewPlanService(f.repos.Plan, f.repos.Settings, f.repos.Audit, f.repos, nil, emitter, logger)
+}
+
+func (f *restoreFixture) scenarioCount(t *testing.T) int64 {
+	t.Helper()
+	var n int64
+	require.NoError(t, f.db.Model(&model.Scenario{}).Where("tenant_id = ?", f.tenantID).Count(&n).Error)
+	return n
+}
+
+func TestCloneScenario_CopiesEverySectionWithFreshIDs(t *testing.T) {
+	f := newRestoreFixture(t)
+	source := f.state(t, f.scenID)
+
+	clone, err := f.planService(t).CloneScenario(f.ctx, f.tenantID, f.scenID, "Copy")
+	require.NoError(t, err)
+	require.NotNil(t, clone)
+	assert.Equal(t, f.planID, clone.PlanID)
+	assert.False(t, clone.IsDefault)
+
+	got := f.state(t, clone.ID)
+	assert.Equal(t, int64(1), got.configs)
+	assert.Equal(t, "BE", got.country)
+	assert.ElementsMatch(t, source.products, got.products)
+	assert.ElementsMatch(t, source.prices, got.prices, "assumptions follow their cloned product")
+	assert.ElementsMatch(t, source.capex, got.capex)
+	for name, id := range got.productID {
+		assert.NotEqual(t, source.productID[name], id, "cloned product %s must get a fresh ID", name)
+	}
+	assert.Equal(t, source, f.state(t, f.scenID), "source scenario untouched")
+}
+
+func TestCloneScenario_WriteFailureRollsBackTheWholeClone(t *testing.T) {
+	f := newRestoreFixture(t)
+	before := f.scenarioCount(t)
+	var productsBefore int64
+	require.NoError(t, f.db.Model(&model.Product{}).Where("tenant_id = ?", f.tenantID).Count(&productsBefore).Error)
+
+	// Make the last section's write fail: capex is copied after the scenario
+	// row, settings and products have been written. The trigger lives in the
+	// test transaction and disappears with it.
+	require.NoError(t, f.db.Exec(`
+		CREATE FUNCTION pg_temp.reject_capex() RETURNS trigger LANGUAGE plpgsql AS
+		$$ BEGIN RAISE EXCEPTION 'injected capex failure'; END $$`).Error)
+	require.NoError(t, f.db.Exec(`
+		CREATE TRIGGER reject_capex BEFORE INSERT ON capex_entries
+		FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_capex()`).Error)
+	t.Cleanup(func() { _ = f.db.Exec(`DROP TRIGGER IF EXISTS reject_capex ON capex_entries`).Error })
+
+	clone, err := f.planService(t).CloneScenario(f.ctx, f.tenantID, f.scenID, "Copy")
+	require.Error(t, err)
+	assert.Nil(t, clone)
+
+	assert.Equal(t, before, f.scenarioCount(t), "no scenario row survives a failed clone")
+	var productsAfter int64
+	require.NoError(t, f.db.Model(&model.Product{}).Where("tenant_id = ?", f.tenantID).Count(&productsAfter).Error)
+	assert.Equal(t, productsBefore, productsAfter, "products written before the failure are rolled back")
+}

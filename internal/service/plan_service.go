@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 	"ascenda/internal/event"
 	"ascenda/internal/model"
+	"ascenda/internal/repo"
+	"github.com/google/uuid"
 	"github.com/ovander/backendkit/apierror"
 	"github.com/ovander/backendkit/ctxutil"
 	"github.com/ovander/backendkit/pagination"
-	"ascenda/internal/repo"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // PlanService orchestrates plan and scenario CRUD operations.
@@ -22,23 +22,23 @@ type PlanService struct {
 	auditRepo    repo.AuditRepository
 	// deps is the narrow dependency interface; the real app injects *repo.RepoBundle,
 	// tests can inject any struct that implements repo.PlanDeps.
-	deps              repo.PlanDeps
-	countryRateSvc    *CountryRateConfigService // nil-safe: falls back to hard-coded defaults
-	featurePolicySvc  *FeaturePolicyService     // nil-safe: falls back to hard-coded limits
-	emitter           *event.Emitter
-	logger            *logrus.Entry
+	deps             repo.PlanDeps
+	countryRateSvc   *CountryRateConfigService // nil-safe: falls back to hard-coded defaults
+	featurePolicySvc *FeaturePolicyService     // nil-safe: falls back to hard-coded limits
+	emitter          *event.Emitter
+	logger           *logrus.Entry
 }
 
 // NewPlanService creates a new PlanService.
 func NewPlanService(planRepo repo.PlanRepository, settingsRepo repo.SettingsRepository, auditRepo repo.AuditRepository, deps repo.PlanDeps, countryRateSvc *CountryRateConfigService, emitter *event.Emitter, logger *logrus.Entry) *PlanService {
 	return &PlanService{
-		planRepo:          planRepo,
-		settingsRepo:      settingsRepo,
-		auditRepo:         auditRepo,
-		deps:              deps,
-		countryRateSvc:    countryRateSvc,
-		emitter:           emitter,
-		logger:            logger,
+		planRepo:       planRepo,
+		settingsRepo:   settingsRepo,
+		auditRepo:      auditRepo,
+		deps:           deps,
+		countryRateSvc: countryRateSvc,
+		emitter:        emitter,
+		logger:         logger,
 	}
 }
 
@@ -543,11 +543,13 @@ func (s *PlanService) UpdateScenario(ctx context.Context, tenantID, scenarioID u
 }
 
 // CloneScenario clones a scenario with all its data to a new scenario.
-// The entire clone — scenario row creation plus all 20+ child table copies —
-// is wrapped in a single database transaction so a mid-copy failure leaves no
-// partial state behind.
+// The scenario row and every child table copy run in a single database
+// transaction, through the same sections a snapshot uses (settings,
+// products, staff, capex, opex, P&L, financing plan, P&L-to-cash, WCR, cash
+// and budget overrides). The first failed read or write rolls the whole
+// clone back and is reported to the caller; no half-copied scenario is left
+// behind (audit §3.1).
 func (s *PlanService) CloneScenario(ctx context.Context, tenantID, sourceScenarioID uuid.UUID, newName string) (*model.Scenario, error) {
-	// Read source outside the transaction (pure SELECT, no atomicity needed).
 	sourceScenario, err := s.deps.GetScenario().GetByID(tenantID, sourceScenarioID)
 	if err != nil || sourceScenario == nil || sourceScenario.TenantID != tenantID {
 		s.logger.WithError(err).Warn("source scenario not found")
@@ -562,18 +564,15 @@ func (s *PlanService) CloneScenario(ctx context.Context, tenantID, sourceScenari
 	}
 	newScenario.TenantID = tenantID
 
-	// Wrap all writes in a single atomic transaction.
 	txErr := s.deps.GetDB().Transaction(func(tx *gorm.DB) error {
 		txRepos := repo.NewRepoBundle(tx)
-		txSettings := repo.NewSettingsRepo(tx)
-
-		if err := txRepos.GetScenario().Create(newScenario); err != nil {
-			return err
+		if err := txRepos.Scenario.Create(newScenario); err != nil {
+			return fmt.Errorf("create scenario: %w", err)
 		}
-		return s.deepCopyScenarioData(tenantID, sourceScenarioID, newScenario.ID, txRepos, txSettings)
+		return copyScenarioData(registerSections(txRepos), tenantID, sourceScenarioID, newScenario.ID)
 	})
 	if txErr != nil {
-		s.logger.WithError(txErr).Error("failed to clone scenario (transaction rolled back)")
+		s.logger.WithError(txErr).WithField("source_scenario_id", sourceScenarioID).Error("failed to clone scenario (rolled back)")
 		return nil, apierror.Internal("failed to clone scenario")
 	}
 
@@ -613,182 +612,5 @@ func (s *PlanService) DeleteScenario(ctx context.Context, tenantID, scenarioID u
 		EntityID:   scenarioID,
 		Action:     event.ActionDelete,
 	})
-	return nil
-}
-
-// deepCopyScenarioData performs a deep copy of all data from source to destination scenario.
-// deps and settingsRepo are the transactional repos provided by CloneScenario; reads
-// of source data use s.deps / s.settingsRepo (no write-lock needed for SELECTs).
-func (s *PlanService) deepCopyScenarioData(tenantID, sourceScenarioID, destScenarioID uuid.UUID, deps repo.PlanDeps, settingsRepo repo.SettingsRepository) error {
-	// Copy Settings
-	if config, err := s.settingsRepo.GetConfig(tenantID, sourceScenarioID); err == nil && config != nil {
-		newConfig := *config
-		newConfig.ID = uuid.New()
-		newConfig.ScenarioID = destScenarioID
-		_ = settingsRepo.UpsertConfig(&newConfig)
-	}
-
-	if balance, err := s.settingsRepo.GetOpeningBalance(tenantID, sourceScenarioID); err == nil && balance != nil {
-		newBalance := *balance
-		newBalance.ID = uuid.New()
-		newBalance.ScenarioID = destScenarioID
-		_ = settingsRepo.UpsertOpeningBalance(&newBalance)
-	}
-
-	if wcConfig, err := s.settingsRepo.GetWCConfig(tenantID, sourceScenarioID); err == nil && wcConfig != nil {
-		newWCConfig := *wcConfig
-		newWCConfig.ID = uuid.New()
-		newWCConfig.ScenarioID = destScenarioID
-		_ = settingsRepo.UpsertWCConfig(&newWCConfig)
-	}
-
-	// Copy Products with mapping
-	if ptrProducts, err := s.deps.GetProduct().ListProductsByScenario(tenantID, sourceScenarioID); err == nil {
-		for _, p := range ptrProducts {
-			newProduct := *p
-			newProduct.ID = uuid.New()
-			newProduct.ScenarioID = destScenarioID
-			_ = deps.GetProduct().CreateProduct(&newProduct)
-
-			// Copy assumptions
-			if ptrAssumptions, err := s.deps.GetProduct().GetAssumptionsByProduct(tenantID, p.ID); err == nil {
-				vals := make([]model.ProductAssumption, len(ptrAssumptions))
-				for i, a := range ptrAssumptions {
-					v := *a
-					v.ID = uuid.New()
-					v.ProductID = newProduct.ID
-					vals[i] = v
-				}
-				_ = deps.GetProduct().BatchUpsertAssumptions(tenantID, destScenarioID, vals)
-			}
-
-			// Copy volumes
-			if ptrVolumes, err := s.deps.GetProduct().GetVolumesByProduct(tenantID, p.ID); err == nil {
-				vals := make([]model.ProductSalesVolume, len(ptrVolumes))
-				for i, v := range ptrVolumes {
-					nv := *v
-					nv.ID = uuid.New()
-					nv.ProductID = newProduct.ID
-					vals[i] = nv
-				}
-				_ = deps.GetProduct().BatchUpsertVolumes(tenantID, destScenarioID, vals)
-			}
-
-			// Copy margins
-			if ptrMargins, err := s.deps.GetProduct().GetMarginsByProduct(tenantID, p.ID); err == nil {
-				vals := make([]model.ProductDistributorMargin, len(ptrMargins))
-				for i, m := range ptrMargins {
-					nm := *m
-					nm.ID = uuid.New()
-					nm.ProductID = newProduct.ID
-					vals[i] = nm
-				}
-				_ = deps.GetProduct().BatchUpsertMargins(tenantID, destScenarioID, vals)
-			}
-		}
-	}
-
-	// Copy Staff
-	if ptrHC, err := s.deps.GetStaff().ListHeadcountsByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.StaffHeadcount, len(ptrHC))
-		for i, h := range ptrHC {
-			v := *h
-			v.ID = uuid.New()
-			v.ScenarioID = destScenarioID
-			vals[i] = v
-		}
-		_ = deps.GetStaff().BatchUpsertHeadcounts(tenantID, destScenarioID, vals)
-	}
-
-	if ptrSal, err := s.deps.GetStaff().ListSalariesByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.StaffSalary, len(ptrSal))
-		for i, sal := range ptrSal {
-			v := *sal
-			v.ID = uuid.New()
-			v.ScenarioID = destScenarioID
-			vals[i] = v
-		}
-		_ = deps.GetStaff().BatchUpsertSalaries(tenantID, destScenarioID, vals)
-	}
-
-	if ptrInc, err := s.deps.GetStaff().ListIncentivesByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.StaffIncentive, len(ptrInc))
-		for i, inc := range ptrInc {
-			v := *inc
-			v.ID = uuid.New()
-			v.ScenarioID = destScenarioID
-			vals[i] = v
-		}
-		_ = deps.GetStaff().BatchUpsertIncentives(tenantID, destScenarioID, vals)
-	}
-
-	// Copy Capex, Opex, PnL, FiPlan, PnlCash, WCR, Cash, Budget
-	if ptr, err := s.deps.GetCapex().ListByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.CapexEntry, len(ptr))
-		for i, e := range ptr {
-			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
-		}
-		_ = deps.GetCapex().BatchUpsert(tenantID, destScenarioID, vals)
-	}
-
-	if ptr, err := s.deps.GetOpex().ListByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.OpexManualEntry, len(ptr))
-		for i, e := range ptr {
-			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
-		}
-		_ = deps.GetOpex().BatchUpsert(tenantID, destScenarioID, vals)
-	}
-
-	if ptr, err := s.deps.GetPnL().ListByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.PnlManualEntry, len(ptr))
-		for i, e := range ptr {
-			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
-		}
-		_ = deps.GetPnL().BatchUpsert(tenantID, destScenarioID, vals)
-	}
-
-	if ptr, err := s.deps.GetFiPlan().ListByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.FiplanEntry, len(ptr))
-		for i, e := range ptr {
-			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
-		}
-		_ = deps.GetFiPlan().BatchUpsert(tenantID, destScenarioID, vals)
-	}
-
-	if ptr, err := s.deps.GetPnlCash().ListByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.PnlCashEntry, len(ptr))
-		for i, e := range ptr {
-			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
-		}
-		_ = deps.GetPnlCash().BatchUpsert(tenantID, destScenarioID, vals)
-	}
-
-	if ptr, err := s.deps.GetWCR().ListByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.WCREntry, len(ptr))
-		for i, e := range ptr {
-			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
-		}
-		_ = deps.GetWCR().BatchUpsert(tenantID, destScenarioID, vals)
-	}
-
-	if ptr, err := s.deps.GetCash().ListByScenario(tenantID, sourceScenarioID); err == nil {
-		vals := make([]model.CashMonthlyOverride, len(ptr))
-		for i, e := range ptr {
-			v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
-		}
-		_ = deps.GetCash().BatchUpsert(tenantID, destScenarioID, vals)
-	}
-
-	// Copy budget for all years
-	for year := 1; year <= 5; year++ {
-		if ptr, err := s.deps.GetBudget().ListByScenario(tenantID, sourceScenarioID, year); err == nil {
-			vals := make([]model.BudgetMonthlyOverride, len(ptr))
-			for i, e := range ptr {
-				v := *e; v.ID = uuid.New(); v.ScenarioID = destScenarioID; vals[i] = v
-			}
-			_ = deps.GetBudget().BatchUpsert(tenantID, destScenarioID, vals)
-		}
-	}
-
 	return nil
 }
