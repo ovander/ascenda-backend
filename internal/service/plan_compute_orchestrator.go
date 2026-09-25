@@ -95,6 +95,10 @@ func (o *PlanComputeOrchestrator) LoadInputs(tenantID, scenarioID uuid.UUID) (*c
 			input.Products[i] = *p
 		}
 
+		// Scenario-level facts some drivers read from other products
+		// (contract bonuses are paid on the competition wins).
+		driverCtx := compute.BuildDriverContext(input.Products)
+
 		input.ProductData = make([]compute.ProductInputBundle, len(input.Products))
 		for i, product := range input.Products {
 			bundle := compute.ProductInputBundle{}
@@ -123,7 +127,7 @@ func (o *PlanComputeOrchestrator) LoadInputs(tenantID, scenarioID uuid.UUID) (*c
 				}
 			}
 
-			if derived, dErr := compute.ApplyDriverCompute(product, bundle); dErr != nil {
+			if derived, dErr := compute.ApplyDriverComputeWithContext(product, bundle, driverCtx); dErr != nil {
 				o.logger.WithError(dErr).WithField("product_id", product.ID).
 					Warn("orchestrator: driver compute failed — falling back to stored assumptions")
 			} else {

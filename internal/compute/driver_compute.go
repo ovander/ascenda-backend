@@ -15,6 +15,8 @@ package compute
 //   industry    → keep user-set volume; adjust unit cost for scrap & setup
 //   marketplace → derive transaction volume + net revenue/tx + variable cost/tx
 //   media       → derive per-mille volume + CPM revenue + delivery+content cost
+//   competition → derive event volume + results-driven prize money + per-event cost
+//   contract    → derive one unit of contract revenue (fixed + bonus per win)
 //
 // All generated volumes are placed in ZoneFrance/ChannelDirect.  Existing
 // distributor margins are always preserved unmodified.
@@ -34,6 +36,13 @@ import (
 // On parse error the original bundle is returned along with the error so the
 // caller can decide whether to hard-fail or soft-warn.
 func ApplyDriverCompute(product model.Product, bundle ProductInputBundle) (ProductInputBundle, error) {
+	return ApplyDriverComputeWithContext(product, bundle, DriverContext{})
+}
+
+// ApplyDriverComputeWithContext is ApplyDriverCompute for drivers that need
+// facts from other products of the same scenario (the contract driver reads
+// the competition wins). Build ctx with BuildDriverContext.
+func ApplyDriverComputeWithContext(product model.Product, bundle ProductInputBundle, ctx DriverContext) (ProductInputBundle, error) {
 	dt := product.DriverType
 	if dt == "" || dt == model.DriverGeneric {
 		return bundle, nil
@@ -85,6 +94,26 @@ func ApplyDriverCompute(product model.Product, bundle ProductInputBundle) (Produ
 			return bundle, fmt.Errorf("session_based params unmarshal: %w", err)
 		}
 		return applySessionBasedDriver(p, bundle, product.ID), nil
+
+	case model.DriverCompetition:
+		var p model.CompetitionParams
+		if err := json.Unmarshal(product.DriverParams, &p); err != nil {
+			return bundle, fmt.Errorf("competition params unmarshal: %w", err)
+		}
+		if err := p.Validate(); err != nil {
+			return bundle, fmt.Errorf("competition params: %w", err)
+		}
+		return applyCompetitionDriver(p, bundle, product.ID), nil
+
+	case model.DriverContract:
+		var p model.ContractParams
+		if err := json.Unmarshal(product.DriverParams, &p); err != nil {
+			return bundle, fmt.Errorf("contract params unmarshal: %w", err)
+		}
+		if err := p.Validate(); err != nil {
+			return bundle, fmt.Errorf("contract params: %w", err)
+		}
+		return applyContractDriver(p, bundle, product.ID, ctx), nil
 
 	default:
 		return bundle, nil

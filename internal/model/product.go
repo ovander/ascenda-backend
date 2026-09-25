@@ -56,6 +56,13 @@ const (
 	DriverMarketplace  DriverType = "marketplace"
 	DriverMedia        DriverType = "media"
 	DriverSessionBased DriverType = "session_based"
+	// DriverCompetition drives prize money from sporting results (events,
+	// cuts, top-10 finishes, wins) and per-event costs; see CompetitionParams.
+	DriverCompetition DriverType = "competition"
+	// DriverContract drives sponsorship or image-rights revenue from a list of
+	// contracts, with a bonus per win fed by the scenario's competition
+	// products; see ContractParams.
+	DriverContract DriverType = "contract"
 )
 
 // ---------------------------------------------------------------------------
