@@ -49,3 +49,27 @@ func (r *dbScenarioRestorer) RestoreScenarioData(tenantID, scenarioID uuid.UUID,
 		return nil
 	})
 }
+
+// copyScenarioData captures every section of the source scenario and writes
+// it into the destination through the same sections, so a clone carries
+// exactly what a snapshot would. The caller supplies sections bound to the
+// transaction the destination is created in; the first error aborts the copy
+// and is returned so that transaction rolls back.
+func copyScenarioData(sections []SnapshotSection, tenantID, sourceID, destID uuid.UUID) error {
+	data := make(map[string]json.RawMessage)
+	for _, section := range sections {
+		pairs, err := section.Capture(tenantID, sourceID)
+		if err != nil {
+			return fmt.Errorf("capture %s: %w", section.Name, err)
+		}
+		for k, v := range pairs {
+			data[k] = v
+		}
+	}
+	for _, section := range sections {
+		if err := section.Restore(tenantID, destID, data); err != nil {
+			return fmt.Errorf("copy %s: %w", section.Name, err)
+		}
+	}
+	return nil
+}
