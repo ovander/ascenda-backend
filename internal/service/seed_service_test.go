@@ -4,7 +4,7 @@ package service
 //
 // SeedService itself cannot be unit-tested without a real DB (it holds a
 // concrete *repo.RepoBundle), but the plan-definition functions —
-// saasDemo(), hardwareDemo(), consultingDemo(), demoPlanDefs() — are pure
+// saasDemo(), hardwareDemo(), consultingDemo(), golfDemo(), demoPlanDefs() — are pure
 // and contain all the business logic worth validating:
 //
 //   - Each driver product has the correct typed params (validates the
@@ -25,9 +25,18 @@ import (
 
 // ── demoPlanDefs ──────────────────────────────────────────────────────────────
 
-func TestDemoPlanDefs_ReturnsThreePlans(t *testing.T) {
+func TestDemoPlanDefs_ReturnsAllDemoPlans(t *testing.T) {
 	defs := demoPlanDefs()
-	assert.Len(t, defs, 3, "expected SaaS, Hardware, and Consulting demo plans")
+	names := make([]string, 0, len(defs))
+	for _, def := range defs {
+		names = append(names, def.name)
+	}
+	assert.Equal(t, []string{
+		"SaaS Startup — Ascenda Demo",
+		"Hardware Scaleup — Ascenda Demo",
+		"Consulting Firm — Ascenda Demo",
+		"Pro Tour Golfer — Ascenda Demo",
+	}, names, "expected SaaS, Hardware, Consulting, and Golf demo plans in seed order")
 }
 
 func TestDemoPlanDefs_AllHaveProducts(t *testing.T) {

@@ -1,13 +1,14 @@
 package service
 
-// SeedService provisions the three built-in demo business plans for a tenant
+// SeedService provisions the four built-in demo business plans for a tenant
 // the very first time they list their plans.  Demo plans carry IsDemo=true and
 // cannot be deleted by users.
 //
-// Each demo plan covers one of the three canonical startup archetypes:
+// Each demo plan covers one canonical business archetype:
 //   1. SaaS  – subscription + professional services, PLG growth model
 //   2. Hardware – unit-price product, contract manufacturing
 //   3. Consulting – daily-rate, utilisation-driven revenue model
+//   4. Pro Tour Golfer – individual athlete: prize money, sponsorship, appearances
 //
 // Data is mapped to Ascenda's underlying schema:
 //   - Revenue   → Product + ProductAssumption + ProductSalesVolume
@@ -78,7 +79,7 @@ func (s *SeedService) ResetDemoPlans(ctx context.Context, tenantID, userID uuid.
 	return s.EnsureDemoPlans(ctx, tenantID, userID)
 }
 
-// EnsureDemoPlans is idempotent: it creates the three demo plans for the given
+// EnsureDemoPlans is idempotent: it creates the demo plans for the given
 // tenant only if none exist yet.  Safe to call on every list-plans request.
 func (s *SeedService) EnsureDemoPlans(ctx context.Context, tenantID, userID uuid.UUID) error {
 	// Check whether the tenant already has demo plans.
