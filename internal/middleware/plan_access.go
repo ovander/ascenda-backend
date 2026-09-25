@@ -41,8 +41,9 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 // The plan-level role injected into the context is, in order:
 //   - "owner" for tenant owners (unchanged);
 //   - the plan_members role for explicit members;
-//   - "viewer" for any other tenant user on a demo plan (demo plans are readable
-//     by everyone in the tenant, but only members and owners may edit them);
+//   - on a demo plan, "editor" for any other tenant user ("viewer" for the
+//     read-only tenant role "reader"): demo plans are a shared sandbox that
+//     everyone may edit and owners can reset;
 //   - otherwise the request is rejected with 403.
 func (m *PlanAccessMiddleware) RequirePlanAccess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,13 +91,17 @@ func (m *PlanAccessMiddleware) RequirePlanAccess(next http.Handler) http.Handler
 			return
 		}
 
-		// Demo plans are read-accessible to every tenant user — no membership
-		// required, but the effective role is viewer so RequirePlanEdit blocks
-		// writes. The tenant role must NOT leak through here: "editor" as a
-		// tenant role would otherwise grant write access to a plan the user was
-		// never granted (audit finding S-H1).
+		// Demo plans are a sandbox every tenant user may edit — no membership
+		// required. The read-only tenant role "reader" keeps read-only access.
+		// The plan-level role is set explicitly rather than leaking the tenant
+		// role through, and RequireScenarioInPlan keeps a demo plan from being
+		// used as a gateway to other plans' scenarios (audit finding S-H1).
 		if plan, err := m.planRepo.GetByID(tenantID, planID); err == nil && plan != nil && plan.IsDemo {
-			ctx = ctxutil.WithUserRole(ctx, "viewer")
+			demoRole := "editor"
+			if role == "reader" {
+				demoRole = "viewer"
+			}
+			ctx = ctxutil.WithUserRole(ctx, demoRole)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}

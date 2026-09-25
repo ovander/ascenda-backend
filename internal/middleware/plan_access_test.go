@@ -257,7 +257,7 @@ func TestPlanAccessUserWithoutMembership(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
-func TestPlanAccessDemoPlanIsViewerForNonMembers(t *testing.T) {
+func TestPlanAccessDemoPlanIsEditableSandbox(t *testing.T) {
 	tenantID := uuid.New()
 	userID := uuid.New()
 	planID := uuid.New()
@@ -268,35 +268,38 @@ func TestPlanAccessDemoPlanIsViewerForNonMembers(t *testing.T) {
 		IsDemo:       true,
 	})
 	memberRepo := newMockPlanMemberRepo()
-	// No membership entry — demo plans are readable by all tenant users, but
-	// the tenant role (e.g. "editor") must not leak into the plan-level role.
+	// No membership entry — demo plans are a sandbox every tenant user may
+	// edit, except the read-only tenant role "reader".
 	mw := NewPlanAccessMiddleware(planRepo, memberRepo, newMockScenarioRepo(), logrus.NewEntry(logrus.New()))
 
-	for _, role := range []string{"editor", "reader", "user"} {
-		t.Run("demo plan readable by "+role, func(t *testing.T) {
+	cases := map[string]string{"editor": "editor", "user": "editor", "reader": "viewer"}
+	for tenantRole, wantPlanRole := range cases {
+		t.Run("tenant role "+tenantRole, func(t *testing.T) {
 			var capturedRole string
 			handler := mw.RequirePlanAccess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				capturedRole = ctxutil.GetUserRole(r.Context())
 				w.WriteHeader(http.StatusOK)
 			}))
 
-			req := newPlanRequest(role, tenantID, userID, planID)
+			req := newPlanRequest(tenantRole, tenantID, userID, planID)
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 
-			assert.Equal(t, http.StatusOK, w.Code, "demo plan should be readable for role: "+role)
-			assert.Equal(t, "viewer", capturedRole, "non-members get viewer on demo plans, never their tenant role")
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, wantPlanRole, capturedRole)
 		})
 	}
 
-	t.Run("demo plan write is blocked for non-members", func(t *testing.T) {
-		handler := mw.RequirePlanAccess(mw.RequirePlanEdit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Fatal("should not reach handler")
-		})))
-		req := newPlanRequest("editor", tenantID, userID, planID)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-		assert.Equal(t, http.StatusForbidden, w.Code)
+	t.Run("demo plan write allowed for editor, blocked for reader", func(t *testing.T) {
+		for tenantRole, wantStatus := range map[string]int{"editor": http.StatusOK, "user": http.StatusOK, "reader": http.StatusForbidden} {
+			handler := mw.RequirePlanAccess(mw.RequirePlanEdit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})))
+			req := newPlanRequest(tenantRole, tenantID, userID, planID)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			assert.Equal(t, wantStatus, w.Code, "tenant role %s", tenantRole)
+		}
 	})
 }
 
