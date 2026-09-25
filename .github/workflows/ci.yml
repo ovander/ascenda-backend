@@ -93,7 +93,7 @@ jobs:
           echo "unformatted files in tree: $count"
 
   integration:
-    name: Repository integration tests (testcontainers)
+    name: Database integration tests (testcontainers)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,10 +103,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # internal/repo tests are behind the `integration` build tag and spin up
-      # PostgreSQL 16 through testcontainers-go; ubuntu-latest ships Docker.
+      # Tests behind the `integration` build tag (internal/repo, and the
+      # snapshot restore tests in internal/service) spin up PostgreSQL 16
+      # through testcontainers-go (internal/testdb); ubuntu-latest ships Docker.
       - name: Integration tests
-        run: go test -tags integration -count=1 ./internal/repo/...
+        run: go test -tags integration -count=1 ./internal/repo/... ./internal/service/...
         env:
           TESTCONTAINERS_RYUK_DISABLED: "true"
 

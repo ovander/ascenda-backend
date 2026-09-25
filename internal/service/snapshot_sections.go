@@ -2,20 +2,57 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 
-	"github.com/google/uuid"
 	"ascenda/internal/compute"
 	"ascenda/internal/model"
 	"ascenda/internal/repo"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // SnapshotSection handles capture and restore for one logical data group.
-// Capture returns key→JSON pairs to include in the snapshot.
-// Restore receives the full snapshot data map and writes its entities back.
+//
+// Capture returns key→JSON pairs to include in the snapshot. Clear empties the
+// section's tables for a scenario and Restore writes the snapshot's entities
+// back; ScenarioRestorer runs Clear for every section, then Restore for every
+// section, inside one transaction, so both must return every error they meet
+// (an error rolls the whole restore back) and must accept a missing key as
+// "nothing to write".
 type SnapshotSection struct {
 	Name    string
 	Capture func(tenantID, scenarioID uuid.UUID) (map[string]json.RawMessage, error)
+	Clear   func(tenantID, scenarioID uuid.UUID) error
 	Restore func(tenantID, scenarioID uuid.UUID, data map[string]json.RawMessage) error
+}
+
+// decodeSection unmarshals one snapshot key into a slice of T. A missing or
+// empty key yields nil, nil; malformed JSON is an error so that a corrupt
+// snapshot aborts the restore instead of silently restoring a subset.
+func decodeSection[T any](data map[string]json.RawMessage, key string) ([]T, error) {
+	raw, ok := data[key]
+	if !ok || len(raw) == 0 {
+		return nil, nil
+	}
+	var out []T
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", key, err)
+	}
+	return out, nil
+}
+
+// decodeOne is decodeSection for a single-object key.
+func decodeOne[T any](data map[string]json.RawMessage, key string) (*T, error) {
+	raw, ok := data[key]
+	if !ok || len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var out T
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", key, err)
+	}
+	return &out, nil
 }
 
 // registerSections builds the ordered list of snapshot sections.
@@ -35,6 +72,40 @@ func registerSections(repos *repo.RepoBundle) []SnapshotSection {
 	}
 }
 
+// capture marshals the rows returned by fetch under key. A fetch error aborts
+// the capture: a snapshot missing a section would, on restore, wipe that
+// section, so it must never be produced silently.
+func capture(result map[string]json.RawMessage, key string, fetch func() (interface{}, error)) error {
+	rows, err := fetch()
+	if err != nil {
+		return fmt.Errorf("read %s: %w", key, err)
+	}
+	raw, err := json.Marshal(rows)
+	if err != nil {
+		return fmt.Errorf("encode %s: %w", key, err)
+	}
+	result[key] = raw
+	return nil
+}
+
+// captureOptional is capture for a single optional row: a not-found result
+// leaves the key out instead of failing.
+func captureOptional[T any](result map[string]json.RawMessage, key string, fetch func() (*T, error)) error {
+	row, err := fetch()
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && row == nil) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", key, err)
+	}
+	raw, err := json.Marshal(row)
+	if err != nil {
+		return fmt.Errorf("encode %s: %w", key, err)
+	}
+	result[key] = raw
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Settings (config, opening balance, working capital config)
 // ---------------------------------------------------------------------------
@@ -44,43 +115,61 @@ func settingsSection(repos *repo.RepoBundle) SnapshotSection {
 		Name: "settings",
 		Capture: func(tenantID, scenarioID uuid.UUID) (map[string]json.RawMessage, error) {
 			result := make(map[string]json.RawMessage)
-			if config, err := repos.Settings.GetConfig(tenantID, scenarioID); err == nil && config != nil {
-				result["config"], _ = json.Marshal(config)
+			if err := captureOptional(result, "config", func() (*model.PlanConfig, error) {
+				return repos.Settings.GetConfig(tenantID, scenarioID)
+			}); err != nil {
+				return nil, err
 			}
-			if balance, err := repos.Settings.GetOpeningBalance(tenantID, scenarioID); err == nil && balance != nil {
-				result["openingBalance"], _ = json.Marshal(balance)
+			if err := captureOptional(result, "openingBalance", func() (*model.OpeningBalance, error) {
+				return repos.Settings.GetOpeningBalance(tenantID, scenarioID)
+			}); err != nil {
+				return nil, err
 			}
-			if wc, err := repos.Settings.GetWCConfig(tenantID, scenarioID); err == nil && wc != nil {
-				result["wcConfig"], _ = json.Marshal(wc)
+			if err := captureOptional(result, "wcConfig", func() (*model.WorkingCapitalConfig, error) {
+				return repos.Settings.GetWCConfig(tenantID, scenarioID)
+			}); err != nil {
+				return nil, err
 			}
 			return result, nil
 		},
+		Clear: func(tenantID, scenarioID uuid.UUID) error {
+			return repos.Settings.DeleteCoreByScenario(tenantID, scenarioID)
+		},
 		Restore: func(tenantID, scenarioID uuid.UUID, data map[string]json.RawMessage) error {
-			if raw, ok := data["config"]; ok && len(raw) > 0 {
-				var config model.PlanConfig
-				if err := json.Unmarshal(raw, &config); err == nil {
-					config.ID = uuid.New()
-					config.TenantID = tenantID
-					config.ScenarioID = scenarioID
-					_ = repos.Settings.UpsertConfig(&config)
+			config, err := decodeOne[model.PlanConfig](data, "config")
+			if err != nil {
+				return err
+			}
+			if config != nil {
+				config.ID = uuid.New()
+				config.TenantID = tenantID
+				config.ScenarioID = scenarioID
+				if err := repos.Settings.UpsertConfig(config); err != nil {
+					return fmt.Errorf("write config: %w", err)
 				}
 			}
-			if raw, ok := data["openingBalance"]; ok && len(raw) > 0 {
-				var ob model.OpeningBalance
-				if err := json.Unmarshal(raw, &ob); err == nil {
-					ob.ID = uuid.New()
-					ob.TenantID = tenantID
-					ob.ScenarioID = scenarioID
-					_ = repos.Settings.UpsertOpeningBalance(&ob)
+			ob, err := decodeOne[model.OpeningBalance](data, "openingBalance")
+			if err != nil {
+				return err
+			}
+			if ob != nil {
+				ob.ID = uuid.New()
+				ob.TenantID = tenantID
+				ob.ScenarioID = scenarioID
+				if err := repos.Settings.UpsertOpeningBalance(ob); err != nil {
+					return fmt.Errorf("write opening balance: %w", err)
 				}
 			}
-			if raw, ok := data["wcConfig"]; ok && len(raw) > 0 {
-				var wc model.WorkingCapitalConfig
-				if err := json.Unmarshal(raw, &wc); err == nil {
-					wc.ID = uuid.New()
-					wc.TenantID = tenantID
-					wc.ScenarioID = scenarioID
-					_ = repos.Settings.UpsertWCConfig(&wc)
+			wc, err := decodeOne[model.WorkingCapitalConfig](data, "wcConfig")
+			if err != nil {
+				return err
+			}
+			if wc != nil {
+				wc.ID = uuid.New()
+				wc.TenantID = tenantID
+				wc.ScenarioID = scenarioID
+				if err := repos.Settings.UpsertWCConfig(wc); err != nil {
+					return fmt.Errorf("write working capital config: %w", err)
 				}
 			}
 			return nil
@@ -97,98 +186,111 @@ func productsSection(repos *repo.RepoBundle) SnapshotSection {
 		Name: "products",
 		Capture: func(tenantID, scenarioID uuid.UUID) (map[string]json.RawMessage, error) {
 			result := make(map[string]json.RawMessage)
-			products, err := repos.Product.ListProductsByScenario(tenantID, scenarioID)
-			if err != nil {
-				return result, nil
+			// Batch-fetch: 4 queries total instead of 1+3N.
+			steps := []struct {
+				key   string
+				fetch func() (interface{}, error)
+			}{
+				{"products", func() (interface{}, error) { return repos.Product.ListProductsByScenario(tenantID, scenarioID) }},
+				{"productAssumptions", func() (interface{}, error) { return repos.Product.GetAssumptionsByScenario(tenantID, scenarioID) }},
+				{"productSalesVolumes", func() (interface{}, error) { return repos.Product.GetVolumesByScenario(tenantID, scenarioID) }},
+				{"productDistributorMargins", func() (interface{}, error) { return repos.Product.GetMarginsByScenario(tenantID, scenarioID) }},
 			}
-			result["products"], _ = json.Marshal(products)
-
-			// Batch-fetch: 3 queries total instead of 3N
-			if ptrA, err := repos.Product.GetAssumptionsByScenario(tenantID, scenarioID); err == nil {
-				allAssumptions := make([]model.ProductAssumption, len(ptrA))
-				for i, a := range ptrA {
-					allAssumptions[i] = *a
+			for _, step := range steps {
+				if err := capture(result, step.key, step.fetch); err != nil {
+					return nil, err
 				}
-				result["productAssumptions"], _ = json.Marshal(allAssumptions)
-			}
-			if ptrV, err := repos.Product.GetVolumesByScenario(tenantID, scenarioID); err == nil {
-				allVolumes := make([]model.ProductSalesVolume, len(ptrV))
-				for i, v := range ptrV {
-					allVolumes[i] = *v
-				}
-				result["productSalesVolumes"], _ = json.Marshal(allVolumes)
-			}
-			if ptrM, err := repos.Product.GetMarginsByScenario(tenantID, scenarioID); err == nil {
-				allMargins := make([]model.ProductDistributorMargin, len(ptrM))
-				for i, m := range ptrM {
-					allMargins[i] = *m
-				}
-				result["productDistributorMargins"], _ = json.Marshal(allMargins)
 			}
 			return result, nil
 		},
+		Clear: func(tenantID, scenarioID uuid.UUID) error {
+			return repos.Product.DeleteByScenario(tenantID, scenarioID)
+		},
 		Restore: func(tenantID, scenarioID uuid.UUID, data map[string]json.RawMessage) error {
-			oldToNewProduct := make(map[uuid.UUID]uuid.UUID)
-
-			if raw, ok := data["products"]; ok && len(raw) > 0 {
-				var products []model.Product
-				if err := json.Unmarshal(raw, &products); err == nil {
-					for i := range products {
-						oldID := products[i].ID
-						products[i].ID = uuid.New()
-						products[i].TenantID = tenantID
-						products[i].ScenarioID = scenarioID
-						oldToNewProduct[oldID] = products[i].ID
-						_ = repos.Product.CreateProduct(&products[i])
-					}
+			products, err := decodeSection[model.Product](data, "products")
+			if err != nil {
+				return err
+			}
+			// Products get fresh IDs; child rows are re-pointed through this map.
+			// A child whose product is not in the snapshot is dropped: it could
+			// only reference a product the restore has just deleted.
+			oldToNewProduct := make(map[uuid.UUID]uuid.UUID, len(products))
+			for i := range products {
+				oldID := products[i].ID
+				products[i].ID = uuid.New()
+				products[i].TenantID = tenantID
+				products[i].ScenarioID = scenarioID
+				oldToNewProduct[oldID] = products[i].ID
+				if err := repos.Product.CreateProduct(&products[i]); err != nil {
+					return fmt.Errorf("write product %q: %w", products[i].Name, err)
 				}
 			}
 
-			if raw, ok := data["productAssumptions"]; ok && len(raw) > 0 {
-				var assumptions []model.ProductAssumption
-				if err := json.Unmarshal(raw, &assumptions); err == nil {
-					for i := range assumptions {
-						assumptions[i].ID = uuid.New()
-						assumptions[i].TenantID = tenantID
-						if newID, ok := oldToNewProduct[assumptions[i].ProductID]; ok {
-							assumptions[i].ProductID = newID
-						}
-					}
-					_ = repos.Product.BatchUpsertAssumptions(tenantID, scenarioID, assumptions)
+			assumptions, err := decodeSection[model.ProductAssumption](data, "productAssumptions")
+			if err != nil {
+				return err
+			}
+			for productID, rows := range groupByProduct(assumptions, oldToNewProduct,
+				func(a *model.ProductAssumption) *uuid.UUID { return &a.ProductID }) {
+				for i := range rows {
+					rows[i].ID = uuid.New()
+					rows[i].TenantID = tenantID
+				}
+				if err := repos.Product.BatchUpsertAssumptions(tenantID, scenarioID, rows); err != nil {
+					return fmt.Errorf("write assumptions of product %s: %w", productID, err)
 				}
 			}
 
-			if raw, ok := data["productSalesVolumes"]; ok && len(raw) > 0 {
-				var volumes []model.ProductSalesVolume
-				if err := json.Unmarshal(raw, &volumes); err == nil {
-					for i := range volumes {
-						volumes[i].ID = uuid.New()
-						volumes[i].TenantID = tenantID
-						if newID, ok := oldToNewProduct[volumes[i].ProductID]; ok {
-							volumes[i].ProductID = newID
-						}
-					}
-					_ = repos.Product.BatchUpsertVolumes(tenantID, scenarioID, volumes)
+			volumes, err := decodeSection[model.ProductSalesVolume](data, "productSalesVolumes")
+			if err != nil {
+				return err
+			}
+			for productID, rows := range groupByProduct(volumes, oldToNewProduct,
+				func(v *model.ProductSalesVolume) *uuid.UUID { return &v.ProductID }) {
+				for i := range rows {
+					rows[i].ID = uuid.New()
+					rows[i].TenantID = tenantID
+				}
+				if err := repos.Product.BatchUpsertVolumes(tenantID, scenarioID, rows); err != nil {
+					return fmt.Errorf("write sales volumes of product %s: %w", productID, err)
 				}
 			}
 
-			if raw, ok := data["productDistributorMargins"]; ok && len(raw) > 0 {
-				var margins []model.ProductDistributorMargin
-				if err := json.Unmarshal(raw, &margins); err == nil {
-					for i := range margins {
-						margins[i].ID = uuid.New()
-						margins[i].TenantID = tenantID
-						if newID, ok := oldToNewProduct[margins[i].ProductID]; ok {
-							margins[i].ProductID = newID
-						}
-					}
-					_ = repos.Product.BatchUpsertMargins(tenantID, scenarioID, margins)
+			margins, err := decodeSection[model.ProductDistributorMargin](data, "productDistributorMargins")
+			if err != nil {
+				return err
+			}
+			for productID, rows := range groupByProduct(margins, oldToNewProduct,
+				func(m *model.ProductDistributorMargin) *uuid.UUID { return &m.ProductID }) {
+				for i := range rows {
+					rows[i].ID = uuid.New()
+					rows[i].TenantID = tenantID
+				}
+				if err := repos.Product.BatchUpsertMargins(tenantID, scenarioID, rows); err != nil {
+					return fmt.Errorf("write distributor margins of product %s: %w", productID, err)
 				}
 			}
-
 			return nil
 		},
 	}
+}
+
+// groupByProduct re-points product child rows to their restored product and
+// groups them by that product, because the product repository's batch upserts
+// take the rows of one product at a time. Rows whose product is not in the
+// map are dropped.
+func groupByProduct[T any](rows []T, oldToNew map[uuid.UUID]uuid.UUID, productID func(*T) *uuid.UUID) map[uuid.UUID][]T {
+	groups := make(map[uuid.UUID][]T)
+	for i := range rows {
+		id := productID(&rows[i])
+		newID, ok := oldToNew[*id]
+		if !ok {
+			continue
+		}
+		*id = newID
+		groups[newID] = append(groups[newID], rows[i])
+	}
+	return groups
 }
 
 // ---------------------------------------------------------------------------
@@ -200,49 +302,59 @@ func staffSection(repos *repo.RepoBundle) SnapshotSection {
 		Name: "staff",
 		Capture: func(tenantID, scenarioID uuid.UUID) (map[string]json.RawMessage, error) {
 			result := make(map[string]json.RawMessage)
-			if hc, err := repos.Staff.ListHeadcountsByScenario(tenantID, scenarioID); err == nil {
-				result["staffHeadcounts"], _ = json.Marshal(hc)
+			steps := []struct {
+				key   string
+				fetch func() (interface{}, error)
+			}{
+				{"staffHeadcounts", func() (interface{}, error) { return repos.Staff.ListHeadcountsByScenario(tenantID, scenarioID) }},
+				{"staffSalaries", func() (interface{}, error) { return repos.Staff.ListSalariesByScenario(tenantID, scenarioID) }},
+				{"staffIncentives", func() (interface{}, error) { return repos.Staff.ListIncentivesByScenario(tenantID, scenarioID) }},
 			}
-			if sal, err := repos.Staff.ListSalariesByScenario(tenantID, scenarioID); err == nil {
-				result["staffSalaries"], _ = json.Marshal(sal)
-			}
-			if inc, err := repos.Staff.ListIncentivesByScenario(tenantID, scenarioID); err == nil {
-				result["staffIncentives"], _ = json.Marshal(inc)
+			for _, step := range steps {
+				if err := capture(result, step.key, step.fetch); err != nil {
+					return nil, err
+				}
 			}
 			return result, nil
 		},
+		Clear: func(tenantID, scenarioID uuid.UUID) error {
+			return repos.Staff.DeleteByScenario(tenantID, scenarioID)
+		},
 		Restore: func(tenantID, scenarioID uuid.UUID, data map[string]json.RawMessage) error {
-			if raw, ok := data["staffHeadcounts"]; ok && len(raw) > 0 {
-				var hc []model.StaffHeadcount
-				if err := json.Unmarshal(raw, &hc); err == nil {
-					for i := range hc {
-						hc[i].ID = uuid.New()
-						hc[i].TenantID = tenantID
-						hc[i].ScenarioID = scenarioID
-					}
-					_ = repos.Staff.BatchUpsertHeadcounts(tenantID, scenarioID, hc)
+			hc, err := decodeSection[model.StaffHeadcount](data, "staffHeadcounts")
+			if err != nil {
+				return err
+			}
+			if len(hc) > 0 {
+				for i := range hc {
+					hc[i].ID = uuid.New()
+				}
+				if err := repos.Staff.BatchUpsertHeadcounts(tenantID, scenarioID, hc); err != nil {
+					return fmt.Errorf("write headcounts: %w", err)
 				}
 			}
-			if raw, ok := data["staffSalaries"]; ok && len(raw) > 0 {
-				var sal []model.StaffSalary
-				if err := json.Unmarshal(raw, &sal); err == nil {
-					for i := range sal {
-						sal[i].ID = uuid.New()
-						sal[i].TenantID = tenantID
-						sal[i].ScenarioID = scenarioID
-					}
-					_ = repos.Staff.BatchUpsertSalaries(tenantID, scenarioID, sal)
+			sal, err := decodeSection[model.StaffSalary](data, "staffSalaries")
+			if err != nil {
+				return err
+			}
+			if len(sal) > 0 {
+				for i := range sal {
+					sal[i].ID = uuid.New()
+				}
+				if err := repos.Staff.BatchUpsertSalaries(tenantID, scenarioID, sal); err != nil {
+					return fmt.Errorf("write salaries: %w", err)
 				}
 			}
-			if raw, ok := data["staffIncentives"]; ok && len(raw) > 0 {
-				var inc []model.StaffIncentive
-				if err := json.Unmarshal(raw, &inc); err == nil {
-					for i := range inc {
-						inc[i].ID = uuid.New()
-						inc[i].TenantID = tenantID
-						inc[i].ScenarioID = scenarioID
-					}
-					_ = repos.Staff.BatchUpsertIncentives(tenantID, scenarioID, inc)
+			inc, err := decodeSection[model.StaffIncentive](data, "staffIncentives")
+			if err != nil {
+				return err
+			}
+			if len(inc) > 0 {
+				for i := range inc {
+					inc[i].ID = uuid.New()
+				}
+				if err := repos.Staff.BatchUpsertIncentives(tenantID, scenarioID, inc); err != nil {
+					return fmt.Errorf("write incentives: %w", err)
 				}
 			}
 			return nil
@@ -257,35 +369,19 @@ func staffSection(repos *repo.RepoBundle) SnapshotSection {
 func capexSection(repos *repo.RepoBundle) SnapshotSection {
 	return simpleSection("capex", "capexEntries",
 		func(tID, sID uuid.UUID) (interface{}, error) { return repos.Capex.ListByScenario(tID, sID) },
-		func(tID, sID uuid.UUID, raw json.RawMessage) error {
-			var entries []model.CapexEntry
-			if err := json.Unmarshal(raw, &entries); err != nil {
-				return err
-			}
-			for i := range entries {
-				entries[i].ID = uuid.New()
-				entries[i].TenantID = tID
-				entries[i].ScenarioID = sID
-			}
-			return repos.Capex.BatchUpsert(tID, sID, entries)
-		},
+		repos.Capex.DeleteByScenario,
+		repos.Capex.BatchUpsert,
+		func(e *model.CapexEntry, tID, sID uuid.UUID) { e.ID, e.TenantID, e.ScenarioID = uuid.New(), tID, sID },
 	)
 }
 
 func opexSection(repos *repo.RepoBundle) SnapshotSection {
 	return simpleSection("opex", "opexEntries",
 		func(tID, sID uuid.UUID) (interface{}, error) { return repos.Opex.ListByScenario(tID, sID) },
-		func(tID, sID uuid.UUID, raw json.RawMessage) error {
-			var entries []model.OpexManualEntry
-			if err := json.Unmarshal(raw, &entries); err != nil {
-				return err
-			}
-			for i := range entries {
-				entries[i].ID = uuid.New()
-				entries[i].TenantID = tID
-				entries[i].ScenarioID = sID
-			}
-			return repos.Opex.BatchUpsert(tID, sID, entries)
+		repos.Opex.DeleteByScenario,
+		repos.Opex.BatchUpsert,
+		func(e *model.OpexManualEntry, tID, sID uuid.UUID) {
+			e.ID, e.TenantID, e.ScenarioID = uuid.New(), tID, sID
 		},
 	)
 }
@@ -293,17 +389,10 @@ func opexSection(repos *repo.RepoBundle) SnapshotSection {
 func pnlSection(repos *repo.RepoBundle) SnapshotSection {
 	return simpleSection("pnl", "pnlEntries",
 		func(tID, sID uuid.UUID) (interface{}, error) { return repos.PnL.ListByScenario(tID, sID) },
-		func(tID, sID uuid.UUID, raw json.RawMessage) error {
-			var entries []model.PnlManualEntry
-			if err := json.Unmarshal(raw, &entries); err != nil {
-				return err
-			}
-			for i := range entries {
-				entries[i].ID = uuid.New()
-				entries[i].TenantID = tID
-				entries[i].ScenarioID = sID
-			}
-			return repos.PnL.BatchUpsert(tID, sID, entries)
+		repos.PnL.DeleteByScenario,
+		repos.PnL.BatchUpsert,
+		func(e *model.PnlManualEntry, tID, sID uuid.UUID) {
+			e.ID, e.TenantID, e.ScenarioID = uuid.New(), tID, sID
 		},
 	)
 }
@@ -311,71 +400,37 @@ func pnlSection(repos *repo.RepoBundle) SnapshotSection {
 func fiplanSection(repos *repo.RepoBundle) SnapshotSection {
 	return simpleSection("fiplan", "fiplanEntries",
 		func(tID, sID uuid.UUID) (interface{}, error) { return repos.FiPlan.ListByScenario(tID, sID) },
-		func(tID, sID uuid.UUID, raw json.RawMessage) error {
-			var entries []model.FiplanEntry
-			if err := json.Unmarshal(raw, &entries); err != nil {
-				return err
-			}
-			for i := range entries {
-				entries[i].ID = uuid.New()
-				entries[i].TenantID = tID
-				entries[i].ScenarioID = sID
-			}
-			return repos.FiPlan.BatchUpsert(tID, sID, entries)
-		},
+		repos.FiPlan.DeleteByScenario,
+		repos.FiPlan.BatchUpsert,
+		func(e *model.FiplanEntry, tID, sID uuid.UUID) { e.ID, e.TenantID, e.ScenarioID = uuid.New(), tID, sID },
 	)
 }
 
 func pnlCashSection(repos *repo.RepoBundle) SnapshotSection {
 	return simpleSection("pnlCash", "pnlCashEntries",
 		func(tID, sID uuid.UUID) (interface{}, error) { return repos.PnlCash.ListByScenario(tID, sID) },
-		func(tID, sID uuid.UUID, raw json.RawMessage) error {
-			var entries []model.PnlCashEntry
-			if err := json.Unmarshal(raw, &entries); err != nil {
-				return err
-			}
-			for i := range entries {
-				entries[i].ID = uuid.New()
-				entries[i].TenantID = tID
-				entries[i].ScenarioID = sID
-			}
-			return repos.PnlCash.BatchUpsert(tID, sID, entries)
-		},
+		repos.PnlCash.DeleteByScenario,
+		repos.PnlCash.BatchUpsert,
+		func(e *model.PnlCashEntry, tID, sID uuid.UUID) { e.ID, e.TenantID, e.ScenarioID = uuid.New(), tID, sID },
 	)
 }
 
 func wcrSection(repos *repo.RepoBundle) SnapshotSection {
 	return simpleSection("wcr", "wcrEntries",
 		func(tID, sID uuid.UUID) (interface{}, error) { return repos.WCR.ListByScenario(tID, sID) },
-		func(tID, sID uuid.UUID, raw json.RawMessage) error {
-			var entries []model.WCREntry
-			if err := json.Unmarshal(raw, &entries); err != nil {
-				return err
-			}
-			for i := range entries {
-				entries[i].ID = uuid.New()
-				entries[i].TenantID = tID
-				entries[i].ScenarioID = sID
-			}
-			return repos.WCR.BatchUpsert(tID, sID, entries)
-		},
+		repos.WCR.DeleteByScenario,
+		repos.WCR.BatchUpsert,
+		func(e *model.WCREntry, tID, sID uuid.UUID) { e.ID, e.TenantID, e.ScenarioID = uuid.New(), tID, sID },
 	)
 }
 
 func cashSection(repos *repo.RepoBundle) SnapshotSection {
 	return simpleSection("cash", "cashOverrides",
 		func(tID, sID uuid.UUID) (interface{}, error) { return repos.Cash.ListByScenario(tID, sID) },
-		func(tID, sID uuid.UUID, raw json.RawMessage) error {
-			var entries []model.CashMonthlyOverride
-			if err := json.Unmarshal(raw, &entries); err != nil {
-				return err
-			}
-			for i := range entries {
-				entries[i].ID = uuid.New()
-				entries[i].TenantID = tID
-				entries[i].ScenarioID = sID
-			}
-			return repos.Cash.BatchUpsert(tID, sID, entries)
+		repos.Cash.DeleteByScenario,
+		repos.Cash.BatchUpsert,
+		func(e *model.CashMonthlyOverride, tID, sID uuid.UUID) {
+			e.ID, e.TenantID, e.ScenarioID = uuid.New(), tID, sID
 		},
 	)
 }
@@ -389,58 +444,76 @@ func budgetSection(repos *repo.RepoBundle) SnapshotSection {
 		Name: "budget",
 		Capture: func(tenantID, scenarioID uuid.UUID) (map[string]json.RawMessage, error) {
 			result := make(map[string]json.RawMessage)
-			var allBudgets []model.BudgetMonthlyOverride
+			allBudgets := []model.BudgetMonthlyOverride{}
 			for year := 1; year <= compute.MaxYears; year++ {
-				if ptrEntries, err := repos.Budget.ListByScenario(tenantID, scenarioID, year); err == nil {
-					for _, e := range ptrEntries {
-						allBudgets = append(allBudgets, *e)
-					}
+				ptrEntries, err := repos.Budget.ListByScenario(tenantID, scenarioID, year)
+				if err != nil {
+					return nil, fmt.Errorf("read budgetOverrides year %d: %w", year, err)
+				}
+				for _, e := range ptrEntries {
+					allBudgets = append(allBudgets, *e)
 				}
 			}
-			result["budgetOverrides"], _ = json.Marshal(allBudgets)
-			return result, nil
+			return result, capture(result, "budgetOverrides", func() (interface{}, error) { return allBudgets, nil })
+		},
+		Clear: func(tenantID, scenarioID uuid.UUID) error {
+			return repos.Budget.DeleteByScenario(tenantID, scenarioID)
 		},
 		Restore: func(tenantID, scenarioID uuid.UUID, data map[string]json.RawMessage) error {
-			if raw, ok := data["budgetOverrides"]; ok && len(raw) > 0 {
-				var entries []model.BudgetMonthlyOverride
-				if err := json.Unmarshal(raw, &entries); err == nil {
-					for i := range entries {
-						entries[i].ID = uuid.New()
-						entries[i].TenantID = tenantID
-						entries[i].ScenarioID = scenarioID
-					}
-					_ = repos.Budget.BatchUpsert(tenantID, scenarioID, entries)
-				}
-			}
-			return nil
+			return restoreEntries(tenantID, scenarioID, data, "budgetOverrides", repos.Budget.BatchUpsert,
+				func(e *model.BudgetMonthlyOverride, tID, sID uuid.UUID) {
+					e.ID, e.TenantID, e.ScenarioID = uuid.New(), tID, sID
+				})
 		},
 	}
 }
 
 // ---------------------------------------------------------------------------
-// simpleSection is a helper for single-key capture/restore sections.
+// simpleSection is a helper for single-key capture/restore sections whose
+// rows are written with one batch upsert.
 // ---------------------------------------------------------------------------
 
-func simpleSection(
+func simpleSection[T any](
 	name string,
 	key string,
 	listFn func(tenantID, scenarioID uuid.UUID) (interface{}, error),
-	restoreFn func(tenantID, scenarioID uuid.UUID, raw json.RawMessage) error,
+	clearFn func(tenantID, scenarioID uuid.UUID) error,
+	upsertFn func(tenantID, scenarioID uuid.UUID, entries []T) error,
+	retarget func(entry *T, tenantID, scenarioID uuid.UUID),
 ) SnapshotSection {
 	return SnapshotSection{
 		Name: name,
 		Capture: func(tenantID, scenarioID uuid.UUID) (map[string]json.RawMessage, error) {
 			result := make(map[string]json.RawMessage)
-			if entries, err := listFn(tenantID, scenarioID); err == nil {
-				result[key], _ = json.Marshal(entries)
+			if err := capture(result, key, func() (interface{}, error) { return listFn(tenantID, scenarioID) }); err != nil {
+				return nil, err
 			}
 			return result, nil
 		},
+		Clear: clearFn,
 		Restore: func(tenantID, scenarioID uuid.UUID, data map[string]json.RawMessage) error {
-			if raw, ok := data[key]; ok && len(raw) > 0 {
-				return restoreFn(tenantID, scenarioID, raw)
-			}
-			return nil
+			return restoreEntries(tenantID, scenarioID, data, key, upsertFn, retarget)
 		},
 	}
+}
+
+// restoreEntries decodes data[key], re-targets every row (fresh ID, target
+// tenant and scenario) and writes them in one batch. No rows → nothing written.
+func restoreEntries[T any](tenantID, scenarioID uuid.UUID, data map[string]json.RawMessage, key string,
+	upsertFn func(tenantID, scenarioID uuid.UUID, entries []T) error,
+	retarget func(entry *T, tenantID, scenarioID uuid.UUID)) error {
+	entries, err := decodeSection[T](data, key)
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	for i := range entries {
+		retarget(&entries[i], tenantID, scenarioID)
+	}
+	if err := upsertFn(tenantID, scenarioID, entries); err != nil {
+		return fmt.Errorf("write %s: %w", key, err)
+	}
+	return nil
 }

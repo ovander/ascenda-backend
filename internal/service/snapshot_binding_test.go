@@ -56,9 +56,25 @@ func (f *fakeSnapshotRepo) Delete(tenantID, snapshotID uuid.UUID) error {
 
 var _ repo.SnapshotRepository = (*fakeSnapshotRepo)(nil)
 
+// recordingRestorer stands in for the transactional restorer: it records the
+// scenario each restore targets and can be told to fail.
+type recordingRestorer struct {
+	calls []uuid.UUID
+	data  []map[string]json.RawMessage
+	err   error
+}
+
+func (r *recordingRestorer) RestoreScenarioData(_ uuid.UUID, scenarioID uuid.UUID, data map[string]json.RawMessage) error {
+	r.calls = append(r.calls, scenarioID)
+	r.data = append(r.data, data)
+	return r.err
+}
+
 type snapshotFixture struct {
 	svc        *SnapshotService
 	snapRepo   *fakeSnapshotRepo
+	restorer   *recordingRestorer
+	events     []event.Event
 	tenantID   uuid.UUID
 	planA      uuid.UUID
 	planB      uuid.UUID
@@ -77,6 +93,7 @@ func newSnapshotFixture(t *testing.T) *snapshotFixture {
 
 	f := &snapshotFixture{
 		snapRepo: newFakeSnapshotRepo(),
+		restorer: &recordingRestorer{},
 		tenantID: uuid.New(),
 		planA:    uuid.New(),
 		planB:    uuid.New(),
@@ -93,7 +110,7 @@ func newSnapshotFixture(t *testing.T) *snapshotFixture {
 		s := &model.PlanSnapshot{
 			TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: f.tenantID},
 			ScenarioID:   scenarioID,
-			Data:         json.RawMessage(`{}`), // empty: sections have nothing to restore
+			Data:         json.RawMessage(`{"capexEntries":[]}`),
 		}
 		require.NoError(t, f.snapRepo.Create(s))
 		return s.ID
@@ -101,11 +118,13 @@ func newSnapshotFixture(t *testing.T) *snapshotFixture {
 	f.snapOfA1, f.snapOfA1v2, f.snapOfB1 = snap(f.scenA1), snap(f.scenA1), snap(f.scenB1)
 
 	emitter := event.NewEmitter(logger)
+	emitter.Subscribe(func(e event.Event) { f.events = append(f.events, e) })
 	t.Cleanup(emitter.Close)
 
-	// Only the scenario repo is needed: with empty snapshot data no section
-	// touches its repository.
+	// Only the scenario repo is needed: writes go through the recording
+	// restorer instead of the database-backed one.
 	f.svc = NewSnapshotService(f.snapRepo, &repo.RepoBundle{Scenario: scenRepo}, emitter, logger)
+	f.svc.restorer = f.restorer
 	return f
 }
 
@@ -144,7 +163,7 @@ func TestSnapshotBinding_GetDataScopedToScenario(t *testing.T) {
 
 	data, err := f.svc.GetData(ctx, f.tenantID, f.scenA1, f.snapOfA1)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{}`, string(data))
+	assert.JSONEq(t, `{"capexEntries":[]}`, string(data))
 
 	_, err = f.svc.GetData(ctx, f.tenantID, f.scenA1, f.snapOfB1)
 	assertNotFound(t, err)
@@ -170,8 +189,44 @@ func TestSnapshotBinding_RestoreScopedToScenario(t *testing.T) {
 	// even though the snapshot itself would be found by (tenant, id).
 	err := f.svc.Restore(ctx, f.tenantID, f.scenA1, f.snapOfB1)
 	assertNotFound(t, err)
+	assert.Empty(t, f.restorer.calls, "a refused restore must not touch the scenario")
 
 	require.NoError(t, f.svc.Restore(ctx, f.tenantID, f.scenA1, f.snapOfA1))
+	require.Equal(t, []uuid.UUID{f.scenA1}, f.restorer.calls)
+	assert.Contains(t, f.restorer.data[0], "capexEntries", "restorer receives the parsed snapshot")
+	require.Len(t, f.events, 1)
+	assert.Equal(t, event.SnapshotRestored, f.events[0].Type)
+	assert.Equal(t, f.scenA1, f.events[0].ScenarioID)
+}
+
+func TestSnapshotBinding_RestoreFailureIsReportedAndEmitsNothing(t *testing.T) {
+	f := newSnapshotFixture(t)
+	f.restorer.err = errors.New("write products: boom")
+
+	err := f.svc.Restore(context.Background(), f.tenantID, f.scenA1, f.snapOfA1)
+	require.Error(t, err)
+	var appErr *apierror.AppError
+	require.True(t, errors.As(err, &appErr))
+	assert.Equal(t, http.StatusInternalServerError, appErr.StatusCode)
+	assert.Empty(t, f.events, "no SnapshotRestored event for a failed restore")
+}
+
+func TestSnapshotBinding_RestoreRejectsCorruptSnapshotData(t *testing.T) {
+	f := newSnapshotFixture(t)
+	f.snapRepo.snapshots[f.snapOfA1].Data = json.RawMessage(`{not json`)
+
+	err := f.svc.Restore(context.Background(), f.tenantID, f.scenA1, f.snapOfA1)
+	require.Error(t, err)
+	assert.Empty(t, f.restorer.calls, "unparseable data must fail before any write")
+	assert.Empty(t, f.events)
+}
+
+func TestSnapshotBinding_RestorerWithoutDatabaseFails(t *testing.T) {
+	// The default restorer is built from RepoBundle.DB; a bundle without a
+	// handle must fail loudly rather than panic or pretend to restore.
+	r := &dbScenarioRestorer{}
+	err := r.RestoreScenarioData(uuid.New(), uuid.New(), map[string]json.RawMessage{})
+	assert.ErrorIs(t, err, errNoDatabase)
 }
 
 func TestSnapshotBinding_DiffRequiresBothInScenario(t *testing.T) {
@@ -193,8 +248,9 @@ func TestSnapshotBinding_CloneTargetMustBeInSamePlan(t *testing.T) {
 	f := newSnapshotFixture(t)
 	ctx := context.Background()
 
-	// Target in the same plan → allowed.
+	// Target in the same plan → allowed, and the target is what gets written.
 	require.NoError(t, f.svc.CloneToScenario(ctx, f.tenantID, f.scenA1, f.snapOfA1, f.scenA2))
+	require.Equal(t, []uuid.UUID{f.scenA2}, f.restorer.calls)
 
 	// Target in another plan of the same tenant → refused.
 	err := f.svc.CloneToScenario(ctx, f.tenantID, f.scenA1, f.snapOfA1, f.scenB1)
@@ -207,4 +263,6 @@ func TestSnapshotBinding_CloneTargetMustBeInSamePlan(t *testing.T) {
 	// Snapshot not in the URL scenario → refused before any target check.
 	err = f.svc.CloneToScenario(ctx, f.tenantID, f.scenA1, f.snapOfB1, f.scenA2)
 	assertNotFound(t, err)
+
+	assert.Len(t, f.restorer.calls, 1, "refused clones never reach the restorer")
 }
