@@ -18,7 +18,7 @@ import (
 func TestAuditHandler_List_MissingTenantContext(t *testing.T) {
 	// When tenant context is missing, handler returns 403 without calling repo.
 	// Pass nil for dependencies since they won't be accessed.
-	handler := NewAuditHandler(nil, nil, logrus.NewEntry(logrus.New()))
+	handler := NewAuditHandler(nil, nil, nil, nil, logrus.NewEntry(logrus.New()))
 
 	r := httptest.NewRequest(http.MethodGet, "/?page=0&limit=50", nil)
 	// No tenant context — defaults to zero UUID
@@ -33,7 +33,7 @@ func TestAuditHandler_List_MissingTenantContext(t *testing.T) {
 
 func TestAuditHandler_RecordExport_MissingTenantContext(t *testing.T) {
 	// When tenant context is missing, handler returns 403 without creating entry.
-	handler := NewAuditHandler(nil, nil, logrus.NewEntry(logrus.New()))
+	handler := NewAuditHandler(nil, nil, nil, nil, logrus.NewEntry(logrus.New()))
 
 	body := map[string]interface{}{
 		"totalExported": 100,
@@ -56,7 +56,7 @@ func TestAuditHandler_RecordExport_MissingTenantContext(t *testing.T) {
 
 func TestAuditHandler_RecordExport_InvalidJSON(t *testing.T) {
 	// When JSON body is invalid, handler returns 400.
-	handler := NewAuditHandler(nil, nil, logrus.NewEntry(logrus.New()))
+	handler := NewAuditHandler(nil, nil, nil, nil, logrus.NewEntry(logrus.New()))
 
 	tenantID := uuid.New()
 	r := httptest.NewRequest(http.MethodPost, "/export", bytes.NewReader([]byte("invalid json")))
@@ -73,7 +73,7 @@ func TestAuditHandler_RecordExport_InvalidJSON(t *testing.T) {
 
 func TestAuditHandler_GetDetail_MissingTenantContext(t *testing.T) {
 	// When tenant context is missing, handler returns 403 without reading repo.
-	handler := NewAuditHandler(nil, nil, logrus.NewEntry(logrus.New()))
+	handler := NewAuditHandler(nil, nil, nil, nil, logrus.NewEntry(logrus.New()))
 
 	entryID := uuid.New()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -90,7 +90,7 @@ func TestAuditHandler_GetDetail_MissingTenantContext(t *testing.T) {
 
 func TestAuditHandler_GetDetail_InvalidEntryUUID(t *testing.T) {
 	// When entryId URL param is not a valid UUID, handler returns 400.
-	handler := NewAuditHandler(nil, nil, logrus.NewEntry(logrus.New()))
+	handler := NewAuditHandler(nil, nil, nil, nil, logrus.NewEntry(logrus.New()))
 
 	tenantID := uuid.New()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -107,7 +107,7 @@ func TestAuditHandler_GetDetail_InvalidEntryUUID(t *testing.T) {
 
 func TestAuditHandler_DownloadByScenario_MissingTenantContext(t *testing.T) {
 	// When tenant context is missing, handler returns 403 without querying repo.
-	handler := NewAuditHandler(nil, nil, logrus.NewEntry(logrus.New()))
+	handler := NewAuditHandler(nil, nil, nil, nil, logrus.NewEntry(logrus.New()))
 
 	scenarioID := uuid.New()
 	r := httptest.NewRequest(http.MethodGet, "/download", nil)
@@ -124,7 +124,7 @@ func TestAuditHandler_DownloadByScenario_MissingTenantContext(t *testing.T) {
 
 func TestAuditHandler_DownloadByScenario_InvalidScenarioUUID(t *testing.T) {
 	// When scenarioId URL param is not a valid UUID, handler returns 400.
-	handler := NewAuditHandler(nil, nil, logrus.NewEntry(logrus.New()))
+	handler := NewAuditHandler(nil, nil, nil, nil, logrus.NewEntry(logrus.New()))
 
 	tenantID := uuid.New()
 	r := httptest.NewRequest(http.MethodGet, "/download", nil)

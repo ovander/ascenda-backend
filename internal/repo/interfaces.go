@@ -174,6 +174,11 @@ type AuditRepository interface {
 	ListByEntity(tenantID uuid.UUID, entityType string, entityID uuid.UUID) ([]*model.AuditLog, error)
 	ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*model.AuditLog, error)
 	CountByTenant(tenantID uuid.UUID) (int64, error)
+	// ListByTenantAndEntities / CountByTenantAndEntities restrict the trail to
+	// rows whose entity_id is in entityIDs (plans, scenarios or the tenant ID
+	// the caller may see). An empty entityIDs yields no rows.
+	ListByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID, offset, limit int) ([]*model.AuditLog, error)
+	CountByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID) (int64, error)
 	ListByEntityID(tenantID, entityID uuid.UUID) ([]*model.AuditLog, error)
 	ListByUser(tenantID, userID uuid.UUID, offset, limit int) ([]*model.AuditLog, error)
 }

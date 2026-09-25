@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"ascenda/internal/repo"
+	"ascenda/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/ovander/backendkit/ctxutil"
@@ -13,18 +14,16 @@ import (
 // PlanAccessMiddleware checks plan-level permissions via plan_members table and
 // binds nested resources (scenarios) to the plan named in the URL.
 type PlanAccessMiddleware struct {
-	planRepo       repo.PlanRepository
-	planMemberRepo repo.PlanMemberRepository
-	scenarioRepo   repo.ScenarioRepository
-	logger         *logrus.Entry
+	resolver     *service.PlanAccessResolver
+	scenarioRepo repo.ScenarioRepository
+	logger       *logrus.Entry
 }
 
 func NewPlanAccessMiddleware(planRepo repo.PlanRepository, planMemberRepo repo.PlanMemberRepository, scenarioRepo repo.ScenarioRepository, logger *logrus.Entry) *PlanAccessMiddleware {
 	return &PlanAccessMiddleware{
-		planRepo:       planRepo,
-		planMemberRepo: planMemberRepo,
-		scenarioRepo:   scenarioRepo,
-		logger:         logger,
+		resolver:     service.NewPlanAccessResolver(planRepo, planMemberRepo, scenarioRepo),
+		scenarioRepo: scenarioRepo,
+		logger:       logger,
 	}
 }
 
@@ -38,13 +37,9 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 // RequirePlanAccess checks if user has any access (editor or viewer) to the plan.
 // Owner bypasses this check entirely.
 //
-// The plan-level role injected into the context is, in order:
-//   - "owner" for tenant owners (unchanged);
-//   - the plan_members role for explicit members;
-//   - on a demo plan, "editor" for any other tenant user ("viewer" for the
-//     read-only tenant role "reader"): demo plans are a shared sandbox that
-//     everyone may edit and owners can reset;
-//   - otherwise the request is rejected with 403.
+// The plan-level role injected into the context comes from
+// service.PlanAccessResolver.PlanRole (owner → member role → demo sandbox);
+// callers without any access are rejected with 403.
 func (m *PlanAccessMiddleware) RequirePlanAccess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -83,31 +78,17 @@ func (m *PlanAccessMiddleware) RequirePlanAccess(next http.Handler) http.Handler
 			return
 		}
 
-		// Explicit membership wins, on demo and regular plans alike.
-		member, err := m.planMemberRepo.GetByPlanAndUser(tenantID, planID, userID)
-		if err == nil && member != nil {
-			ctx = ctxutil.WithUserRole(ctx, member.Role)
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-
-		// Demo plans are a sandbox every tenant user may edit — no membership
-		// required. The read-only tenant role "reader" keeps read-only access.
 		// The plan-level role is set explicitly rather than leaking the tenant
-		// role through, and RequireScenarioInPlan keeps a demo plan from being
-		// used as a gateway to other plans' scenarios (audit finding S-H1).
-		if plan, err := m.planRepo.GetByID(tenantID, planID); err == nil && plan != nil && plan.IsDemo {
-			demoRole := "editor"
-			if role == "reader" {
-				demoRole = "viewer"
-			}
-			ctx = ctxutil.WithUserRole(ctx, demoRole)
-			next.ServeHTTP(w, r.WithContext(ctx))
+		// role through; RequireScenarioInPlan keeps a demo plan from being used
+		// as a gateway to other plans' scenarios (audit finding S-H1).
+		planRole, ok := m.resolver.PlanRole(tenantID, userID, role, planID)
+		if !ok {
+			m.logger.WithField("user_id", userID).WithField("plan_id", planID).Warn("plan access denied")
+			writeJSONError(w, http.StatusForbidden, "forbidden", "no access to this plan")
 			return
 		}
-
-		m.logger.WithField("user_id", userID).WithField("plan_id", planID).Warn("plan access denied")
-		writeJSONError(w, http.StatusForbidden, "forbidden", "no access to this plan")
+		ctx = ctxutil.WithUserRole(ctx, planRole)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

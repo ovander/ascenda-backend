@@ -131,6 +131,12 @@ func (r *stubAuditRepo) ListByTenant(tenantID uuid.UUID, offset, limit int) ([]*
 	return nil, nil
 }
 func (r *stubAuditRepo) CountByTenant(tenantID uuid.UUID) (int64, error)             { return 0, nil }
+func (r *stubAuditRepo) ListByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID, offset, limit int) ([]*model.AuditLog, error) {
+	return nil, nil
+}
+func (r *stubAuditRepo) CountByTenantAndEntities(tenantID uuid.UUID, entityIDs []uuid.UUID) (int64, error) {
+	return 0, nil
+}
 func (r *stubAuditRepo) ListByEntityID(tenantID, entityID uuid.UUID) ([]*model.AuditLog, error) {
 	return nil, nil
 }
