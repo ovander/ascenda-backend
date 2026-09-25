@@ -248,7 +248,11 @@ make docker-compose-down   # stops everything
 
 ## Database
 
-Migrations live in `migrations/` as numbered SQL files (`NNNN_name.up.sql` / `NNNN_name.down.sql`).
+Migrations live in `migrations/` as numbered SQL files (`NNNN_name.up.sql` / `NNNN_name.down.sql`) and are embedded in the binary. **They are the only source of truth for the schema**: `000000_baseline.up.sql` creates every base table (generated from the GORM models), and `000001` onwards evolve it. A fresh database is fully provisioned by `./ascenda-api migrate` (or `make migrate-up`) with no AutoMigrate step.
+
+`DB_AUTO_MIGRATE` (default `true` in development only) additionally runs GORM AutoMigrate after the SQL migrations. It is a convenience for local model tinkering; any schema change that must reach staging or production needs a migration file, and the repository integration tests (`make test-integration`) provision their database from the migrations alone, so a model that drifts from them fails CI.
+
+Existing databases are unaffected by the baseline: golang-migrate only applies it below version 1, and every deployment is at version 15 or later.
 
 ```bash
 make migrate-up                        # apply all pending
@@ -281,7 +285,20 @@ make test-cover      # coverage report → coverage.html
 make test-compute    # compute engine tests only
 ```
 
-Integration tests use [testcontainers-go](https://golang.testcontainers.org/) to spin up a real PostgreSQL instance — no manual setup required. They are skipped with `-short`.
+Integration tests live in `internal/repo` behind the `integration` build tag and use [testcontainers-go](https://golang.testcontainers.org/) to spin up a real PostgreSQL instance — no manual setup beyond a running Docker daemon. Without Docker, point them at any empty PostgreSQL database with `TEST_DATABASE_URL=postgres://…` instead. Either way the schema is provisioned from the embedded SQL migrations. Run them with `make test-integration`; `make test` / `make test-short` do not include them.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and push to `main`:
+
+| Job | What it runs | Gate |
+|---|---|---|
+| Build, vet, unit tests | `go build`, `go vet`, `go test -short -race` | blocking |
+| golangci-lint | `.golangci.yml` (standard linters); pull requests fail only on **new** issues (`--new-from-rev`), pushes to `main` report the full backlog | blocking on PRs |
+| gofmt | changed `.go` files must be gofmt-clean; the tree-wide count is reported on `main` | blocking on PRs |
+| Integration tests | `go test -tags integration ./internal/repo/...` (testcontainers) | blocking |
+| govulncheck | reachable vulnerabilities in dependencies | blocking |
+| Docker image | `docker build` of the Dockerfile (no push) | blocking |
 
 Handler tests use hand-rolled mocks (no code-gen required) and `httptest.NewRecorder`. Each domain's handler test file defines a `Mock<Domain>Service` struct that satisfies the handler's service interface.
 

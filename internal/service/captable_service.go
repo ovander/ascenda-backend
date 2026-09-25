@@ -71,7 +71,7 @@ func (s *CapTableService) GetCompany(ctx context.Context, tenantID, scenarioID u
 
 // UpsertCompany creates or updates the company config for a scenario.
 func (s *CapTableService) UpsertCompany(ctx context.Context, company *model.CapTableCompany) error {
-	company.TenantID = company.TenantID // already set by handler
+	// company.TenantID and ScenarioID are already set by the handler from the URL.
 	if err := s.capTableRepo.UpsertCompany(company); err != nil {
 		s.logger.WithError(err).Error("failed to upsert cap table company")
 		return apierror.Internal("failed to save cap table company")

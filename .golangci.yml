@@ -1,0 +1,26 @@
+# golangci-lint v2 configuration.
+#
+# The default linter set (errcheck, govet, ineffassign, staticcheck, unused)
+# is kept. CI runs with --new-from-rev on pull requests, so only issues
+# introduced by a change fail the build; the historical backlog is tracked
+# in docs/AUDIT-2026-09-25.md §6.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  exclusions:
+    generated: lax
+    rules:
+      # Test doubles and test helpers routinely ignore returned errors.
+      - path: _test\.go$
+        linters: [errcheck]
+      - path: internal/service/testhelpers\.go$
+        linters: [errcheck, unused]
+
+formatters:
+  enable:
+    - gofmt

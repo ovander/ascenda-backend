@@ -37,6 +37,9 @@ run-prod: ## Run with production settings
 test: ## Run all tests
 	$(GO) test -v -race -count=1 ./...
 
+test-integration: ## Run repository integration tests (testcontainers, needs Docker; or set TEST_DATABASE_URL)
+	go test -tags integration -count=1 ./internal/repo/...
+
 test-short: ## Run tests without integration tests
 	$(GO) test -v -short -race ./...
 
@@ -85,11 +88,14 @@ migrate-status: ## Show pending vs applied migration count
 migrate-force: ## Mark a specific version as applied without running it (usage: make migrate-force version=12)
 	$(MIGRATE) force $(version)
 
-# On existing deployments that ran migrations manually before golang-migrate was
-# introduced, mark all 12 existing migrations as applied without re-running them:
-migrate-baseline: ## Mark all pre-numbered migrations as applied (run once on existing DBs)
-	$(MIGRATE) force 12
-	@echo "Baseline set to version 12 — only future migrations will be applied"
+# On an existing database whose schema was created by GORM AutoMigrate and
+# whose migrations were applied by hand (no schema_migrations table), mark
+# every migration up to and including the current head as applied without
+# re-running them. Fresh databases never need this: 000000_baseline.up.sql
+# creates the base schema and `migrate-up` applies everything in order.
+migrate-baseline: ## Mark all existing migrations as applied (run once on legacy DBs)
+	$(MIGRATE) force 15
+	@echo "Baseline set to version 15 — only future migrations will be applied"
 
 # ── Database ─────────────────────────
 
@@ -133,7 +139,7 @@ deps-update: ## Update all dependencies
 # ── Tools ────────────────────────────
 
 tools: ## Install development tools
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
