@@ -514,7 +514,7 @@ Do NOT suggest corrections — only explain the implications.`
 	case NarrationTypeBenchmarkCommentary:
 		return `Generate a benchmark commentary narration.
 Using the primary_driver_type and product_economics data, comment on how the plan's KPIs compare to typical industry benchmarks for that driver type.
-For SaaS: reference CAC payback, churn, ARR growth. For consulting: utilisation rate, revenue-per-FTE. For marketplace: take rate, GMV growth. For media: eCPM, ARPU. For industry: gross margin, inventory turn. For session_based: fill rate, revenue-per-session, trainer utilisation, participant yield. For generic: revenue growth, EBITDA margin.
+For SaaS: reference CAC payback, churn, ARR growth. For consulting: utilisation rate, revenue-per-FTE. For marketplace: take rate, GMV growth. For media: eCPM, ARPU. For industry: gross margin, inventory turn. For session_based: fill rate, revenue-per-session, trainer utilisation, participant yield. For competition: cut rate, prize money per event played, share of revenue from wins and top-10 finishes, per-event cost. For contract: share of revenue from contracts versus prize money, dependence on the largest partner, bonus share. For generic: revenue growth, EBITDA margin.
 Be explicit that benchmarks are general references, not guarantees.`
 
 	case NarrationTypePortfolioMix:
@@ -525,8 +525,9 @@ Do NOT recommend adding or removing products.`
 
 	case NarrationTypeDriverAdvisor:
 		return `Generate a driver advisor narration.
-Based on the product_economics data and any generic-driver products present, suggest which structured driver type (saas, consulting, marketplace, industry, media, session_based) best fits each generic product.
+Based on the product_economics data and any generic-driver products present, suggest which structured driver type (saas, consulting, marketplace, industry, media, session_based, competition, contract) best fits each generic product.
 Use session_based when the product delivers discrete sessions or events (training, workshops, seminars) where revenue scales with participants × fill rate and cost splits between fixed-per-session and variable-per-participant.
+Use competition when revenue is prize money earned from sporting results (events played, cuts made, top-10 finishes, wins) with per-event travel, entry and caddie or coach costs. Use contract when revenue is a set of sponsorship or image-rights contracts with a fixed yearly value and optional bonuses per win.
 Explain the reasoning for each recommendation using the available assumption and KPI data.
 Structure your output JSON with an additional "structured_data" field containing an object: {"recommendations": [{"product_name": "...", "recommended_driver": "...", "confidence": "high|medium|low", "rationale": "..."}]}.`
 

@@ -44,6 +44,10 @@ func (s *ProductService) ListProducts(ctx context.Context, tenantID, scenarioID 
 
 // CreateProduct creates a new product.
 func (s *ProductService) CreateProduct(ctx context.Context, tenantID, scenarioID uuid.UUID, product *model.Product) error {
+	if err := model.ValidateDriverParams(product.DriverType, product.DriverParams); err != nil {
+		return apierror.BadRequest(err.Error())
+	}
+
 	product.ID = uuid.New()
 	product.TenantID = tenantID
 	product.ScenarioID = scenarioID
@@ -96,6 +100,11 @@ func (s *ProductService) UpdateProduct(ctx context.Context, tenantID, productID 
 	}
 	if len(product.DriverParams) > 0 {
 		existing.DriverParams = product.DriverParams
+	}
+	// Validate against the effective driver type: the request may change the
+	// parameters without restating the type.
+	if err := model.ValidateDriverParams(existing.DriverType, existing.DriverParams); err != nil {
+		return apierror.BadRequest(err.Error())
 	}
 
 	if err := s.productRepo.UpdateProduct(existing); err != nil {
@@ -294,9 +303,22 @@ func (s *ProductService) GetDerivedBundle(ctx context.Context, tenantID, product
 		bundle.Margins = append(bundle.Margins, *m)
 	}
 
+	// Drivers that read other products of the scenario (contract bonuses on
+	// competition wins) need the scenario context.
+	var driverCtx compute.DriverContext
+	if product.DriverType == model.DriverContract {
+		if siblings, err := s.productRepo.ListProductsByScenario(tenantID, product.ScenarioID); err == nil {
+			all := make([]model.Product, len(siblings))
+			for i, p := range siblings {
+				all[i] = *p
+			}
+			driverCtx = compute.BuildDriverContext(all)
+		}
+	}
+
 	// Apply driver compute. On error (e.g. params not yet saved, partial JSON)
 	// fall back to the raw stored bundle so the UI still gets a valid response.
-	derived, dErr := compute.ApplyDriverCompute(*product, bundle)
+	derived, dErr := compute.ApplyDriverComputeWithContext(*product, bundle, driverCtx)
 	if dErr != nil {
 		s.logger.WithError(dErr).Warn("driver compute failed in GetDerivedBundle — returning raw bundle")
 		derived = bundle
