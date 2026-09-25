@@ -147,7 +147,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 		mwLog.Warn("TENANT_DEFAULT_FALLBACK enabled — unknown users without a tenant claim are provisioned into the default workspace (development only)")
 	}
 	rbacMW := middleware.NewRBACMiddleware(log)
-	planAccessMW := middleware.NewPlanAccessMiddleware(repos.Plan, repos.PlanMember, log)
+	planAccessMW := middleware.NewPlanAccessMiddleware(repos.Plan, repos.PlanMember, repos.Scenario, log)
 	tierGateMW := middleware.NewTierGateMiddleware(log)
 	aiAccessMW := middleware.NewAIAccessMiddleware(services.AIUsagePolicy, log)
 	loggerMW := middleware.NewLoggerMiddleware(log.Logger)

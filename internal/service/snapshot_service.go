@@ -17,6 +17,7 @@ import (
 // SnapshotService orchestrates plan versioning and snapshots.
 type SnapshotService struct {
 	snapshotRepo repo.SnapshotRepository
+	scenarioRepo repo.ScenarioRepository
 	sections     []SnapshotSection
 	emitter      *event.Emitter
 	logger       *logrus.Entry
@@ -26,10 +27,31 @@ type SnapshotService struct {
 func NewSnapshotService(snapshotRepo repo.SnapshotRepository, repos *repo.RepoBundle, emitter *event.Emitter, logger *logrus.Entry) *SnapshotService {
 	return &SnapshotService{
 		snapshotRepo: snapshotRepo,
+		scenarioRepo: repos.Scenario,
 		sections:     registerSections(repos),
 		emitter:      emitter,
 		logger:       logger,
 	}
+}
+
+// getInScenario loads a snapshot and verifies it belongs to scenarioID.
+// A snapshot from another scenario is reported as not found so that IDs are
+// not confirmed across plans.
+func (s *SnapshotService) getInScenario(tenantID, scenarioID, snapshotID uuid.UUID) (*model.PlanSnapshot, error) {
+	snapshot, err := s.snapshotRepo.GetByID(tenantID, snapshotID)
+	if err != nil || snapshot == nil || snapshot.TenantID != tenantID {
+		s.logger.WithError(err).WithField("snapshot_id", snapshotID).Warn("snapshot not found")
+		return nil, apierror.NotFound("snapshot", snapshotID.String())
+	}
+	if snapshot.ScenarioID != scenarioID {
+		s.logger.WithFields(logrus.Fields{
+			"snapshot_id":       snapshotID,
+			"scenario_id":       scenarioID,
+			"snapshot_scenario": snapshot.ScenarioID,
+		}).Warn("snapshot does not belong to scenario in URL — access denied")
+		return nil, apierror.NotFound("snapshot", snapshotID.String())
+	}
+	return snapshot, nil
 }
 
 // Create captures the current state of a scenario as a snapshot.
@@ -86,12 +108,11 @@ func (s *SnapshotService) Create(ctx context.Context, tenantID, scenarioID uuid.
 	return snapshot, nil
 }
 
-// Restore restores a scenario from a snapshot.
-func (s *SnapshotService) Restore(ctx context.Context, tenantID, snapshotID uuid.UUID) error {
-	snapshot, err := s.snapshotRepo.GetByID(tenantID, snapshotID)
-	if err != nil || snapshot == nil || snapshot.TenantID != tenantID {
-		s.logger.WithError(err).Warn("snapshot not found")
-		return apierror.NotFound("snapshot", snapshotID.String())
+// Restore restores a scenario from one of its own snapshots.
+func (s *SnapshotService) Restore(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) error {
+	snapshot, err := s.getInScenario(tenantID, scenarioID, snapshotID)
+	if err != nil {
+		return err
 	}
 
 	// Deserialize and restore data
@@ -113,12 +134,32 @@ func (s *SnapshotService) Restore(ctx context.Context, tenantID, snapshotID uuid
 	return nil
 }
 
-// CloneToScenario clones a snapshot to a new scenario.
-func (s *SnapshotService) CloneToScenario(ctx context.Context, tenantID, snapshotID, newScenarioID uuid.UUID) error {
-	snapshot, err := s.snapshotRepo.GetByID(tenantID, snapshotID)
-	if err != nil || snapshot == nil || snapshot.TenantID != tenantID {
-		s.logger.WithError(err).Warn("snapshot not found")
-		return apierror.NotFound("snapshot", snapshotID.String())
+// CloneToScenario writes a snapshot's data into newScenarioID. The snapshot
+// must belong to scenarioID (the scenario in the URL) and the target scenario
+// must exist in the same plan — the caller's edit rights were checked against
+// that plan, so they carry over to the target.
+func (s *SnapshotService) CloneToScenario(ctx context.Context, tenantID, scenarioID, snapshotID, newScenarioID uuid.UUID) error {
+	snapshot, err := s.getInScenario(tenantID, scenarioID, snapshotID)
+	if err != nil {
+		return err
+	}
+
+	source, err := s.scenarioRepo.GetByID(tenantID, scenarioID)
+	if err != nil || source == nil {
+		return apierror.NotFound("scenario", scenarioID.String())
+	}
+	target, err := s.scenarioRepo.GetByID(tenantID, newScenarioID)
+	if err != nil || target == nil {
+		return apierror.NotFound("scenario", newScenarioID.String())
+	}
+	if target.PlanID != source.PlanID {
+		s.logger.WithFields(logrus.Fields{
+			"snapshot_id":     snapshotID,
+			"source_plan_id":  source.PlanID,
+			"target_scenario": newScenarioID,
+			"target_plan_id":  target.PlanID,
+		}).Warn("snapshot clone target belongs to another plan — access denied")
+		return apierror.NotFound("scenario", newScenarioID.String())
 	}
 
 	// Restore to new scenario
@@ -131,17 +172,17 @@ func (s *SnapshotService) CloneToScenario(ctx context.Context, tenantID, snapsho
 	return nil
 }
 
-// Diff compares two snapshots by returning their raw data maps.
-func (s *SnapshotService) Diff(ctx context.Context, tenantID, snapshot1ID, snapshot2ID uuid.UUID) (map[string]interface{}, error) {
-	snap1, err := s.snapshotRepo.GetByID(tenantID, snapshot1ID)
-	if err != nil || snap1 == nil {
-		return nil, apierror.NotFound("snapshot", snapshot1ID.String())
+// Diff compares two snapshots of the same scenario by returning their raw data maps.
+func (s *SnapshotService) Diff(ctx context.Context, tenantID, scenarioID, snapshot1ID, snapshot2ID uuid.UUID) (map[string]interface{}, error) {
+	snap1, err := s.getInScenario(tenantID, scenarioID, snapshot1ID)
+	if err != nil {
+		return nil, err
 	}
 	data1Raw := snap1.Data
 
-	snap2, err := s.snapshotRepo.GetByID(tenantID, snapshot2ID)
-	if err != nil || snap2 == nil {
-		return nil, apierror.NotFound("snapshot", snapshot2ID.String())
+	snap2, err := s.getInScenario(tenantID, scenarioID, snapshot2ID)
+	if err != nil {
+		return nil, err
 	}
 	data2Raw := snap2.Data
 
@@ -195,36 +236,23 @@ func (s *SnapshotService) List(ctx context.Context, tenantID, scenarioID uuid.UU
 }
 
 // Get retrieves a snapshot by ID (without data).
-func (s *SnapshotService) Get(ctx context.Context, tenantID, snapshotID uuid.UUID) (*model.PlanSnapshot, error) {
-	snapshot, err := s.snapshotRepo.GetByID(tenantID, snapshotID)
-	if err != nil || snapshot == nil || snapshot.TenantID != tenantID {
-		s.logger.WithError(err).Warn("snapshot not found")
-		return nil, apierror.NotFound("snapshot", snapshotID.String())
-	}
-	return snapshot, nil
+func (s *SnapshotService) Get(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) (*model.PlanSnapshot, error) {
+	return s.getInScenario(tenantID, scenarioID, snapshotID)
 }
 
 // GetData retrieves raw snapshot data.
-func (s *SnapshotService) GetData(ctx context.Context, tenantID, snapshotID uuid.UUID) (json.RawMessage, error) {
-	// Verify access
-	_, err := s.Get(ctx, tenantID, snapshotID)
+func (s *SnapshotService) GetData(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) (json.RawMessage, error) {
+	snapshot, err := s.getInScenario(tenantID, scenarioID, snapshotID)
 	if err != nil {
 		return nil, err
-	}
-
-	snapshot, err := s.snapshotRepo.GetByID(tenantID, snapshotID)
-	if err != nil || snapshot == nil {
-		s.logger.WithError(err).Error("failed to get snapshot data")
-		return nil, apierror.Internal("failed to get snapshot data")
 	}
 	return snapshot.Data, nil
 }
 
 // Delete removes a snapshot.
-func (s *SnapshotService) Delete(ctx context.Context, tenantID, snapshotID uuid.UUID) error {
-	// Verify access
-	_, err := s.Get(ctx, tenantID, snapshotID)
-	if err != nil {
+func (s *SnapshotService) Delete(ctx context.Context, tenantID, scenarioID, snapshotID uuid.UUID) error {
+	// Verify the snapshot belongs to the scenario in the URL.
+	if _, err := s.getInScenario(tenantID, scenarioID, snapshotID); err != nil {
 		return err
 	}
 

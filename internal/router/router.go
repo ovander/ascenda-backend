@@ -254,8 +254,11 @@ func NewRouter(
 					r.Get("/", handlers.Plans.Scenario.List)
 					r.With(planAccessMW.RequirePlanEdit).Post("/", handlers.Plans.Scenario.Create)
 
-					// All routes under /{scenarioId} in a single subrouter
+					// All routes under /{scenarioId} in a single subrouter.
+					// RequireScenarioInPlan guarantees the scenario belongs to {planId};
+					// every data service below is keyed on (tenant, scenario) only.
 					r.Route("/{scenarioId}", func(r chi.Router) {
+						r.Use(planAccessMW.RequireScenarioInPlan)
 						r.Get("/", handlers.Plans.Scenario.Get)
 						r.With(planAccessMW.RequirePlanEdit).Put("/", handlers.Plans.Scenario.Update)
 						r.With(planAccessMW.RequirePlanEdit).Delete("/", handlers.Plans.Scenario.Delete)
