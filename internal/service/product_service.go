@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 
 	"ascenda/internal/compute"
 	"ascenda/internal/event"
@@ -82,19 +84,33 @@ func (s *ProductService) GetProduct(ctx context.Context, tenantID, productID uui
 }
 
 // UpdateProduct updates a product.
-func (s *ProductService) UpdateProduct(ctx context.Context, tenantID, productID uuid.UUID, product *model.Product) error {
+// ProductUpdate is a partial update of a product: nil / empty fields keep
+// their stored values. Clients send only what they change — the name on a
+// rename, the driver type and parameters when the driver is configured.
+type ProductUpdate struct {
+	Name         *string
+	DriverType   *model.DriverType
+	DriverParams json.RawMessage // nil = unchanged; JSON null clears the parameters
+}
+
+func (s *ProductService) UpdateProduct(ctx context.Context, tenantID, productID uuid.UUID, upd ProductUpdate) error {
 	existing, err := s.GetProduct(ctx, tenantID, productID)
 	if err != nil {
 		return err
 	}
 
-	existing.Name = product.Name
-	existing.SortOrder = product.SortOrder
-	if product.DriverType != "" {
-		existing.DriverType = product.DriverType
+	if upd.Name != nil {
+		name := strings.TrimSpace(*upd.Name)
+		if name == "" {
+			return apierror.BadRequest("name must not be empty")
+		}
+		existing.Name = name
 	}
-	if len(product.DriverParams) > 0 {
-		existing.DriverParams = product.DriverParams
+	if upd.DriverType != nil && *upd.DriverType != "" {
+		existing.DriverType = *upd.DriverType
+	}
+	if upd.DriverParams != nil {
+		existing.DriverParams = upd.DriverParams
 	}
 	// Validate against the effective driver type: the request may change the
 	// parameters without restating the type.
