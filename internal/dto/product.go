@@ -10,16 +10,11 @@ import (
 
 // ProductResponse is the API representation of a product.
 type ProductResponse struct {
-	ID                        string          `json:"id"`
-	ScenarioID                string          `json:"scenarioId"`
-	Name                      string          `json:"name"`
-	ProductType               string          `json:"productType"`
-	SortOrder                 int             `json:"sortOrder"`
-	DirectCostVariability     decimal.Decimal `json:"directCostVariability"`
-	ExternalChargeVariability decimal.Decimal `json:"externalChargeVariability"`
-	TaxVariability            decimal.Decimal `json:"taxVariability"`
-	StaffVariability          decimal.Decimal `json:"staffVariability"`
-	DepreciationVariability   decimal.Decimal `json:"depreciationVariability"`
+	ID          string `json:"id"`
+	ScenarioID  string `json:"scenarioId"`
+	Name        string `json:"name"`
+	ProductType string `json:"productType"`
+	SortOrder   int    `json:"sortOrder"`
 	// Business Driver Framework — Phase 1
 	DriverType   string          `json:"driverType"`
 	DriverParams json.RawMessage `json:"driverParams,omitempty"`
@@ -29,18 +24,13 @@ type ProductResponse struct {
 // ProductFromModel converts a model.Product to a ProductResponse.
 func ProductFromModel(p model.Product) ProductResponse {
 	return ProductResponse{
-		ID:                        p.ID.String(),
-		ScenarioID:                p.ScenarioID.String(),
-		Name:                      p.Name,
-		ProductType:               string(p.ProductType),
-		SortOrder:                 p.SortOrder,
-		DirectCostVariability:     p.DirectCostVariability,
-		ExternalChargeVariability: p.ExternalChargeVariability,
-		TaxVariability:            p.TaxVariability,
-		StaffVariability:          p.StaffVariability,
-		DepreciationVariability:   p.DepreciationVariability,
-		DriverType:                string(p.DriverType),
-		DriverParams:              p.DriverParams,
+		ID:           p.ID.String(),
+		ScenarioID:   p.ScenarioID.String(),
+		Name:         p.Name,
+		ProductType:  string(p.ProductType),
+		SortOrder:    p.SortOrder,
+		DriverType:   string(p.DriverType),
+		DriverParams: p.DriverParams,
 		Timestamps: Timestamps{
 			CreatedAt: p.CreatedAt,
 			UpdatedAt: p.UpdatedAt,

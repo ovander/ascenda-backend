@@ -25,15 +25,10 @@ func newTestProductService() (*ProductService, *MockProductRepo) {
 // seedProduct inserts a product and returns it.
 func seedProduct(repo *MockProductRepo, tenantID, scenarioID uuid.UUID, name string) *model.Product {
 	p := &model.Product{
-		TenantScoped:              model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
-		ScenarioID:                scenarioID,
-		Name:                      name,
-		DriverType:                model.DriverGeneric,
-		DirectCostVariability:     decimal.NewFromFloat(1),
-		ExternalChargeVariability: decimal.Zero,
-		TaxVariability:            decimal.Zero,
-		StaffVariability:          decimal.Zero,
-		DepreciationVariability:   decimal.Zero,
+		TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+		ScenarioID:   scenarioID,
+		Name:         name,
+		DriverType:   model.DriverGeneric,
 	}
 	_ = repo.CreateProduct(p)
 	return p
@@ -168,13 +163,8 @@ func TestCreateProduct_AssignsIDsAndPersists(t *testing.T) {
 	ctx := context.Background()
 
 	p := &model.Product{
-		Name:                      "SaaS",
-		DriverType:                model.DriverSaaS,
-		DirectCostVariability:     decimal.NewFromFloat(1),
-		ExternalChargeVariability: decimal.Zero,
-		TaxVariability:            decimal.Zero,
-		StaffVariability:          decimal.Zero,
-		DepreciationVariability:   decimal.Zero,
+		Name:       "SaaS",
+		DriverType: model.DriverSaaS,
 	}
 
 	err := svc.CreateProduct(ctx, tenantID, scenarioID, p)

@@ -90,11 +90,6 @@ func (s *ProductService) UpdateProduct(ctx context.Context, tenantID, productID 
 
 	existing.Name = product.Name
 	existing.SortOrder = product.SortOrder
-	existing.DirectCostVariability = product.DirectCostVariability
-	existing.ExternalChargeVariability = product.ExternalChargeVariability
-	existing.TaxVariability = product.TaxVariability
-	existing.StaffVariability = product.StaffVariability
-	existing.DepreciationVariability = product.DepreciationVariability
 	if product.DriverType != "" {
 		existing.DriverType = product.DriverType
 	}
