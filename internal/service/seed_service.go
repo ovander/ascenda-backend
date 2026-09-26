@@ -1012,18 +1012,13 @@ func (s *SeedService) createDemoProduct(tenantID, userID, scenarioID uuid.UUID, 
 	}
 
 	product := &model.Product{
-		TenantScoped:              model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
-		ScenarioID:                scenarioID,
-		Name:                      pd.name,
-		ProductType:               pd.pType,
-		SortOrder:                 sortOrder,
-		DirectCostVariability:     d(1),
-		ExternalChargeVariability: d(1),
-		TaxVariability:            d(1),
-		StaffVariability:          d(1),
-		DepreciationVariability:   d(1),
-		DriverType:                driverType,
-		DriverParams:              driverParams,
+		TenantScoped: model.TenantScoped{ID: uuid.New(), TenantID: tenantID},
+		ScenarioID:   scenarioID,
+		Name:         pd.name,
+		ProductType:  pd.pType,
+		SortOrder:    sortOrder,
+		DriverType:   driverType,
+		DriverParams: driverParams,
 	}
 	if err := s.repos.Product.CreateProduct(product); err != nil {
 		return err

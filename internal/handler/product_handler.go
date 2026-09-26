@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/ovander/backendkit/ctxutil"
-	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -135,14 +134,9 @@ func (h *ProductHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // UpdateProductRequest represents a product update request.
 type UpdateProductRequest struct {
-	Name                      string          `json:"name"`
-	DirectCostVariability     decimal.Decimal `json:"directCostVariability"`
-	ExternalChargeVariability decimal.Decimal `json:"externalChargeVariability"`
-	TaxVariability            decimal.Decimal `json:"taxVariability"`
-	StaffVariability          decimal.Decimal `json:"staffVariability"`
-	DepreciationVariability   decimal.Decimal `json:"depreciationVariability"`
-	DriverType                string          `json:"driverType"`
-	DriverParams              json.RawMessage `json:"driverParams"`
+	Name         string          `json:"name"`
+	DriverType   string          `json:"driverType"`
+	DriverParams json.RawMessage `json:"driverParams"`
 }
 
 // Update updates a product.
@@ -165,14 +159,9 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	tenantID := ctxutil.GetTenantID(r.Context())
 	product := &model.Product{
-		Name:                      req.Name,
-		DirectCostVariability:     req.DirectCostVariability,
-		ExternalChargeVariability: req.ExternalChargeVariability,
-		TaxVariability:            req.TaxVariability,
-		StaffVariability:          req.StaffVariability,
-		DepreciationVariability:   req.DepreciationVariability,
-		DriverType:                dType,
-		DriverParams:              req.DriverParams,
+		Name:         req.Name,
+		DriverType:   dType,
+		DriverParams: req.DriverParams,
 	}
 
 	if err := h.svc.UpdateProduct(r.Context(), tenantID, productID, product); err != nil {

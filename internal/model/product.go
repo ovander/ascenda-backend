@@ -219,15 +219,10 @@ const (
 // Product represents a product or service line
 type Product struct {
 	TenantScoped
-	ScenarioID                uuid.UUID       `gorm:"type:uuid;not null;index" json:"scenarioId"`
-	Name                      string          `gorm:"type:varchar(255);not null" json:"name"`
-	ProductType               ProductType     `gorm:"type:varchar(50);not null;default:'product'" json:"productType"`
-	SortOrder                 int             `gorm:"not null;default:0" json:"sortOrder"`
-	DirectCostVariability     decimal.Decimal `gorm:"type:numeric(5,4)" json:"directCostVariability"`
-	ExternalChargeVariability decimal.Decimal `gorm:"type:numeric(5,4)" json:"externalChargeVariability"`
-	TaxVariability            decimal.Decimal `gorm:"type:numeric(5,4)" json:"taxVariability"`
-	StaffVariability          decimal.Decimal `gorm:"type:numeric(5,4)" json:"staffVariability"`
-	DepreciationVariability   decimal.Decimal `gorm:"type:numeric(5,4)" json:"depreciationVariability"`
+	ScenarioID  uuid.UUID   `gorm:"type:uuid;not null;index" json:"scenarioId"`
+	Name        string      `gorm:"type:varchar(255);not null" json:"name"`
+	ProductType ProductType `gorm:"type:varchar(50);not null;default:'product'" json:"productType"`
+	SortOrder   int         `gorm:"not null;default:0" json:"sortOrder"`
 
 	// Business Driver Framework — Phase 1
 	// DriverType selects which compute formula drives Volume → Revenue / COGS.
