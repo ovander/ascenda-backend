@@ -96,7 +96,7 @@ Ascenda is built around a few core principles:
 
 | Concern | Library / Tool |
 |---|---|
-| Language | Go 1.25 |
+| Language | Go 1.27 (toolchain pinned in go.mod) |
 | HTTP router | [chi v5](https://github.com/go-chi/chi) |
 | ORM | [GORM](https://gorm.io) + PostgreSQL driver |
 | Database | PostgreSQL 16 |
@@ -169,7 +169,7 @@ The `compute` package contains all financial modelling logic as pure functions o
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.21 or later — the `toolchain go1.27.1` line in go.mod downloads Go 1.27.1 automatically
 - PostgreSQL 16
 - [golang-migrate CLI](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate) (for manual migration commands)
 
