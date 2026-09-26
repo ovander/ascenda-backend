@@ -2,6 +2,8 @@ module ascenda
 
 go 1.25.0
 
+toolchain go1.27.1
+
 require (
 	github.com/getsentry/sentry-go v0.40.0
 	github.com/go-chi/chi/v5 v5.1.0
