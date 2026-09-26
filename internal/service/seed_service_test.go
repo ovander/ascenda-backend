@@ -16,11 +16,14 @@ package service
 //   - WCR, FiPlan, and incentive-rate fields are set on the right plans.
 
 import (
+	"encoding/json"
 	"testing"
 
+	"ascenda/internal/compute"
 	"ascenda/internal/model"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ── demoPlanDefs ──────────────────────────────────────────────────────────────
@@ -352,6 +355,169 @@ func TestConsultingDemo_PricesIncreaseOverTime(t *testing.T) {
 				"product %q: price Y%d (%s) should be ≥ Y%d (%s)",
 				pd.name, i+1, pd.prices[i].StringFixed(0),
 				i, pd.prices[i-1].StringFixed(0))
+		}
+	}
+}
+
+// ── Golf demo ─────────────────────────────────────────────────────────────────
+
+func golfProduct(t *testing.T, name string) demoProduct {
+	t.Helper()
+	for _, pd := range golfDemo().products {
+		if pd.name == name {
+			return pd
+		}
+	}
+	t.Fatalf("golf demo has no product %q", name)
+	return demoProduct{}
+}
+
+// TestGolfDemo_UsesAthleteDrivers: prize money on the competition driver,
+// sponsorship and image rights on the contract driver; only appearances —
+// genuinely billed per day — stay generic.
+func TestGolfDemo_UsesAthleteDrivers(t *testing.T) {
+	want := map[string]model.DriverType{
+		"Tournament Prize Money":    model.DriverCompetition,
+		"Sponsorship":               model.DriverContract,
+		"Image Rights & Media":      model.DriverContract,
+		"Appearance Fees & Pro-Ams": "",
+	}
+	got := map[string]model.DriverType{}
+	for _, pd := range golfDemo().products {
+		got[pd.name] = pd.driverType
+	}
+	assert.Equal(t, want, got)
+}
+
+// TestGolfDemo_DriverParamsAreValid runs the same validation as the product
+// API, which the seed bypasses.
+func TestGolfDemo_DriverParamsAreValid(t *testing.T) {
+	for _, pd := range golfDemo().products {
+		if pd.driverParams == nil {
+			continue
+		}
+		raw, err := json.Marshal(pd.driverParams)
+		require.NoError(t, err)
+		assert.NoError(t, model.ValidateDriverParams(pd.driverType, raw), "product %q", pd.name)
+	}
+}
+
+// TestGolfDemo_ToursMatchFrontendPresets: the payouts are the frontend's
+// "Challenge Tour" / "DP World Tour" presets, and the circuit names match
+// them so the form shows the tour selected.
+func TestGolfDemo_ToursMatchFrontendPresets(t *testing.T) {
+	p := golfProduct(t, "Tournament Prize Money").driverParams.(model.CompetitionParams)
+	presets := map[string][3]float64{
+		"Challenge Tour": {45000, 12000, 2500},
+		"DP World Tour":  {380000, 90000, 12000},
+	}
+	assert.Equal(t, [5]string{"Challenge Tour", "Challenge Tour", "DP World Tour", "DP World Tour", "DP World Tour"}, p.Circuit)
+	for y := 0; y < 5; y++ {
+		want := presets[p.Circuit[y]]
+		assert.True(t, p.PrizePerWin[y].Equal(d(want[0])), "Y%d prize per win", y+1)
+		assert.True(t, p.PrizePerTop10[y].Equal(d(want[1])), "Y%d prize per top-10", y+1)
+		assert.True(t, p.PrizePerCut[y].Equal(d(want[2])), "Y%d prize per cut", y+1)
+	}
+}
+
+// TestGolfDemo_ComputedRevenueAndCosts pins the story told in the scenario
+// description to what the drivers compute: revenue per product per year and
+// the prize money's direct costs.
+func TestGolfDemo_ComputedRevenueAndCosts(t *testing.T) {
+	revenue := func(pd demoProduct, y int) decimal.Decimal {
+		return pd.prices[y].Mul(decimal.NewFromInt(pd.units[y]))
+	}
+	cost := func(pd demoProduct, y int) decimal.Decimal {
+		return pd.cogs[y].Mul(decimal.NewFromInt(pd.units[y]))
+	}
+	cases := []struct {
+		product string
+		revenue [5]float64
+		cost    [5]float64
+	}{
+		// Wins × payout + top-10s × payout + other cuts × payout.
+		// Costs: events × (entry + travel + caddie) + coach fee + shares × winnings.
+		{"Tournament Prize Money",
+			[5]float64{68000, 127500, 246000, 426000, 806000},
+			[5]float64{81860, 91075, 196800, 223620, 277580}},
+		// Contract values + bonuses on the Y2 and Y5 wins (active partners only).
+		{"Sponsorship",
+			[5]float64{23000, 50000, 95000, 195000, 355000},
+			[5]float64{0, 0, 0, 0, 0}},
+		{"Image Rights & Media",
+			[5]float64{0, 0, 10000, 35000, 60000},
+			[5]float64{0, 0, 0, 0, 0}},
+		{"Appearance Fees & Pro-Ams",
+			[5]float64{6000, 16000, 48000, 96000, 160000},
+			[5]float64{600, 1600, 4800, 8000, 12000}},
+	}
+	total := [5]decimal.Decimal{}
+	for _, c := range cases {
+		pd := golfProduct(t, c.product)
+		for y := 0; y < 5; y++ {
+			assert.InDelta(t, c.revenue[y], revenue(pd, y).InexactFloat64(), 0.01, "%s revenue Y%d", c.product, y+1)
+			assert.InDelta(t, c.cost[y], cost(pd, y).InexactFloat64(), 0.01, "%s cost Y%d", c.product, y+1)
+			total[y] = total[y].Add(revenue(pd, y))
+		}
+	}
+	// "Revenue grows from about €97K to €1.38M" (scenario description).
+	assert.InDelta(t, 97000, total[0].InexactFloat64(), 0.01)
+	assert.InDelta(t, 1381000, total[4].InexactFloat64(), 0.01)
+}
+
+// TestGolfDemo_StoredRowsMatchDrivers: the seeded price/cost/volume rows of
+// the driver products are what the drivers compute, in the context of the
+// plan's other products (contract bonuses read the competition wins).
+func TestGolfDemo_StoredRowsMatchDrivers(t *testing.T) {
+	products := golfDemo().products
+	models := make([]model.Product, len(products))
+	for i, pd := range products {
+		models[i] = model.Product{DriverType: pd.driverType}
+		if pd.driverParams != nil {
+			models[i].DriverParams, _ = json.Marshal(pd.driverParams)
+		}
+	}
+	ctx := compute.BuildDriverContext(models)
+	for i, pd := range products {
+		if pd.driverType == "" {
+			continue
+		}
+		bundle, err := compute.ApplyDriverComputeWithContext(models[i], compute.ProductInputBundle{}, ctx)
+		require.NoError(t, err, pd.name)
+		for y := 0; y < 5; y++ {
+			var units int64
+			for _, v := range bundle.Volumes {
+				if v.YearIndex == y+1 {
+					units += v.UnitsSold
+				}
+			}
+			assert.Equal(t, units, pd.units[y], "%s units Y%d", pd.name, y+1)
+			assert.True(t, bundle.Assumptions[y].BaseUnitPrice.Equal(pd.prices[y]), "%s price Y%d", pd.name, y+1)
+			assert.True(t, bundle.Assumptions[y].RawMaterialCost.Equal(pd.cogs[y]), "%s cost Y%d", pd.name, y+1)
+		}
+	}
+}
+
+// TestGolfDemo_NoDoubleCounting: the caddie, the coach and tournament travel
+// are costed in the prize money product, so no headcount category holds them
+// and the travel opex line stays below the tournament travel.
+func TestGolfDemo_NoDoubleCounting(t *testing.T) {
+	def := golfDemo()
+	p := golfProduct(t, "Tournament Prize Money").driverParams.(model.CompetitionParams)
+	for _, o := range def.opex {
+		if o.lineID != model.LineTravelTransport {
+			continue
+		}
+		for y := 0; y < 5; y++ {
+			tournamentTravel := p.TravelPerEvent[y].Mul(decimal.NewFromInt(int64(p.Events[y])))
+			assert.True(t, o.amounts[y].LessThan(tournamentTravel),
+				"Y%d travel opex %s should only cover non-tournament travel (tournament travel %s)",
+				y+1, o.amounts[y].StringFixed(0), tournamentTravel.StringFixed(0))
+		}
+	}
+	for y := 0; y < 2; y++ {
+		for cat, hc := range def.headcounts {
+			assert.True(t, hc[y].IsZero(), "Y%d: no salaried staff (%s) while the player manages alone", y+1, cat)
 		}
 	}
 }

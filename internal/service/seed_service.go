@@ -8,7 +8,7 @@ package service
 //   1. SaaS  – subscription + professional services, PLG growth model
 //   2. Hardware – unit-price product, contract manufacturing
 //   3. Consulting – daily-rate, utilisation-driven revenue model
-//   4. Pro Tour Golfer – individual athlete: prize money, sponsorship, appearances
+//   4. Pro Tour Golfer – individual athlete: competition and contract drivers
 //
 // Data is mapped to Ascenda's underlying schema:
 //   - Revenue   → Product + ProductAssumption + ProductSalesVolume
@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"ascenda/internal/compute"
 	"ascenda/internal/model"
 	"ascenda/internal/repo"
 	"github.com/google/uuid"
@@ -135,6 +136,13 @@ type demoPlanDef struct {
 	wcCustomer60Pct decimal.Decimal
 	wcSupplier30Pct decimal.Decimal
 	wcSupplier60Pct decimal.Decimal
+	// wcNoInventory sets the inventory held (default 10 % of COGS) to zero,
+	// for a business with no stock.
+	wcNoInventory bool
+	// opexPerHire adjusts the default opex rates (rent, per-head costs, % of
+	// sales) and stores them with the plan. nil keeps the defaults, which are
+	// then applied at compute time rather than stored.
+	opexPerHire func(*model.OpexPerHire)
 }
 
 type demoProduct struct {
@@ -453,116 +461,198 @@ func consultingDemo() demoPlanDef {
 
 // ── 4. Pro Tour Golfer ────────────────────────────────────────────────────────
 
+// Tour economics per event, in EUR — the "Challenge Tour" and "DP World Tour"
+// presets of the frontend's competition driver form (athleteDrivers.ts), so a
+// user who re-selects the tour gets the same figures.
+var (
+	golfChallengeTour = golfTour{name: "Challenge Tour", win: d(45000), top10: d(12000), cut: d(2500)}
+	golfDPWorldTour   = golfTour{name: "DP World Tour", win: d(380000), top10: d(90000), cut: d(12000)}
+)
+
+type golfTour struct {
+	name            string
+	win, top10, cut decimal.Decimal
+}
+
 func golfDemo() demoPlanDef {
-	// Individual professional golfer — French, competing on the Challenge Tour
-	// in Y1 and graduating to the DP World Tour from Y2.
+	// Individual professional golfer (fictional) — two seasons on the Challenge
+	// Tour, a win and a top-20 Order of Merit finish in Y2, then three seasons
+	// on the DP World Tour.
 	//
-	// Revenue model: three streams —
-	//   Prize Money   : 1 unit = 1 tournament played; price = average net prize.
-	//                   COGS = caddie fee (~15 % of prize per event).
-	//   Sponsorship   : 1 unit = annual contract bundle; price = total value.
-	//                   Agent commission (10 %) carried in professional_fees opex.
-	//   Appearances   : 1 unit = 1 pro-am / corporate day; price = appearance fee.
+	// Revenue model — the athlete drivers, not unit prices:
+	//   Prize money   : competition driver. Per season: events, cuts made,
+	//                   top-10s and wins × the tour's average payouts. Direct
+	//                   costs per event (entry, tournament travel, caddie fee)
+	//                   plus the caddie's and the coach's share of winnings and
+	//                   the coach's annual retainer.
+	//   Sponsorship   : contract driver. One line per partner, value per year,
+	//                   plus a bonus per win (wins read from the prize money
+	//                   product).
+	//   Image rights  : contract driver. Media and licensing deals.
+	//   Appearances   : generic service — 1 unit = 1 pro-am / corporate day.
 	//
-	// Staff: caddie is costed via COGS (not headcount) to avoid double-counting.
-	//   Headcount covers fixed overhead only: swing coach (from Y2), fitness
-	//   trainer (from Y4), agent/manager (throughout), PA (from Y4).
-	//
-	// Travel is by far the largest opex — DP World Tour events span 4 continents.
-	// Goal: reach Top-50 ranking and ~€1.7M total revenue by Year 5.
+	// The caddie and the coach are costed inside the competition driver, and
+	// tournament travel too, so they are not in headcount or in the travel opex
+	// line: headcount is the off-course team (fitness trainer, manager, PA),
+	// travel opex is training camps and sponsor days.
+	tours := [5]golfTour{golfChallengeTour, golfChallengeTour, golfDPWorldTour, golfDPWorldTour, golfDPWorldTour}
+	prize := model.CompetitionParams{
+		Events: [5]model.FlexInt64{22, 23, 26, 25, 24},
+		Cuts:   [5]model.FlexInt64{12, 15, 14, 16, 17},
+		Top10s: [5]model.FlexInt64{4, 5, 1, 3, 3}, // excluding wins
+		Wins:   [5]model.FlexInt64{0, 1, 0, 0, 1},
+
+		EntryFeePerEvent:  [5]decimal.Decimal{d(250), d(250), d(400), d(400), d(400)},
+		TravelPerEvent:    [5]decimal.Decimal{d(1800), d(1800), d(3800), d(3800), d(3800)},
+		CaddieFeePerEvent: [5]decimal.Decimal{d(1000), d(1000), d(1500), d(1500), d(1500)},
+		CaddieShare:       [5]decimal.Decimal{d(0.05), d(0.05), d(0.07), d(0.08), d(0.08)},
+		CoachAnnualFee:    [5]decimal.Decimal{d(10000), d(12000), d(24000), d(30000), d(36000)},
+		CoachShare:        [5]decimal.Decimal{d(0.02), d(0.02), d(0.03), d(0.04), d(0.05)},
+	}
+	for y, tour := range tours {
+		prize.Circuit[y] = tour.name
+		prize.PrizePerWin[y] = tour.win
+		prize.PrizePerTop10[y] = tour.top10
+		prize.PrizePerCut[y] = tour.cut
+		prize.OtherPrizeMoney[y] = d(0)
+	}
+
+	sponsorship := model.ContractParams{Contracts: []model.ContractLine{
+		{Partner: "Equipment brand (clubs & ball)", Amounts: [5]decimal.Decimal{d(8000), d(12000), d(50000), d(80000), d(120000)}, BonusPerWin: d(10000)},
+		{Partner: "Apparel brand", Amounts: [5]decimal.Decimal{d(5000), d(8000), d(20000), d(35000), d(60000)}, BonusPerWin: d(5000)},
+		{Partner: "Regional bank (cap logo)", Amounts: [5]decimal.Decimal{d(10000), d(10000), d(25000), d(30000), d(40000)}, BonusPerWin: d(5000)},
+		{Partner: "Watch brand", Amounts: [5]decimal.Decimal{d(0), d(0), d(0), d(50000), d(100000)}, BonusPerWin: d(15000)},
+	}}
+	image := model.ContractParams{Contracts: []model.ContractLine{
+		{Partner: "Media & content partnership", Amounts: [5]decimal.Decimal{d(0), d(0), d(10000), d(20000), d(35000)}, BonusPerWin: d(0)},
+		{Partner: "Golf academy licensing", Amounts: [5]decimal.Decimal{d(0), d(0), d(0), d(15000), d(25000)}, BonusPerWin: d(0)},
+	}}
+
 	return demoPlanDef{
 		name:                "Pro Tour Golfer — Ascenda Demo",
-		description:         "Individual professional golfer transitioning from the Challenge Tour (Y1) to an established DP World Tour career (Y5). Three revenue streams: tournament prize money, brand sponsorships, and corporate appearance fees. Caddie costs are modelled as COGS; travel is the dominant opex driver (~€60K–€250K/year). Demonstrates athlete business economics with ~85 % gross margin on prize money and rapid revenue growth tied to world-ranking progression.",
-		scenarioDescription: "Base-case: gradual ascent from Challenge Tour rookie (€65K revenue Y1) to Top-50 DP World Tour player (€1.7M Y5). Y1 funded by €250K personal savings + bank loan; player self-manages admin in Y1 to preserve cash. Swing coach and agent hired from Y2 once DP World Tour card is secured. Fitness trainer + PA added from Y4 as profile and commercial schedule grows. Travel cost ramps from €35K (European Challenge Tour, Y1) to €230K (global DP World Tour, Y5). First endorsements signed mid-Y2; major equipment brand deal from Y3.",
+		description:         "Individual professional golfer: two seasons on the Challenge Tour, then three on the DP World Tour. Prize money comes from the season's results (events, cuts, top-10s, wins) and the tour's payouts, with tournament costs, caddie and coach; sponsorship and image rights are contracts, with bonuses per win; appearances are billed per day. Uses the competition and contract drivers.",
+		scenarioDescription: "Base case: a Challenge Tour rookie (no win, four top-10s) who wins in Y2, finishes in the Order of Merit top 20 and plays the DP World Tour from Y3 — keeping the card, then a first DP World Tour win in Y5. Revenue grows from about €97K to €1.38M. Equipment and apparel deals step up with the DP World Tour card; a watch brand signs in Y4. Funded by €100K of savings and a €50K bank loan; a manager and a part-time fitness trainer join in Y3, a PA in Y4.",
 		companyName:         "ProGolf SAS",
 		country:             "FR",
-		products: []demoProduct{
+		products: deriveAthleteRows([]demoProduct{
 			{
-				// 1 unit = 1 tournament played; price = average net prize per event.
-				// COGS = caddie fee per tournament (base + % of winnings ≈ 15 %).
-				name:  "Tournament Prize Money",
-				pType: model.ProductTypeService,
-				// Y1: Challenge Tour (20 events, avg €2 000 prize)
-				// Y2: DP World Tour rookie (25 events, avg €4 800)
-				// Y3: Established tour player (25 events, avg €11 200)
-				// Y4: Top-100 ranking (22 events, avg €22 700)
-				// Y5: Top-50 / Ryder Cup candidate (22 events, avg €40 900)
-				prices: [5]decimal.Decimal{d(2000), d(4800), d(11200), d(22700), d(40900)},
-				cogs:   [5]decimal.Decimal{d(300), d(720), d(1680), d(3400), d(6100)},
-				units:  [5]int64{20, 25, 25, 22, 22},
+				name:         "Tournament Prize Money",
+				pType:        model.ProductTypeService,
+				driverType:   model.DriverCompetition,
+				driverParams: prize,
 			},
 			{
-				// 1 unit = 1 annual sponsorship/endorsement contract bundle.
-				// Agent commission (~10 %) carried in professional_fees opex.
-				name:   "Sponsorship & Endorsements",
-				pType:  model.ProductTypeService,
-				prices: [5]decimal.Decimal{d(15000), d(40000), d(120000), d(300000), d(600000)},
-				cogs:   [5]decimal.Decimal{d(0), d(0), d(0), d(0), d(0)},
-				units:  [5]int64{1, 1, 1, 1, 1},
+				name:         "Sponsorship",
+				pType:        model.ProductTypeService,
+				driverType:   model.DriverContract,
+				driverParams: sponsorship,
 			},
 			{
-				// 1 unit = 1 corporate pro-am or appearance day.
-				// Travel/prep cost per appearance carried in COGS.
+				name:         "Image Rights & Media",
+				pType:        model.ProductTypeService,
+				driverType:   model.DriverContract,
+				driverParams: image,
+			},
+			{
+				// 1 unit = 1 corporate pro-am or appearance day; COGS = travel
+				// and preparation per day.
 				name:   "Appearance Fees & Pro-Ams",
 				pType:  model.ProductTypeService,
-				prices: [5]decimal.Decimal{d(2000), d(2500), d(4000), d(6000), d(8000)},
-				cogs:   [5]decimal.Decimal{d(200), d(250), d(400), d(500), d(600)},
-				units:  [5]int64{5, 10, 15, 20, 25},
+				prices: [5]decimal.Decimal{d(1500), d(2000), d(4000), d(6000), d(8000)},
+				cogs:   [5]decimal.Decimal{d(150), d(200), d(400), d(500), d(600)},
+				units:  [5]int64{4, 8, 12, 16, 20},
 			},
-		},
-		// Caddie costed via COGS above — headcount = fixed overhead only.
-		// Y1: player manages own schedule; no salaried staff until revenue justifies it.
+		}),
+		// Off-course team only — caddie and coach are in the prize money product.
+		// Y1–Y2: the player manages alone.
 		headcounts: map[model.StaffCategory][5]decimal.Decimal{
-			// Swing coach: hired full-time from Y2 once DP World Tour card is secured.
-			model.CategoryProdTechnicians: {d(0), d(1), d(1), d(2), d(2)},
-			// Agent / manager: brought on from Y2 when sponsorship pipeline warrants it.
-			// Y1 agent costs are carried in professional_fees (commission only, no salary).
-			model.CategoryAdminManagers: {d(0), d(1), d(1), d(1), d(1)},
-			// PA / personal assistant: hired from Y4 as commercial schedule intensifies.
-			model.CategoryAdminAssistants: {d(0), d(0), d(0), d(1), d(1)},
+			// Fitness trainer / physio: part-time in Y3, full-time from Y4.
+			model.CategoryProdTechnicians: {d(0), d(0), d(0.5), d(1), d(1)},
+			// Manager: from Y3, with the DP World Tour card and the bigger deals.
+			model.CategoryAdminManagers: {d(0), d(0), d(1), d(1), d(1)},
+			// PA: part-time in Y4, full-time in Y5.
+			model.CategoryAdminAssistants: {d(0), d(0), d(0), d(0.5), d(1)},
 		},
-		// Monthly gross salary (€) — coaching staff below top-tier agency rates
-		// because caddie cost is already in COGS.
+		// Monthly gross salary (€).
 		salaries: map[model.StaffCategory][5]decimal.Decimal{
-			model.CategoryProdTechnicians: {d(3500), d(3700), d(3900), d(4200), d(4500)},
-			model.CategoryAdminManagers:   {d(5000), d(5500), d(6000), d(6500), d(7000)},
-			model.CategoryAdminAssistants: {d(3000), d(3200), d(3400), d(3600), d(3800)},
+			model.CategoryProdTechnicians: {d(3400), d(3500), d(3600), d(3800), d(4000)},
+			model.CategoryAdminManagers:   {d(4000), d(4000), d(4000), d(4300), d(4600)},
+			model.CategoryAdminAssistants: {d(2800), d(2900), d(3000), d(3200), d(3400)},
 		},
 		capex: []demoCapex{
-			// Golf equipment, launch monitors (TrackMan), GPS devices, club fitting.
-			{model.AssetEquipmentTools, 3, [5]decimal.Decimal{d(20000), d(8000), d(8000), d(15000), d(15000)}},
-			// Vehicle — long-distance driving to European events.
-			{model.AssetVehicles, 5, [5]decimal.Decimal{d(30000), d(0), d(0), d(35000), d(0)}},
+			// Launch monitor (TrackMan), putting analysis, club fitting.
+			{model.AssetEquipmentTools, 3, [5]decimal.Decimal{d(15000), d(5000), d(8000), d(10000), d(12000)}},
+			// Vehicle for the European events reachable by road.
+			{model.AssetVehicles, 5, [5]decimal.Decimal{d(25000), d(0), d(0), d(0), d(30000)}},
 		},
 		opex: []demoOpex{
-			// Tour travel: Y1 Challenge Tour is mostly Europe (lower cost); intercontinental
-			// from Y2 as the player joins the global DP World Tour circuit.
-			{model.LineTravelTransport, [5]decimal.Decimal{d(35000), d(80000), d(130000), d(180000), d(230000)}},
-			// Y1: agent commission on initial deals + legal setup.
-			// Y2+: ongoing agent commission (~10 % of sponsorship) + contract/IP legal fees.
-			{model.LineProfessionalFees, [5]decimal.Decimal{d(8000), d(15000), d(30000), d(60000), d(100000)}},
-			// Coaching clinics, training camps, tour entry and qualifying fees.
-			{model.LineRecruitmentTraining, [5]decimal.Decimal{d(8000), d(15000), d(22000), d(30000), d(40000)}},
-			// Event hospitality, sponsor entertainment, image/PR costs.
-			{model.LineMissionRepresentation, [5]decimal.Decimal{d(3000), d(8000), d(15000), d(25000), d(45000)}},
-			// Equipment maintenance, miscellaneous operational costs.
-			{model.LineOtherExpenses, [5]decimal.Decimal{d(4000), d(6000), d(9000), d(14000), d(20000)}},
+			// Training camps and sponsor days — tournament travel is in the prize money product.
+			{model.LineTravelTransport, [5]decimal.Decimal{d(6000), d(8000), d(15000), d(20000), d(25000)}},
+			// Agent commission on sponsorship and image deals, legal fees.
+			{model.LineProfessionalFees, [5]decimal.Decimal{d(5000), d(8000), d(18000), d(35000), d(60000)}},
+			// Fitness and mental coaching sessions, training facilities.
+			{model.LineRecruitmentTraining, [5]decimal.Decimal{d(5000), d(6000), d(12000), d(18000), d(25000)}},
+			// Sponsor hospitality, image and PR.
+			{model.LineMissionRepresentation, [5]decimal.Decimal{d(2000), d(4000), d(10000), d(20000), d(35000)}},
+			// Tour membership, insurance, equipment upkeep.
+			{model.LineOtherExpenses, [5]decimal.Decimal{d(4000), d(5000), d(8000), d(12000), d(16000)}},
 		},
-		// Y1: personal savings (150 K) + sports/business bank loan (100 K) = 250 K.
-		// This covers the peak cash burn in Y2 while prize money scales up.
-		// Dividends deferred to Y4 once the business is firmly cash-positive.
+		// Y1: €100K personal savings + €50K bank loan; dividends from Y4.
 		fiplanEntries: []demoFiplan{
-			{model.FiplanCapitalIncrease, [5]decimal.Decimal{d(150000), d(0), d(0), d(0), d(0)}},
-			{model.FiplanLTLoans, [5]decimal.Decimal{d(100000), d(0), d(0), d(0), d(0)}},
-			{model.FiplanDividends, [5]decimal.Decimal{d(0), d(0), d(0), d(30000), d(100000)}},
+			{model.FiplanCapitalIncrease, [5]decimal.Decimal{d(100000), d(0), d(0), d(0), d(0)}},
+			{model.FiplanLTLoans, [5]decimal.Decimal{d(50000), d(0), d(0), d(0), d(0)}},
+			{model.FiplanDividends, [5]decimal.Decimal{d(0), d(0), d(0), d(50000), d(150000)}},
 		},
-		// Prize money and appearance fees are paid within ~30 days of the event.
-		// Operating expenses (travel, entry fees) are settled on delivery.
+		// Prize money, sponsor and appearance fees are paid within ~30 days;
+		// tournament costs are settled on the spot.
 		wcCustomer30Pct: d(1),
 		wcCustomer60Pct: d(0),
 		wcSupplier30Pct: d(1),
 		wcSupplier60Pct: d(0),
+		// No stock: equipment is capex, and the rest is consumed as it goes.
+		wcNoInventory: true,
+		// No office rent (the player works from home; the home club is in other
+		// expenses) and no patent royalties; the other defaults stand.
+		opexPerHire: func(o *model.OpexPerHire) {
+			o.PropertyRentals = decimal.Zero
+			o.RoyaltyPaymentsPctSales = decimal.Zero
+		},
 	}
+}
+
+// deriveAthleteRows fills the stored price, cost and volume rows of the
+// competition and contract products with what their drivers compute, so the
+// seeded rows agree with the parameters (as they do for the other demos).
+// Contract bonuses read the wins of the plan's competition products.
+func deriveAthleteRows(products []demoProduct) []demoProduct {
+	models := make([]model.Product, len(products))
+	for i, pd := range products {
+		models[i] = model.Product{DriverType: pd.driverType}
+		if pd.driverParams != nil {
+			models[i].DriverParams, _ = json.Marshal(pd.driverParams)
+		}
+	}
+	ctx := compute.BuildDriverContext(models)
+
+	for i, pd := range products {
+		if pd.driverType != model.DriverCompetition && pd.driverType != model.DriverContract {
+			continue
+		}
+		bundle, err := compute.ApplyDriverComputeWithContext(models[i], compute.ProductInputBundle{}, ctx)
+		if err != nil {
+			continue // invalid params: left empty, and TestGolfDemo_DriverParamsAreValid fails
+		}
+		for y := 0; y < 5; y++ {
+			products[i].prices[y] = bundle.Assumptions[y].BaseUnitPrice
+			products[i].cogs[y] = bundle.Assumptions[y].RawMaterialCost
+		}
+		for _, v := range bundle.Volumes {
+			if v.YearIndex >= 1 && v.YearIndex <= 5 {
+				products[i].units[v.YearIndex-1] += v.UnitsSold
+			}
+		}
+	}
+	return products
 }
 
 // ── materialise one demo plan ─────────────────────────────────────────────────
@@ -650,6 +740,13 @@ func (s *SeedService) createDemoPlan(ctx context.Context, tenantID, userID uuid.
 		wc.SupplierPct30Days = def.wcSupplier30Pct
 		wc.SupplierPct60Days = def.wcSupplier60Pct
 	}
+	if def.wcNoInventory {
+		wc.InventoryPctYear1 = decimal.Zero
+		wc.InventoryPctYear2 = decimal.Zero
+		wc.InventoryPctYear3 = decimal.Zero
+		wc.InventoryPctYear4 = decimal.Zero
+		wc.InventoryPctYear5 = decimal.Zero
+	}
 	if err := s.repos.Settings.UpsertWCConfig(wc); err != nil {
 		return err
 	}
@@ -664,8 +761,14 @@ func (s *SeedService) createDemoPlan(ctx context.Context, tenantID, userID uuid.
 		"inventoryPctYear4": wc.InventoryPctYear4,
 		"inventoryPctYear5": wc.InventoryPctYear5,
 	})
-	// Opex-per-hire — standard French SaaS defaults.
+	// Opex-per-hire — standard French SaaS defaults, unless the plan adjusts them.
 	oph := defaultOpexPerHire(tenantID, scenario.ID)
+	if def.opexPerHire != nil {
+		def.opexPerHire(oph)
+		if err := s.repos.Settings.UpsertOpexPerHire(oph); err != nil {
+			return err
+		}
+	}
 	s.auditCreate(tenantID, userID, scenario.ID, "opex_per_hire", map[string]any{
 		"propertyRentals":           oph.PropertyRentals,
 		"postageTelecom":            oph.PostageTelecom,
