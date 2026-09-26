@@ -26,7 +26,7 @@ type mockProductService struct {
 	listFn               func(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]*model.Product, error)
 	createFn             func(ctx context.Context, tenantID, scenarioID uuid.UUID, p *model.Product) error
 	getFn                func(ctx context.Context, tenantID, productID uuid.UUID) (*model.Product, error)
-	updateFn             func(ctx context.Context, tenantID, productID uuid.UUID, p *model.Product) error
+	updateFn             func(ctx context.Context, tenantID, productID uuid.UUID, upd service.ProductUpdate) error
 	deleteFn             func(ctx context.Context, tenantID, productID uuid.UUID) error
 	getAssumptionsFn     func(ctx context.Context, tenantID, productID uuid.UUID) ([]model.ProductAssumption, error)
 	updateAssumptionsFn  func(ctx context.Context, tenantID, scenarioID, productID uuid.UUID, a []model.ProductAssumption) error
@@ -57,9 +57,9 @@ func (m *mockProductService) GetProduct(ctx context.Context, tenantID, productID
 	}
 	return nil, apierror.Internal("get not implemented")
 }
-func (m *mockProductService) UpdateProduct(ctx context.Context, tenantID, productID uuid.UUID, p *model.Product) error {
+func (m *mockProductService) UpdateProduct(ctx context.Context, tenantID, productID uuid.UUID, upd service.ProductUpdate) error {
 	if m.updateFn != nil {
-		return m.updateFn(ctx, tenantID, productID, p)
+		return m.updateFn(ctx, tenantID, productID, upd)
 	}
 	return apierror.Internal("update not implemented")
 }
@@ -373,15 +373,18 @@ func TestProductHandler_Update_Success(t *testing.T) {
 	called := false
 
 	svc := &mockProductService{
-		updateFn: func(_ context.Context, _, pid uuid.UUID, p *model.Product) error {
+		updateFn: func(_ context.Context, _, pid uuid.UUID, upd service.ProductUpdate) error {
 			assert.Equal(t, productID, pid)
-			assert.Equal(t, "Renamed Widget", p.Name)
+			require.NotNil(t, upd.Name)
+			assert.Equal(t, "Renamed Widget", *upd.Name)
+			assert.Nil(t, upd.DriverType, "not sent, so not changed")
+			assert.Nil(t, upd.DriverParams, "not sent, so not changed")
 			called = true
 			return nil
 		},
 	}
 
-	body, _ := json.Marshal(UpdateProductRequest{Name: "Renamed Widget"})
+	body := []byte(`{"name":"Renamed Widget"}`)
 	r := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	r = withChiParams(r, map[string]string{"productId": productID.String()})
@@ -396,12 +399,12 @@ func TestProductHandler_Update_Success(t *testing.T) {
 
 func TestProductHandler_Update_ServiceError(t *testing.T) {
 	svc := &mockProductService{
-		updateFn: func(_ context.Context, _, _ uuid.UUID, _ *model.Product) error {
+		updateFn: func(_ context.Context, _, _ uuid.UUID, _ service.ProductUpdate) error {
 			return apierror.NotFound("product", "gone")
 		},
 	}
 
-	body, _ := json.Marshal(UpdateProductRequest{Name: "X"})
+	body := []byte(`{"name":"X"}`)
 	r := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	r = withChiParams(r, map[string]string{"productId": uuid.New().String()})

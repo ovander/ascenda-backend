@@ -21,7 +21,7 @@ type ProductServicer interface {
 	ListProducts(ctx context.Context, tenantID, scenarioID uuid.UUID) ([]*model.Product, error)
 	CreateProduct(ctx context.Context, tenantID, scenarioID uuid.UUID, product *model.Product) error
 	GetProduct(ctx context.Context, tenantID, productID uuid.UUID) (*model.Product, error)
-	UpdateProduct(ctx context.Context, tenantID, productID uuid.UUID, product *model.Product) error
+	UpdateProduct(ctx context.Context, tenantID, productID uuid.UUID, upd service.ProductUpdate) error
 	DeleteProduct(ctx context.Context, tenantID, productID uuid.UUID) error
 	GetAssumptions(ctx context.Context, tenantID, productID uuid.UUID) ([]model.ProductAssumption, error)
 	UpdateAssumptions(ctx context.Context, tenantID, scenarioID, productID uuid.UUID, assumptions []model.ProductAssumption) error
@@ -132,11 +132,12 @@ func (h *ProductHandler) Get(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, dto.ProductFromModel(*product))
 }
 
-// UpdateProductRequest represents a product update request.
+// UpdateProductRequest is a partial update: fields left out of the body keep
+// their stored values (a rename sends only the name).
 type UpdateProductRequest struct {
-	Name         string          `json:"name"`
-	DriverType   string          `json:"driverType"`
-	DriverParams json.RawMessage `json:"driverParams"`
+	Name         *string         `json:"name,omitempty"`
+	DriverType   *string         `json:"driverType,omitempty"`
+	DriverParams json.RawMessage `json:"driverParams,omitempty"`
 }
 
 // Update updates a product.
@@ -153,18 +154,14 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pass the driver type as-is; an empty string means "don't change the
-	// existing value" — the service layer guards against overwriting with empty.
-	dType := model.DriverType(req.DriverType)
-
-	tenantID := ctxutil.GetTenantID(r.Context())
-	product := &model.Product{
-		Name:         req.Name,
-		DriverType:   dType,
-		DriverParams: req.DriverParams,
+	upd := service.ProductUpdate{Name: req.Name, DriverParams: req.DriverParams}
+	if req.DriverType != nil {
+		dType := model.DriverType(*req.DriverType)
+		upd.DriverType = &dType
 	}
 
-	if err := h.svc.UpdateProduct(r.Context(), tenantID, productID, product); err != nil {
+	tenantID := ctxutil.GetTenantID(r.Context())
+	if err := h.svc.UpdateProduct(r.Context(), tenantID, productID, upd); err != nil {
 		handleError(w, r, err)
 		return
 	}

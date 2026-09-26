@@ -47,7 +47,7 @@ func TestUpdateProduct_ValidatesParamsAgainstTheStoredDriverType(t *testing.T) {
 	p.DriverType = model.DriverContract
 
 	// The request changes only the params; the type comes from the stored product.
-	update := &model.Product{Name: "Sponsoring", DriverParams: json.RawMessage(`{"contracts":[{"bonusPerWin":-5}]}`)}
+	update := ProductUpdate{DriverParams: json.RawMessage(`{"contracts":[{"bonusPerWin":-5}]}`)}
 	err := svc.UpdateProduct(context.Background(), tenantID, p.ID, update)
 
 	requireBadRequest(t, err, "bonus per win must not be negative")
