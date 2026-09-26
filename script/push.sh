@@ -1,113 +1,133 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# =============================================================================
+# push.sh  —  Ascenda backend build, upload & deploy to the VPS
+#
+# Reference model: vandermoten.eu · Multi-App VPS · April 2026
+#
+# Usage:
+#   ./script/push.sh [version]              # build, upload, deploy
+#   ./script/push.sh [version] --no-deploy  # build and upload only
+#
+#   version  a vX.Y.Z tag on HEAD; without it, the v* tag on HEAD is used
+#            (see script/version-guard.sh — it refuses a dirty or untagged tree)
+#
+# What it does:
+#   1. Resolve and check the version (script/version-guard.sh)
+#   2. Build a static linux binary for the VPS's CPU, stamped with the version
+#   3. Upload app, migrations/*.sql and VERSION to /tmp/ascenda-backend
+#   4. Run /opt/apps/ascenda/deploy-backend.sh <version> on the VPS
+#      (sudo may ask for your password)
+#
+# --no-deploy stops after step 3: use it to inspect the upload first, e.g.
+# to dry-run a migration against the production database, then deploy with
+#   ssh -p 2222 olivier@vandermoten.eu
+#   sudo /opt/apps/ascenda/deploy-backend.sh <version>
+# =============================================================================
 set -euo pipefail
 
-# ==============================
-# CONFIG
-# ==============================
+# ── Configuration ─────────────────────────────────────────────────────────────
 SSH_USER="olivier"
 SSH_HOST="vandermoten.eu"
 SSH_PORT="2222"
 REMOTE="${SSH_USER}@${SSH_HOST}"
-
-APP_NAME="ascenda"
-
-VERSION="${1:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}"
-COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
-BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-BIN_NAME="${APP_NAME}-${VERSION}"
-LOCAL_BIN="/tmp/${BIN_NAME}"
+SSH_OPTS=(-p "${SSH_PORT}" -o StrictHostKeyChecking=accept-new)
 
 REMOTE_TMP_DIR="/tmp/ascenda-backend"
-REMOTE_BIN="${REMOTE_TMP_DIR}/app"
-REMOTE_MIGRATIONS="${REMOTE_TMP_DIR}/migrations"
+REMOTE_DEPLOY="/opt/apps/ascenda/deploy-backend.sh"
+BUILDINFO="github.com/ovander/backendkit/buildinfo"
 
-# ==============================
-# GUARD: prevent dirty release
-# ==============================
-if [[ "${VERSION}" == *"-dirty"* ]]; then
-  echo "❌ Working tree is dirty. Commit your changes before deploying."
-  exit 1
-fi
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# ==============================
-# BUILD
-# ==============================
+# ── Arguments ─────────────────────────────────────────────────────────────────
+DEPLOY=true
+REQUESTED=""
+for arg in "$@"; do
+  case "${arg}" in
+    --no-deploy) DEPLOY=false ;;
+    -h|--help)   sed -n '2,25p' "$0"; exit 0 ;;
+    -*)          echo "❌ Unknown option: ${arg}" >&2; exit 1 ;;
+    *)           REQUESTED="${arg}" ;;
+  esac
+done
+
+# ── 1. Version ────────────────────────────────────────────────────────────────
+VERSION="$(bash "${REPO_ROOT}/script/version-guard.sh" "${REPO_ROOT}" "${REQUESTED}")"
+COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# ── 2. Build for the VPS's CPU ────────────────────────────────────────────────
+REMOTE_ARCH="$(ssh "${SSH_OPTS[@]}" "${REMOTE}" uname -m)"
+case "${REMOTE_ARCH}" in
+  x86_64)        GOARCH=amd64 ;;
+  aarch64|arm64) GOARCH=arm64 ;;
+  *) echo "❌ Unsupported VPS architecture: ${REMOTE_ARCH}" >&2; exit 1 ;;
+esac
+
 echo "=============================="
-echo "🔨 Building ${BIN_NAME}"
-echo "Version:  ${VERSION}"
+echo "🔨 Building Ascenda backend ${VERSION}"
 echo "Commit:   ${COMMIT}"
+echo "Target:   linux/${GOARCH} (${REMOTE}, ${REMOTE_ARCH})"
 echo "Time:     ${BUILD_TIME}"
 echo "=============================="
 
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-  -ldflags="-s -w \
-    -X main.version=${VERSION} \
-    -X main.commit=${COMMIT} \
-    -X main.buildTime=${BUILD_TIME}" \
-  -o "${LOCAL_BIN}" \
-  ./cmd/server
+STAGE="$(mktemp -d)"
+trap 'rm -rf "${STAGE}"' EXIT
 
-# ==============================
-# VALIDATION
-# ==============================
-echo "🔍 Validating binary..."
+(
+  cd "${REPO_ROOT}"
+  CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH}" go build \
+    -ldflags "-s -w \
+      -X ${BUILDINFO}.Version=${VERSION} \
+      -X ${BUILDINFO}.GitCommit=${COMMIT} \
+      -X ${BUILDINFO}.BuildTime=${BUILD_TIME}" \
+    -o "${STAGE}/app" \
+    ./cmd/server
+)
+chmod +x "${STAGE}/app"
 
-if [ ! -f "${LOCAL_BIN}" ]; then
-  echo "❌ Build failed"
+# The migrations are embedded in the binary; the .sql copies are uploaded so
+# they can be read or dry-run on the VPS before deploying.
+mkdir -p "${STAGE}/migrations"
+cp "${REPO_ROOT}"/migrations/*.sql "${STAGE}/migrations/"
+echo "${VERSION}" > "${STAGE}/VERSION"
+
+CHECKSUM="$(shasum -a 256 "${STAGE}/app" | awk '{ print $1 }')"
+echo "✔ Binary built ($(du -h "${STAGE}/app" | awk '{ print $1 }'), sha256 ${CHECKSUM:0:16}…)"
+echo "✔ $(find "${STAGE}/migrations" -name '*.sql' | wc -l | tr -d ' ') migration files staged"
+
+# ── 3. Upload ─────────────────────────────────────────────────────────────────
+echo "📤 Uploading → ${REMOTE}:${REMOTE_TMP_DIR}/"
+ssh "${SSH_OPTS[@]}" "${REMOTE}" "rm -rf ${REMOTE_TMP_DIR} && mkdir -p ${REMOTE_TMP_DIR}"
+rsync -az -e "ssh ${SSH_OPTS[*]}" "${STAGE}/" "${REMOTE}:${REMOTE_TMP_DIR}/"
+
+REMOTE_CHECKSUM="$(ssh "${SSH_OPTS[@]}" "${REMOTE}" "sha256sum ${REMOTE_TMP_DIR}/app" | awk '{ print $1 }')"
+if [ "${REMOTE_CHECKSUM}" != "${CHECKSUM}" ]; then
+  echo "❌ Upload corrupted: remote sha256 ${REMOTE_CHECKSUM} ≠ local ${CHECKSUM}" >&2
   exit 1
 fi
+echo "✔ Upload verified"
 
-chmod +x "${LOCAL_BIN}"
-echo "✔ Binary built: ${LOCAL_BIN}"
+# The VPS runs its own copy of deploy-backend.sh; say so when it is not this one.
+LOCAL_DEPLOY_SUM="$(shasum -a 256 "${REPO_ROOT}/script/deploy-backend.sh" | awk '{ print $1 }')"
+REMOTE_DEPLOY_SUM="$(ssh "${SSH_OPTS[@]}" "${REMOTE}" "sha256sum ${REMOTE_DEPLOY} 2>/dev/null" | awk '{ print $1 }' || true)"
+if [ "${LOCAL_DEPLOY_SUM}" != "${REMOTE_DEPLOY_SUM}" ]; then
+  echo "⚠️  ${REMOTE_DEPLOY} differs from script/deploy-backend.sh — to install this one:"
+  echo "    scp -P ${SSH_PORT} script/deploy-backend.sh ${REMOTE}:/tmp/deploy-backend.sh"
+  echo "    ssh -t -p ${SSH_PORT} ${REMOTE} 'sudo install -m 755 /tmp/deploy-backend.sh ${REMOTE_DEPLOY}'"
+fi
 
-# ==============================
-# CHECKSUM
-# ==============================
-echo "🔐 Generating checksum..."
-CHECKSUM=$(shasum -a 256 "${LOCAL_BIN}" | awk '{print $1}')
-echo "Checksum: ${CHECKSUM}"
+# ── 4. Deploy ─────────────────────────────────────────────────────────────────
+if [ "${DEPLOY}" = false ]; then
+  echo ""
+  echo "=============================="
+  echo "✅ ${VERSION} uploaded (not deployed)"
+  echo ""
+  echo "➡️  To deploy:"
+  echo "    ssh -p ${SSH_PORT} ${REMOTE}"
+  echo "    sudo ${REMOTE_DEPLOY} ${VERSION}"
+  echo "=============================="
+  exit 0
+fi
 
-# ==============================
-# UPLOAD BINARY
-# ==============================
-echo "📁 Preparing remote tmp..."
-ssh -p ${SSH_PORT} ${REMOTE} "rm -rf ${REMOTE_TMP_DIR} && mkdir -p ${REMOTE_TMP_DIR}"
-
-echo "📤 Uploading binary..."
-scp -P ${SSH_PORT} "${LOCAL_BIN}" "${REMOTE}:${REMOTE_BIN}"
-
-# ==============================
-# VERIFY REMOTE
-# ==============================
-echo "🔍 Verifying remote binary..."
-ssh -p ${SSH_PORT} ${REMOTE} "ls -lh ${REMOTE_BIN}"
-
-# ==============================
-# UPLOAD MIGRATIONS
-# ==============================
-echo "📁 Uploading migrations..."
-rsync -az --delete -e "ssh -p ${SSH_PORT}" \
-  migrations/ "${REMOTE}:${REMOTE_MIGRATIONS}/"
-
-# ==============================
-# CLEANUP LOCAL
-# ==============================
-echo "🧹 Cleaning local temp..."
-rm -f "${LOCAL_BIN}"
-
-# ==============================
-# FINAL INSTRUCTIONS
-# ==============================
-echo ""
-echo "=============================="
-echo "✅ PUSH COMPLETE"
-echo "=============================="
-echo ""
-echo "➡️  Next steps on VPS:"
-echo ""
-echo "    ssh -p ${SSH_PORT} ${REMOTE}"
-echo ""
-echo "    sudo /opt/apps/${APP_NAME}/deploy-backend.sh ${VERSION}"
-echo ""
-echo "=============================="
+echo "🚀 Deploying on the VPS..."
+ssh -t "${SSH_OPTS[@]}" "${REMOTE}" "sudo ${REMOTE_DEPLOY} ${VERSION}"

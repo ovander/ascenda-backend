@@ -1,4 +1,21 @@
 #!/bin/bash
+# =============================================================================
+# deploy-backend.sh  —  Ascenda backend deployment, run on the VPS
+#
+# Lives at: /opt/apps/ascenda/deploy-backend.sh
+# Install:  scp -P 2222 script/deploy-backend.sh olivier@vandermoten.eu:/tmp/deploy-backend.sh
+#           ssh -t -p 2222 olivier@vandermoten.eu \
+#               "sudo install -m 755 /tmp/deploy-backend.sh /opt/apps/ascenda/deploy-backend.sh"
+#
+# Usage:    sudo /opt/apps/ascenda/deploy-backend.sh [version]
+#           Normally run by script/push.sh, which uploads app, migrations and
+#           VERSION to /tmp/ascenda-backend first. Without an argument the
+#           version is read from /tmp/ascenda-backend/VERSION.
+#
+# On failure the current link is pointed back at the previous release and the
+# service is started again. Once migrations have run, the previous release may
+# not start on the migrated schema: restore the database backup in that case.
+# =============================================================================
 
 set -euo pipefail
 
@@ -24,21 +41,54 @@ SERVICE="ascenda"
 USER="olivier"
 API_URL="http://localhost:8082/health"
 
-VERSION="${1:-unknown}"
+# -----------------------------
+# VERSION
+# -----------------------------
+# The argument and the uploaded VERSION file (written by push.sh, which stamps
+# the same version into the binary) must agree: a release directory named after
+# one version holding a binary built as another makes `readlink current` lie.
+# Without a VERSION file there is nothing to compare, and the argument stands.
+PUSHED_VERSION="$(cat "$TMP_DIR/VERSION" 2>/dev/null || echo "")"
+VERSION="${1:-$PUSHED_VERSION}"
+
+if [ -z "$VERSION" ]; then
+    echo "❌ Usage: $0 <version>   (or run push.sh first; it writes $TMP_DIR/VERSION)"
+    exit 1
+fi
+if [ -n "$PUSHED_VERSION" ] && [ "$VERSION" != "$PUSHED_VERSION" ]; then
+    echo "❌ Refusing to deploy: the version you named is not the version that was pushed."
+    echo "     argument   $VERSION"
+    echo "     pushed     $PUSHED_VERSION   ($TMP_DIR/VERSION)"
+    echo "   → deploy what was pushed:   sudo $0 $PUSHED_VERSION"
+    echo "   → or push what you meant:   ./script/push.sh $VERSION"
+    exit 1
+fi
+
 RELEASE_DIR="$RELEASES_DIR/$VERSION"
+MIGRATED=false
 
 # -----------------------------
 # ROLLBACK
 # -----------------------------
 rollback() {
+    trap - ERR
     echo "❌ Deployment failed — rolling back..."
 
     if [ -n "${PREVIOUS:-}" ]; then
         sudo ln -sfn "$PREVIOUS" "$CURRENT_LINK"
-        sudo systemctl start $SERVICE
-        echo "✔ Rolled back to previous release"
+        echo "🔗 current → $PREVIOUS"
     else
-        echo "⚠️ No previous release to rollback"
+        echo "⚠️ No previous release to roll back to"
+    fi
+
+    if sudo systemctl start $SERVICE && sleep 2 && systemctl is-active --quiet $SERVICE; then
+        echo "✔ $SERVICE running on the previous release"
+    else
+        echo "❌ $SERVICE did not start — check: sudo journalctl -u $SERVICE -n 50 --no-pager"
+    fi
+    if [ "$MIGRATED" = true ]; then
+        echo "⚠️ The migrations of $VERSION ran, at least in part. If the previous release"
+        echo "   fails on the changed schema, restore the database backup taken before this deploy."
     fi
 
     exit 1
@@ -55,6 +105,11 @@ echo "🔍 Pre-checks..."
 [ -d "$TMP_MIGRATIONS" ] || { echo "❌ Missing migrations in $TMP_MIGRATIONS"; exit 1; }
 
 echo "✔ Pre-checks OK"
+
+# Captured before anything changes, so that a failure at any later step
+# (migrations included) returns to it and restarts the service.
+PREVIOUS="$(readlink -f $CURRENT_LINK 2>/dev/null || echo "")"
+echo "ℹ️  Previous release: ${PREVIOUS:-none}"
 
 # -----------------------------
 # STOP SERVICE
@@ -87,6 +142,7 @@ sudo chmod 644 "$MIGRATIONS_DIR"/*.sql || true
 # RUN MIGRATIONS
 # -----------------------------
 echo "🗄 Running migrations..."
+MIGRATED=true   # set first: a run that fails part-way has still changed the schema
 
 sudo -u $USER bash -c "
 set -a
@@ -99,8 +155,6 @@ $RELEASE_DIR/app migrate
 # SWITCH RELEASE
 # -----------------------------
 echo "🔁 Switching release..."
-
-PREVIOUS="$(readlink -f $CURRENT_LINK || echo "")"
 
 sudo ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
 
@@ -137,18 +191,6 @@ if ! curl -fs $API_URL > /dev/null; then
 fi
 
 # -----------------------------
-# VERSION CHECK
-# -----------------------------
-echo "📦 Deployed version:"
-
-sudo -u $USER bash -c "
-set -a
-source $ENV_FILE
-set +a
-$CURRENT_LINK/app version
-" || echo "⚠️ Version check skipped"
-
-# -----------------------------
 # LOGS
 # -----------------------------
 echo "🔍 Service status:"
@@ -177,4 +219,5 @@ rm -rf "$TMP_DIR"
 echo "=============================="
 echo "✅ Deployment SUCCESS"
 echo "Version: $VERSION"
+echo "Active:  $(readlink -f $CURRENT_LINK)"
 echo "=============================="
