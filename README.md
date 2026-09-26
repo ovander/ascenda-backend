@@ -169,7 +169,7 @@ The `compute` package contains all financial modelling logic as pure functions o
 
 ### Prerequisites
 
-- Go 1.25+ (the `toolchain go1.27.1` line in go.mod downloads Go 1.27.1 automatically)
+- Go 1.21 or later — the `toolchain go1.27.1` line in go.mod downloads Go 1.27.1 automatically
 - PostgreSQL 16
 - [golang-migrate CLI](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate) (for manual migration commands)
 
