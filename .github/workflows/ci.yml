@@ -52,7 +52,7 @@ jobs:
       # without failing the build until it has been worked down.
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.5.0
+          version: v2.14.0  # built with Go 1.27; older builds refuse a Go 1.27 module
           only-new-issues: ${{ github.event_name == 'pull_request' }}
         continue-on-error: ${{ github.event_name != 'pull_request' }}
 
