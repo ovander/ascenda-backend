@@ -6,26 +6,28 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-09-29
+
 ### Added
 - Client attribution: sign-in, refresh, logout and magic-link calls tell Socrate the browser's
   address (resolved through `TRUSTED_PROXY_CIDRS`) and User-Agent, so Socrate v1.5.0+ audits
-  and rate-limits each user instead of this server's address.
+  and rate-limits each user instead of this server's address (#38).
 - `SOCRATE_INTERNAL_URL` (optional): calls to Socrate's OAuth endpoints go to its loopback
-  address when set, so Socrate sees the browser's address; the issuer and JWKS stay public.
-- `BIND_ADDRESS` (optional, default every interface): set `127.0.0.1` to listen on loopback only.
+  address when set, so Socrate sees the browser's address; the issuer and JWKS stay public (#39).
+- `BIND_ADDRESS` (optional, default every interface): set `127.0.0.1` to listen on loopback only (#39).
 
 ### Changed
 - Production start-up requires `SOCRATE_BASE_URL` and `SOCRATE_ADMIN_URL`, and refuses a Socrate
   URL that is malformed, or a base, internal or admin URL that ends with `/` (the issuer is
-  compared exactly).
-- `script/deploy-backend.sh` health-checks the port set in the VPS env file instead of 8082.
+  compared exactly) (#39).
+- `script/deploy-backend.sh` health-checks the port set in the VPS env file instead of 8082 (#39).
 - `backendkit` v1.13.0 → v1.15.0. The code exchange, refresh and revocation of `/auth/callback`,
   `/auth/refresh` and `/auth/logout` go through its `socrate.Client` instead of hand-written
-  requests to `/oauth/token` and `/oauth/revoke`; responses are unchanged.
+  requests to `/oauth/token` and `/oauth/revoke`; responses are unchanged (#38).
 
 ### Removed
 - `POST /auth/login`: unused, and it built an authorize URL without PKCE or `state`, which
-  Socrate refuses. Sign-in is the SPA's PKCE flow or a magic link.
+  Socrate refuses. Sign-in is the SPA's PKCE flow or a magic link (#39).
 
 ## [2.6.0] - 2026-09-29
 
@@ -183,7 +185,8 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 ### Added
 - Initial platform: compute engine, AI, cap table, infrastructure.
 
-[Unreleased]: https://github.com/ovander/ascenda-backend/compare/v2.6.0...HEAD
+[Unreleased]: https://github.com/ovander/ascenda-backend/compare/v2.7.0...HEAD
+[2.7.0]: https://github.com/ovander/ascenda-backend/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/ovander/ascenda-backend/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/ovander/ascenda-backend/compare/v2.4.2...v2.5.0
 [2.4.2]: https://github.com/ovander/ascenda-backend/compare/v2.4.1...v2.4.2
