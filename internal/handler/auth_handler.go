@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"ascenda/internal/config"
 	"ascenda/internal/repo"
@@ -16,19 +15,22 @@ import (
 )
 
 // AuthHandler manages OAuth2 authentication flows and self-service registration.
+// The token grants go through TokenService (backendkit's socrate.Client), so the
+// browser's address and User-Agent reach Socrate with every sign-in, refresh and
+// logout (middleware.SocrateClientAttribution on the /auth routes).
 type AuthHandler struct {
 	config       *config.Config
-	httpClient   *http.Client
+	tokens       *service.TokenService
 	registration *service.RegistrationService
 	userRepo     repo.UserRepository // optional; used to enrich email/name from id_token
 	logger       *logrus.Entry
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(cfg *config.Config, registration *service.RegistrationService, userRepo repo.UserRepository, logger *logrus.Entry) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, tokens *service.TokenService, registration *service.RegistrationService, userRepo repo.UserRepository, logger *logrus.Entry) *AuthHandler {
 	return &AuthHandler{
 		config:       cfg,
-		httpClient:   &http.Client{Timeout: 10 * time.Second},
+		tokens:       tokens,
 		registration: registration,
 		userRepo:     userRepo,
 		logger:       logger,
@@ -75,17 +77,6 @@ type CallbackRequest struct {
 	RedirectURI  string `json:"redirectUri,omitempty"`
 }
 
-// socrateTokenResponse represents the OAuth2/OIDC token response from Socrate (snake_case).
-// id_token is an OIDC ID token (JWT) that contains user claims (email, name, sub, etc.)
-// and is issued when the authorization request includes the "openid email profile" scopes.
-type socrateTokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	IDToken      string `json:"id_token"` // OIDC ID token — contains email, name, sub
-	ExpiresIn    int    `json:"expires_in"`
-	TokenType    string `json:"token_type"`
-}
-
 // TokenResponse represents token exchange response for the frontend (camelCase).
 type TokenResponse struct {
 	AccessToken  string `json:"accessToken"`
@@ -106,29 +97,9 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		redirectURI = h.config.Socrate.RedirectURL
 	}
 
-	data := url.Values{
-		"grant_type":    {"authorization_code"},
-		"code":          {req.Code},
-		"client_id":     {h.config.Socrate.ClientID},
-		"client_secret": {h.config.Socrate.ClientSecret},
-		"redirect_uri":  {redirectURI},
-	}
-	if req.CodeVerifier != "" {
-		data.Set("code_verifier", req.CodeVerifier)
-	}
-	resp, err := h.httpClient.PostForm(h.config.Socrate.BaseURL+"/oauth/token", data)
+	tokens, err := h.tokens.ExchangeCode(r.Context(), req.Code, redirectURI, req.CodeVerifier)
 	if err != nil {
-		handleError(w, r, apierror.Internal("failed to exchange authorization code"))
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		handleError(w, r, apierror.Unauthorized("token exchange failed"))
-		return
-	}
-	var socrateTokens socrateTokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&socrateTokens); err != nil {
-		handleError(w, r, apierror.Internal("failed to decode token response"))
+		handleError(w, r, err)
 		return
 	}
 
@@ -136,14 +107,14 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// and update the user record eagerly. The id_token is issued when the frontend
 	// requests the "openid email profile" scopes. No signature verification is needed
 	// here because the token came directly from Socrate over HTTPS (trusted channel).
-	if socrateTokens.IDToken != "" && h.userRepo != nil {
-		enrichUserFromIDToken(h.userRepo, h.logger, socrateTokens.IDToken)
+	if tokens.IDToken != "" && h.userRepo != nil {
+		enrichUserFromIDToken(h.userRepo, h.logger, tokens.IDToken)
 	}
 
 	respondJSON(w, http.StatusOK, TokenResponse{
-		AccessToken:  socrateTokens.AccessToken,
-		RefreshToken: socrateTokens.RefreshToken,
-		ExpiresIn:    socrateTokens.ExpiresIn,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresIn:    tokens.ExpiresIn,
 	})
 }
 
@@ -215,31 +186,15 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := url.Values{
-		"grant_type":    {"refresh_token"},
-		"refresh_token": {req.RefreshToken},
-		"client_id":     {h.config.Socrate.ClientID},
-		"client_secret": {h.config.Socrate.ClientSecret},
-	}
-	resp, err := h.httpClient.PostForm(h.config.Socrate.BaseURL+"/oauth/token", data)
+	tokens, err := h.tokens.RefreshToken(r.Context(), req.RefreshToken)
 	if err != nil {
-		handleError(w, r, apierror.Internal("failed to refresh token"))
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		handleError(w, r, apierror.Unauthorized("token refresh failed"))
-		return
-	}
-	var socrateTokens socrateTokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&socrateTokens); err != nil {
-		handleError(w, r, apierror.Internal("failed to decode token response"))
+		handleError(w, r, err)
 		return
 	}
 	respondJSON(w, http.StatusOK, TokenResponse{
-		AccessToken:  socrateTokens.AccessToken,
-		RefreshToken: socrateTokens.RefreshToken,
-		ExpiresIn:    socrateTokens.ExpiresIn,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresIn:    tokens.ExpiresIn,
 	})
 }
 
@@ -291,19 +246,8 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := url.Values{
-		"token":         {req.Token},
-		"client_id":     {h.config.Socrate.ClientID},
-		"client_secret": {h.config.Socrate.ClientSecret},
-	}
-	resp, err := h.httpClient.PostForm(h.config.Socrate.BaseURL+"/oauth/revoke", data)
-	if err != nil {
-		handleError(w, r, apierror.Internal("failed to revoke token"))
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		handleError(w, r, apierror.Internal("token revocation failed"))
+	if err := h.tokens.RevokeToken(r.Context(), req.Token); err != nil {
+		handleError(w, r, err)
 		return
 	}
 	respondNoContent(w)

@@ -96,6 +96,9 @@ func NewRouter(
 	// Auth routes (no tenant context required) — rate-limited per client IP.
 	r.Route("/auth", func(r chi.Router) {
 		r.Use(authLimiter.Handler)
+		// Tell Socrate which browser each sign-in, refresh, logout and magic-link
+		// redemption comes from (backendkit client attribution).
+		r.Use(middleware.SocrateClientAttribution(trustedProxies))
 
 		// Self-service registration — unauthenticated, strictly rate-limited.
 		r.With(signupLimiter.Handler).Post("/register", handlers.Admin.Auth.Register)

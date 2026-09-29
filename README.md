@@ -223,7 +223,7 @@ make docker-compose-down   # stops everything
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | auto from `APP_ENV` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable` |
 | `DB_AUTO_MIGRATE` | Run migrations on startup | `true` |
-| `TRUSTED_PROXY_CIDRS` | Reverse proxies whose `X-Forwarded-For` / `X-Real-IP` are trusted for rate-limiting client IPs (comma-separated CIDRs or IPs) | `127.0.0.1/32,::1/128` |
+| `TRUSTED_PROXY_CIDRS` | Reverse proxies whose `X-Forwarded-For` / `X-Real-IP` are trusted to give the client IP, used for rate limiting and sent to Socrate as the browser's address on sign-in calls (comma-separated CIDRs or IPs) | `127.0.0.1/32,::1/128` |
 | `TENANT_DEFAULT_FALLBACK` | Provision users with no tenant claim and no user record into the seeded default workspace. **Development only** — the server refuses to start in production when enabled. | `true` in `development`, else `false` |
 | `DB_MAX_OPEN_CONNS` | Max open DB connections | `25` |
 | `DB_MAX_IDLE_CONNS` | Max idle DB connections | `5` |

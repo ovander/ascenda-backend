@@ -38,6 +38,7 @@ Both are small, contained code fixes. Whether existing users keep their workspac
 - **B1** (refresh rotation) and **W3** (logout revocation) are fixed in ovander/ascenda-frontend#22.
 - **B2** (magic link) is fixed in ovander/ascenda-backend#29 and ovander/ascenda-frontend#23. Magic-link sign-in now redeems Socrate's own token through the backend, with no authorize redirect. The backend PR also upgrades `backendkit` to v1.13.0, which covers **W6**.
 - **W2** is fixed in ovander/ascenda-backend#31. Tokens must name `SOCRATE_CLIENT_ID` in `aud` (`SOCRATE_VERIFY_AUDIENCE`, default on), and roles come from `app_roles[client_id]`, never the top-level `role`.
+- The code exchange, refresh and revocation no longer call `/oauth/token` and `/oauth/revoke` by hand: they go through `backendkit/socrate.Client` (v1.15.0), which also sends Socrate the browser's address and User-Agent (client attribution, used by Socrate v1.5.0+).
 - **W1**, **W4**, **W5** and **W7** are open.
 
 ---
