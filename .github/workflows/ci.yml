@@ -31,7 +31,11 @@ jobs:
         run: go vet ./...
 
       - name: Unit tests (race detector)
-        run: go test -short -race -count=1 ./...
+        run: go test -short -race -count=1 -coverprofile=coverage.out ./...
+
+      # Total coverage must not fall below the floor in script/coverage-floor.sh.
+      - name: Coverage floor
+        run: bash script/coverage-floor.sh coverage.out
 
   lint:
     name: golangci-lint
