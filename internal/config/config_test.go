@@ -38,9 +38,7 @@ func TestValidate_RefusesDefaultTenantFallbackInProduction(t *testing.T) {
 		Env:                        "production",
 		DatabaseURL:                "postgres://x",
 		AllowDefaultTenantFallback: true,
-		Socrate: SocrateConfig{
-			JWKSURL: "https://idp/jwks", ClientID: "id", ClientSecret: "secret", RedirectURL: "https://app/cb",
-		},
+		Socrate:                    validProdSocrate(),
 	}
 	err := cfg.Validate()
 	require.Error(t, err)
@@ -56,4 +54,75 @@ func TestTrustedProxyCIDRs(t *testing.T) {
 
 	t.Setenv("TRUSTED_PROXY_CIDRS", " 10.0.0.0/8 , 192.168.1.5 ,")
 	assert.Equal(t, []string{"10.0.0.0/8", "192.168.1.5"}, Load().TrustedProxyCIDRs)
+}
+
+// validProdSocrate is a complete production Socrate configuration.
+func validProdSocrate() SocrateConfig {
+	return SocrateConfig{
+		BaseURL:      "https://socrate.vandermoten.eu",
+		AdminBaseURL: "http://127.0.0.1:8082",
+		JWKSURL:      "https://socrate.vandermoten.eu/.well-known/jwks.json",
+		ClientID:     "id",
+		ClientSecret: "secret",
+		RedirectURL:  "https://ascenda.vandermoten.eu/callback",
+	}
+}
+
+func TestValidate_ProductionSocrateURLs(t *testing.T) {
+	prod := func(mutate func(*SocrateConfig)) error {
+		s := validProdSocrate()
+		mutate(&s)
+		return (&Config{Env: "production", DatabaseURL: "postgres://x", Socrate: s}).Validate()
+	}
+
+	require.NoError(t, prod(func(*SocrateConfig) {}))
+	require.NoError(t, prod(func(s *SocrateConfig) { s.InternalURL = "http://127.0.0.1:8080" }))
+
+	cases := []struct {
+		name   string
+		mutate func(*SocrateConfig)
+		want   string
+	}{
+		{"issuer missing", func(s *SocrateConfig) { s.BaseURL = "" }, "SOCRATE_BASE_URL"},
+		{"admin URL missing (backendkit would guess :8081)", func(s *SocrateConfig) { s.AdminBaseURL = "" }, "SOCRATE_ADMIN_URL"},
+		{"issuer with trailing slash", func(s *SocrateConfig) { s.BaseURL = "https://socrate.vandermoten.eu/" }, "SOCRATE_BASE_URL must not end with /"},
+		{"internal URL with trailing slash", func(s *SocrateConfig) { s.InternalURL = "http://127.0.0.1:8080/" }, "SOCRATE_INTERNAL_URL must not end with /"},
+		{"admin URL with trailing slash", func(s *SocrateConfig) { s.AdminBaseURL = "http://127.0.0.1:8082/" }, "SOCRATE_ADMIN_URL must not end with /"},
+		{"malformed redirect URL", func(s *SocrateConfig) { s.RedirectURL = "http:httpd://ascenda.vandermoten.eu/callback" }, "SOCRATE_REDIRECT_URL must be an absolute http(s) URL"},
+		{"relative JWKS URL", func(s *SocrateConfig) { s.JWKSURL = "/.well-known/jwks.json" }, "SOCRATE_JWKS_URL must be an absolute http(s) URL"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := prod(tc.mutate)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
+
+func TestSocrateConfig_OAuthCallURL(t *testing.T) {
+	s := SocrateConfig{BaseURL: "https://socrate.vandermoten.eu"}
+	assert.Equal(t, "https://socrate.vandermoten.eu", s.OAuthCallURL())
+	s.InternalURL = "http://127.0.0.1:8080"
+	assert.Equal(t, "http://127.0.0.1:8080", s.OAuthCallURL())
+}
+
+func TestListenAddr(t *testing.T) {
+	t.Setenv("PORT", "8100")
+	t.Setenv("BIND_ADDRESS", "")
+	assert.Equal(t, ":8100", Load().ListenAddr(), "every interface by default (containers)")
+
+	t.Setenv("BIND_ADDRESS", "127.0.0.1")
+	assert.Equal(t, "127.0.0.1:8100", Load().ListenAddr())
+
+	t.Setenv("BIND_ADDRESS", "::1")
+	assert.Equal(t, "[::1]:8100", Load().ListenAddr())
+}
+
+func TestLoad_SocrateInternalURL(t *testing.T) {
+	t.Setenv("SOCRATE_BASE_URL", "https://socrate.vandermoten.eu")
+	t.Setenv("SOCRATE_INTERNAL_URL", "http://127.0.0.1:8080")
+	cfg := Load()
+	assert.Equal(t, "https://socrate.vandermoten.eu", cfg.Socrate.BaseURL)
+	assert.Equal(t, "http://127.0.0.1:8080", cfg.Socrate.OAuthCallURL())
 }

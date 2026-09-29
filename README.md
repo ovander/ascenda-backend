@@ -202,7 +202,7 @@ make run             # development mode (uses air for live reload)
 make run-prod        # production mode
 ```
 
-The server listens on port `3000` by default (override with `PORT=`).
+The server listens on port `8080` on every interface by default (override with `PORT=` and `BIND_ADDRESS=`).
 
 ### Docker
 
@@ -219,7 +219,8 @@ make docker-compose-down   # stops everything
 |---|---|---|
 | `APP_ENV` | Environment (`development`, `staging`, `production`) | `development` |
 | `APP_VERSION` | Application version string | `0.1.0` |
-| `PORT` | HTTP listen port | `3000` |
+| `PORT` | HTTP listen port. In production on the Socrate host: `8100` (Socrate uses `8080` and `8082` there) | `8080` |
+| `BIND_ADDRESS` | Interface to listen on; empty means every interface (containers). On the Socrate host set `127.0.0.1`, so only the local reverse proxy reaches the API | empty |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | auto from `APP_ENV` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable` |
 | `DB_AUTO_MIGRATE` | Run migrations on startup | `true` |
@@ -231,11 +232,13 @@ make docker-compose-down   # stops everything
 | `DB_CONN_MAX_IDLE_TIME` | Connection max idle time (seconds) | `300` |
 | `CORS_ORIGINS` | Allowed CORS origins (comma-separated) | `http://localhost:5173` |
 | `MAX_REQUEST_BODY_BYTES` | Max request body size | `1048576` (1 MB) |
-| `SOCRATE_BASE_URL` | Socrate OAuth2 server base URL | `https://auth.ascenda.com` |
+| `SOCRATE_BASE_URL` | Socrate's public URL, which is also the issuer every access token must carry (`iss`, compared exactly: **no trailing slash**). Required in production | `https://socrate.vandermoten.eu` |
+| `SOCRATE_INTERNAL_URL` | Optional. Where this server calls Socrate's OAuth endpoints (token, revoke, userinfo, magic link) instead of `SOCRATE_BASE_URL`: Socrate's loopback address when both run on the same host, so Socrate sees the browser's address (it trusts `X-Forwarded-For` only from loopback). The issuer and JWKS stay public | `http://127.0.0.1:8080` |
+| `SOCRATE_ADMIN_URL` | Socrate's admin API, reachable only on loopback on the Socrate host. Required in production: left empty, the client would guess `<base host>:8081`, a different service | `http://127.0.0.1:8082` |
 | `SOCRATE_CLIENT_ID` | OAuth2 client ID | — |
 | `SOCRATE_CLIENT_SECRET` | OAuth2 client secret | — |
-| `SOCRATE_JWKS_URL` | JWKS endpoint for JWT validation | `https://auth.ascenda.com/.well-known/jwks.json` |
-| `SOCRATE_REDIRECT_URL` | OAuth2 redirect URI | `http://localhost:5173/callback` |
+| `SOCRATE_JWKS_URL` | JWKS endpoint for JWT validation (RS256) | `https://socrate.vandermoten.eu/.well-known/jwks.json` |
+| `SOCRATE_REDIRECT_URL` | OAuth2 redirect URI, registered at Socrate exactly (no wildcards). The SPA sends its own at `/auth/callback`; this is the fallback. Must be an absolute URL in production | `https://ascenda.vandermoten.eu/callback` |
 | `SOCRATE_VERIFY_AUDIENCE` | Require `SOCRATE_CLIENT_ID` in the access token's `aud` claim, so tokens issued for other applications of the same Socrate are rejected. Set `false` only for an IdP that does not set `aud` | `true` |
 | `AI_PROVIDER` | AI backend (`claude` or `openai`) | `claude` |
 | `AI_API_KEY` | API key for the AI provider | — |
@@ -309,15 +312,14 @@ Handler tests use hand-rolled mocks (no code-gen required) and `httptest.NewReco
 
 ## API Overview
 
-All authenticated endpoints are prefixed with `/api/v1`. JWT bearer token required (obtained via `/auth/login` or `/auth/callback`).
+All authenticated endpoints are prefixed with `/api/v1`. JWT bearer token required, obtained at `/auth/callback` (authorization code with PKCE S256, started by the SPA) or `/auth/magic-link/verify`.
 
 ### Authentication
 
 | Method | Path | Description |
 |---|---|---|
 | POST | `/auth/register` | Self-service registration |
-| POST | `/auth/login` | Email/password login |
-| POST | `/auth/callback` | OAuth2 callback |
+| POST | `/auth/callback` | Exchange the authorization code and PKCE verifier for tokens |
 | POST | `/auth/refresh` | Refresh access token |
 | POST | `/auth/logout` | Revoke session |
 | POST | `/auth/magic-link` | Ask Socrate to e-mail a sign-in link (always 202) |

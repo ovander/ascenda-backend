@@ -200,7 +200,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	// client with no logged response status.
 	// =========================================================================
 	server := &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Port),
+		Addr:              cfg.ListenAddr(),
 		Handler:           httpHandler,
 		ReadHeaderTimeout: httpReadHeaderTimeout,
 		ReadTimeout:       httpReadTimeout,
@@ -209,7 +209,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	}
 	log.WithFields(logrus.Fields{
 		"phase":               "server",
-		"addr":                fmt.Sprintf(":%d", cfg.Port),
+		"addr":                cfg.ListenAddr(),
 		"read_header_timeout": httpReadHeaderTimeout.String(),
 		"read_timeout":        httpReadTimeout.String(),
 		"write_timeout":       httpWriteTimeout.String(),

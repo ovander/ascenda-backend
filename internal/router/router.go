@@ -102,7 +102,6 @@ func NewRouter(
 
 		// Self-service registration — unauthenticated, strictly rate-limited.
 		r.With(signupLimiter.Handler).Post("/register", handlers.Admin.Auth.Register)
-		r.Post("/login", handlers.Admin.Auth.Login)
 		r.Post("/callback", handlers.Admin.Auth.Callback)
 		r.Post("/refresh", handlers.Admin.Auth.Refresh)
 		r.Post("/logout", handlers.Admin.Auth.Logout)

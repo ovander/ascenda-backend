@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -9,8 +11,13 @@ import (
 
 // Config holds all application configuration loaded from environment variables.
 type Config struct {
-	Env            string
-	Port           int
+	Env  string
+	Port int
+	// BindAddress is the interface the HTTP server listens on. Env: BIND_ADDRESS.
+	// Default: empty, i.e. every interface (what a container needs). On a host
+	// shared with Socrate, set 127.0.0.1 so only the local reverse proxy
+	// reaches the API.
+	BindAddress    string
 	LogLevel       string
 	DatabaseURL    string
 	AllowedOrigins []string
@@ -52,8 +59,19 @@ type Config struct {
 
 // SocrateConfig holds OAuth2 server configuration.
 type SocrateConfig struct {
-	BaseURL      string
-	AdminBaseURL string // admin port (default :8081) — used for service-account user creation
+	// BaseURL is Socrate's public URL. It is the issuer every access token must
+	// carry (iss), compared as an exact string: no trailing slash.
+	BaseURL string
+	// InternalURL, when set, is where this server calls Socrate's OAuth
+	// endpoints (token, revoke, userinfo, magic link) instead of BaseURL: its
+	// loopback address when both run on the same host. Socrate trusts
+	// X-Forwarded-For only from loopback, so the browser's address reaches it
+	// this way (client attribution). Env: SOCRATE_INTERNAL_URL.
+	InternalURL string
+	// AdminBaseURL is Socrate's admin API, bound to loopback on the Socrate host
+	// (http://127.0.0.1:8082). Required in production: left empty, backendkit
+	// would derive <BaseURL host>:8081, a different service.
+	AdminBaseURL string
 	ClientID     string
 	ClientSecret string
 	AppID        string // numeric app ID from Socrate admin console (avoids admin API call)
@@ -63,6 +81,20 @@ type SocrateConfig struct {
 	// does not set aud.
 	VerifyAudience bool
 	RedirectURL    string
+}
+
+// OAuthCallURL is the base URL for this server's calls to Socrate's OAuth
+// endpoints: InternalURL when set, BaseURL otherwise.
+func (s SocrateConfig) OAuthCallURL() string {
+	if s.InternalURL != "" {
+		return s.InternalURL
+	}
+	return s.BaseURL
+}
+
+// ListenAddr is the address the HTTP server listens on (BIND_ADDRESS:PORT).
+func (c *Config) ListenAddr() string {
+	return net.JoinHostPort(c.BindAddress, strconv.Itoa(c.Port))
 }
 
 // AIConfig holds AI service configuration.
@@ -146,6 +178,7 @@ func load() *Config {
 	return &Config{
 		Env:                        env,
 		Port:                       envOrDefaultInt("PORT", 8080),
+		BindAddress:                envOrDefault("BIND_ADDRESS", ""),
 		LogLevel:                   envOrDefault("LOG_LEVEL", ""),
 		DatabaseURL:                envOrDefault("DATABASE_URL", "postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable"),
 		AllowedOrigins:             origins,
@@ -158,6 +191,7 @@ func load() *Config {
 
 		Socrate: SocrateConfig{
 			BaseURL:        envOrDefault("SOCRATE_BASE_URL", ""),
+			InternalURL:    envOrDefault("SOCRATE_INTERNAL_URL", ""),
 			AdminBaseURL:   envOrDefault("SOCRATE_ADMIN_URL", ""),
 			ClientID:       envOrDefault("SOCRATE_CLIENT_ID", ""),
 			ClientSecret:   envOrDefault("SOCRATE_CLIENT_SECRET", ""),
@@ -203,6 +237,12 @@ func (c *Config) Validate() error {
 		errs = append(errs, "DATABASE_URL")
 	}
 	if c.IsProd() {
+		if c.Socrate.BaseURL == "" {
+			errs = append(errs, "SOCRATE_BASE_URL")
+		}
+		if c.Socrate.AdminBaseURL == "" {
+			errs = append(errs, "SOCRATE_ADMIN_URL")
+		}
 		if c.Socrate.JWKSURL == "" {
 			errs = append(errs, "SOCRATE_JWKS_URL")
 		}
@@ -215,6 +255,7 @@ func (c *Config) Validate() error {
 		if c.Socrate.RedirectURL == "" {
 			errs = append(errs, "SOCRATE_REDIRECT_URL")
 		}
+		errs = append(errs, c.Socrate.urlErrors()...)
 		if c.AllowDefaultTenantFallback {
 			// Hard error: the fallback places unknown users into a shared tenant.
 			errs = append(errs, "TENANT_DEFAULT_FALLBACK must not be enabled in production")
@@ -232,6 +273,32 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("missing required configuration: %s", strings.Join(errs, ", "))
 	}
 	return nil
+}
+
+// urlErrors reports Socrate URLs that are set but malformed. Base URLs (the
+// issuer, the internal and admin addresses) must not end with a slash: the
+// issuer is compared exactly, and backendkit appends paths to the others.
+func (s SocrateConfig) urlErrors() []string {
+	var errs []string
+	check := func(name, value string, isBase bool) {
+		if value == "" {
+			return
+		}
+		u, err := url.Parse(value)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			errs = append(errs, name+" must be an absolute http(s) URL, got "+strconv.Quote(value))
+			return
+		}
+		if isBase && strings.HasSuffix(value, "/") {
+			errs = append(errs, name+" must not end with /")
+		}
+	}
+	check("SOCRATE_BASE_URL", s.BaseURL, true)
+	check("SOCRATE_INTERNAL_URL", s.InternalURL, true)
+	check("SOCRATE_ADMIN_URL", s.AdminBaseURL, true)
+	check("SOCRATE_JWKS_URL", s.JWKSURL, false)
+	check("SOCRATE_REDIRECT_URL", s.RedirectURL, false)
+	return errs
 }
 
 func envOrDefault(key, fallback string) string {

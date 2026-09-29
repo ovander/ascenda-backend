@@ -26,53 +26,6 @@ func newTestAuthHandler() *AuthHandler {
 	return NewAuthHandler(cfg, service.NewTokenService(nil, logger), nil, nil, logger)
 }
 
-func TestAuthHandlerLogin(t *testing.T) {
-	h := newTestAuthHandler()
-
-	t.Run("valid login request returns auth URL", func(t *testing.T) {
-		body, _ := json.Marshal(LoginRequest{Email: "user@test.com"})
-		req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.Login(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var resp LoginResponse
-		err := json.NewDecoder(w.Body).Decode(&resp)
-		assert.NoError(t, err)
-		assert.Contains(t, resp.AuthURL, "https://auth.example.com/oauth/authorize")
-		assert.Contains(t, resp.AuthURL, "client_id=test-client-id")
-		assert.Contains(t, resp.AuthURL, "redirect_uri=")
-		assert.Contains(t, resp.AuthURL, "login_hint=user%40test.com")
-		assert.Contains(t, resp.AuthURL, "response_type=code")
-		assert.Contains(t, resp.AuthURL, "scope=openid+profile+email")
-	})
-
-	t.Run("missing email returns 422 (validation error)", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{})
-		req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.Login(w, req)
-
-		assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
-	})
-
-	t.Run("invalid JSON returns 400", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader([]byte("not json")))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		h.Login(w, req)
-
-		// Bad JSON may return 400 or 422 depending on decode vs validate stage
-		assert.True(t, w.Code == http.StatusBadRequest || w.Code == http.StatusUnprocessableEntity)
-	})
-}
-
 func TestCallbackRequestStructure(t *testing.T) {
 	t.Run("callback request accepts code and codeVerifier", func(t *testing.T) {
 		payload := `{"code":"auth-code-123","codeVerifier":"verifier-abc","redirectUri":"http://localhost:5173/callback"}`
