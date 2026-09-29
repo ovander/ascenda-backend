@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"ascenda/internal/config"
+	"ascenda/internal/service"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,7 +23,7 @@ func newTestAuthHandler() *AuthHandler {
 		},
 	}
 	logger := logrus.NewEntry(logrus.New())
-	return NewAuthHandler(cfg, nil, nil, logger)
+	return NewAuthHandler(cfg, service.NewTokenService(nil, logger), nil, nil, logger)
 }
 
 func TestAuthHandlerLogin(t *testing.T) {
@@ -96,19 +97,9 @@ func TestCallbackRequestStructure(t *testing.T) {
 	})
 }
 
+// The mapping from Socrate's snake_case token response to this camelCase one is
+// exercised end to end in auth_handler_socrate_test.go.
 func TestTokenResponseMapping(t *testing.T) {
-	t.Run("socrate response snake_case maps correctly", func(t *testing.T) {
-		socrateJSON := `{"access_token":"at-123","refresh_token":"rt-456","expires_in":3600,"token_type":"bearer"}`
-		var socrate socrateTokenResponse
-		err := json.Unmarshal([]byte(socrateJSON), &socrate)
-
-		assert.NoError(t, err)
-		assert.Equal(t, "at-123", socrate.AccessToken)
-		assert.Equal(t, "rt-456", socrate.RefreshToken)
-		assert.Equal(t, 3600, socrate.ExpiresIn)
-		assert.Equal(t, "bearer", socrate.TokenType)
-	})
-
 	t.Run("frontend response uses camelCase", func(t *testing.T) {
 		resp := TokenResponse{
 			AccessToken:  "at-123",
@@ -127,23 +118,6 @@ func TestTokenResponseMapping(t *testing.T) {
 		// Should NOT have snake_case keys
 		assert.NotContains(t, parsed, "access_token")
 		assert.NotContains(t, parsed, "refresh_token")
-	})
-
-	t.Run("socrate to frontend mapping preserves values", func(t *testing.T) {
-		socrate := socrateTokenResponse{
-			AccessToken:  "access-tok",
-			RefreshToken: "refresh-tok",
-			ExpiresIn:    7200,
-		}
-		frontend := TokenResponse{
-			AccessToken:  socrate.AccessToken,
-			RefreshToken: socrate.RefreshToken,
-			ExpiresIn:    socrate.ExpiresIn,
-		}
-
-		assert.Equal(t, "access-tok", frontend.AccessToken)
-		assert.Equal(t, "refresh-tok", frontend.RefreshToken)
-		assert.Equal(t, 7200, frontend.ExpiresIn)
 	})
 }
 

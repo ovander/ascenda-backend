@@ -51,11 +51,28 @@ func TestOpenAPIMatchesRouter(t *testing.T) {
 // enabled, and returns its operations as normalised "METHOD path" keys.
 func routerOperations(t *testing.T) map[string]bool {
 	t.Helper()
+	// Handlers are never invoked: Walk only reads the routing tree.
+	r := newProductionRouter(&handler.HandlerBundle{}, middleware.TrustedProxies{})
+
+	ops := map[string]bool{}
+	err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		ops[normaliseOperation(method, route)] = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk router: %v", err)
+	}
+	return ops
+}
+
+// newProductionRouter builds the router exactly as cmd/server does, with the
+// given handlers and trusted proxies, every optional route enabled, and
+// middlewares whose dependencies are left empty.
+func newProductionRouter(handlers *handler.HandlerBundle, trusted middleware.TrustedProxies) *chi.Mux {
 	lg := logrus.New()
 	lg.SetOutput(nopWriter{})
 	le := logrus.NewEntry(lg)
-	// Handlers are never invoked: Walk only reads the routing tree.
-	r := NewRouter(&handler.HandlerBundle{},
+	return NewRouter(handlers,
 		middleware.NewAuthMiddleware("http://127.0.0.1:1/jwks", "http://issuer.test", "client", true, le),
 		middleware.NewTenantMiddleware(nil, nil, le, nil, false),
 		middleware.NewRBACMiddleware(le),
@@ -67,18 +84,8 @@ func routerOperations(t *testing.T) map[string]bool {
 		middleware.NewRecoverMiddleware(lg),
 		middleware.NewRequestIDMiddleware(),
 		middleware.NewSecurityHeadersMiddleware(),
-		le, nil, 1<<20, true, middleware.TrustedProxies{},
+		le, nil, 1<<20, true, trusted,
 	)
-
-	ops := map[string]bool{}
-	err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		ops[normaliseOperation(method, route)] = true
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk router: %v", err)
-	}
-	return ops
 }
 
 var (

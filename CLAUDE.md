@@ -32,6 +32,10 @@ It is multi-tenant: every business row belongs to a tenant (workspace), and plan
 - **Roles.** Read the role from the context the middleware sets (`ctxutil.GetUserRole`). The auth
   middleware scopes it to Ascenda (`app_roles[SOCRATE_CLIENT_ID]`) and checks the token audience;
   never read the token's top-level `role` claim, and do not turn the audience check off.
+- **Socrate** is reached only through `backendkit` (`jwtauth` for tokens, `socrate.Client` for
+  every call); no hand-written requests to its OAuth or API endpoints (the start-up
+  reachability check in `cmd/server/bootstrap.go` aside). Calls made on a user's behalf run
+  under `/auth`, where `middleware.SocrateClientAttribution` passes the browser's address on.
 - **Migrations.** A schema change is a new numbered pair in `migrations/`
   (`make migrate-create name=...`), with a working `down`. Never edit a migration that has been
   released (tagged). `AutoMigrate` is development-only.

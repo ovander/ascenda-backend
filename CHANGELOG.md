@@ -6,6 +6,16 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Added
+- Client attribution: sign-in, refresh, logout and magic-link calls tell Socrate the browser's
+  address (resolved through `TRUSTED_PROXY_CIDRS`) and User-Agent, so Socrate v1.5.0+ audits
+  and rate-limits each user instead of this server's address.
+
+### Changed
+- `backendkit` v1.13.0 → v1.15.0. The code exchange, refresh and revocation of `/auth/callback`,
+  `/auth/refresh` and `/auth/logout` go through its `socrate.Client` instead of hand-written
+  requests to `/oauth/token` and `/oauth/revoke`; responses are unchanged.
+
 ## [2.6.0] - 2026-09-29
 
 ### Added
