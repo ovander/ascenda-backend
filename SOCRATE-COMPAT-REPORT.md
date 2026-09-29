@@ -35,9 +35,10 @@ Both are small, contained code fixes. Whether existing users keep their workspac
 
 
 **Fix status (2026-09-29).** This report describes the code as audited. Since then:
-- **B1** (refresh rotation) and **W3** (logout revocation) are fixed in ovander/ascenda-frontend#22 (merged).
-- **B2** (magic link) is fixed in ovander/ascenda-backend#29 and ovander/ascenda-frontend#23 (open). Magic-link sign-in now redeems Socrate's own token through the backend, with no authorize redirect. That backend PR also upgrades `backendkit` to v1.13.0, which covers **W6**.
-- **W2** still needs `jwtauth.WithAudience(SOCRATE_CLIENT_ID)`, to switch on at the Socrate cut-over. **W1**, **W4**, **W5** and **W7** are open.
+- **B1** (refresh rotation) and **W3** (logout revocation) are fixed in ovander/ascenda-frontend#22.
+- **B2** (magic link) is fixed in ovander/ascenda-backend#29 and ovander/ascenda-frontend#23. Magic-link sign-in now redeems Socrate's own token through the backend, with no authorize redirect. The backend PR also upgrades `backendkit` to v1.13.0, which covers **W6**.
+- **W2** is fixed in ovander/ascenda-backend#31. Tokens must name `SOCRATE_CLIENT_ID` in `aud` (`SOCRATE_VERIFY_AUDIENCE`, default on), and roles come from `app_roles[client_id]`, never the top-level `role`.
+- **W1**, **W4**, **W5** and **W7** are open.
 
 ---
 
