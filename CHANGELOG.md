@@ -6,16 +6,17 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-09-29
+
 ### Added
 - Contributor files: `CLAUDE.md`, `CONTRIBUTING.md`, this changelog, `SECURITY.md`,
-  `CODEOWNERS`, issue and pull-request templates.
-
+  `CODEOWNERS`, issue and pull-request templates (#35).
 - CI gates: a unit-test coverage floor (75%, `script/coverage-floor.sh`); a test that
   `internal/compute` imports no I/O, database or HTTP code; a test that every route is in
   `docs/openapi.yaml` or on a shrinking list of undocumented routes, and that the spec lists no
-  route the router lacks.
+  route the router lacks (#36).
 - Release workflow: a `vX.Y.Z` tag publishes a GitHub Release with its `CHANGELOG.md` section as
-  notes and Linux amd64/arm64 server binaries.
+  notes and Linux amd64/arm64 server binaries (#36).
 
 ### Changed
 - CI: golangci-lint v2.14.0, built with Go 1.27; the lint check runs again (#34).
@@ -161,7 +162,8 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 ### Added
 - Initial platform: compute engine, AI, cap table, infrastructure.
 
-[Unreleased]: https://github.com/ovander/ascenda-backend/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/ovander/ascenda-backend/compare/v2.6.0...HEAD
+[2.6.0]: https://github.com/ovander/ascenda-backend/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/ovander/ascenda-backend/compare/v2.4.2...v2.5.0
 [2.4.2]: https://github.com/ovander/ascenda-backend/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/ovander/ascenda-backend/compare/v2.4.0...v2.4.1
