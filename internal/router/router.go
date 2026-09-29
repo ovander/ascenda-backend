@@ -104,11 +104,12 @@ func NewRouter(
 		r.Post("/refresh", handlers.Admin.Auth.Refresh)
 		r.Post("/logout", handlers.Admin.Auth.Logout)
 
-		// Passwordless magic-link sign-in.
-		// POST /auth/magic-link   — request a sign-in link (always 202, anti-enumeration).
-		// GET  /auth/magic-link/verify — browser follows link from email; redirects to Socrate PKCE flow.
+		// Passwordless magic-link sign-in through Socrate.
+		// POST /auth/magic-link        — ask Socrate to e-mail a sign-in link (always 202, anti-enumeration).
+		// POST /auth/magic-link/verify — redeem the token from the link for a token set (POST only,
+		//                                so e-mail link scanners cannot spend it).
 		r.With(signupLimiter.Handler).Post("/magic-link", handlers.Admin.MagicLink.Send)
-		r.Get("/magic-link/verify", handlers.Admin.MagicLink.Verify)
+		r.With(signupLimiter.Handler).Post("/magic-link/verify", handlers.Admin.MagicLink.Verify)
 	})
 
 	// Version endpoint (no auth required — useful for deploy checks)

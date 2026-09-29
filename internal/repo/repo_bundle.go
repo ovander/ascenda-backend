@@ -44,9 +44,6 @@ type RepoBundle struct {
 	// Plan-level cap table (Pro tier and above)
 	PlanShareholder *PlanShareholderRepo
 
-	// Magic-link sign-in tokens
-	MagicLink *MagicLinkRepo
-
 	// Platform-wide country rate configs (admin-editable)
 	CountryRateConfig *CountryRateConfigRepo
 
@@ -110,9 +107,6 @@ func NewRepoBundle(db *gorm.DB) *RepoBundle {
 
 		// Plan-level cap table (Pro tier and above)
 		PlanShareholder: NewPlanShareholderRepo(db),
-
-		// Magic-link sign-in tokens
-		MagicLink: NewMagicLinkRepo(db),
 
 		// Platform-wide country rate configs (admin-editable)
 		CountryRateConfig: NewCountryRateConfigRepo(db),
