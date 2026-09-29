@@ -544,6 +544,12 @@ Current focus:
 - Expanding AI-assisted features
 - Preparing for production-grade SaaS deployment
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the checks CI runs, and the pull-request
+workflow; changes are listed in [CHANGELOG.md](CHANGELOG.md). Report vulnerabilities privately as
+described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 Copyright © 2026 Olivier Vandermoten.
