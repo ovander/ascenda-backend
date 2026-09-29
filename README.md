@@ -236,6 +236,7 @@ make docker-compose-down   # stops everything
 | `SOCRATE_CLIENT_SECRET` | OAuth2 client secret | — |
 | `SOCRATE_JWKS_URL` | JWKS endpoint for JWT validation | `https://auth.ascenda.com/.well-known/jwks.json` |
 | `SOCRATE_REDIRECT_URL` | OAuth2 redirect URI | `http://localhost:5173/callback` |
+| `SOCRATE_VERIFY_AUDIENCE` | Require `SOCRATE_CLIENT_ID` in the access token's `aud` claim, so tokens issued for other applications of the same Socrate are rejected. Set `false` only for an IdP that does not set `aud` | `true` |
 | `AI_PROVIDER` | AI backend (`claude` or `openai`) | `claude` |
 | `AI_API_KEY` | API key for the AI provider | — |
 | `AI_MODEL` | Model identifier | `claude-sonnet-4-6` |

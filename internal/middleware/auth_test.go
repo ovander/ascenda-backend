@@ -11,7 +11,7 @@ import (
 
 func TestAuthMiddlewareMissingToken(t *testing.T) {
 	logger := logrus.NewEntry(logrus.New())
-	auth := NewAuthMiddleware("http://example.com/.well-known/jwks.json", "test-secret", logger)
+	auth := NewAuthMiddleware("http://example.com/.well-known/jwks.json", "test-secret", "", false, logger)
 
 	handler := auth.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -27,7 +27,7 @@ func TestAuthMiddlewareMissingToken(t *testing.T) {
 
 func TestAuthMiddlewareInvalidTokenFormat(t *testing.T) {
 	logger := logrus.NewEntry(logrus.New())
-	auth := NewAuthMiddleware("http://example.com/.well-known/jwks.json", "test-secret", logger)
+	auth := NewAuthMiddleware("http://example.com/.well-known/jwks.json", "test-secret", "", false, logger)
 
 	handler := auth.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -66,7 +66,7 @@ func TestAuthMiddlewareInvalidTokenFormat(t *testing.T) {
 
 func TestAuthMiddlewareInvalidToken(t *testing.T) {
 	logger := logrus.NewEntry(logrus.New())
-	auth := NewAuthMiddleware("http://example.com/.well-known/jwks.json", "test-secret", logger)
+	auth := NewAuthMiddleware("http://example.com/.well-known/jwks.json", "test-secret", "", false, logger)
 
 	handler := auth.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

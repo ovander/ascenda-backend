@@ -84,7 +84,7 @@ func TestUserIDFromNonUUID(t *testing.T) {
 
 func TestMiddlewareRejects401WithoutToken(t *testing.T) {
 	logger := logrus.NewEntry(logrus.New())
-	auth := NewAuthMiddleware("http://example.com/jwks", "", logger)
+	auth := NewAuthMiddleware("http://example.com/jwks", "", "", false, logger)
 
 	nextCalled := false
 	handler := auth.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

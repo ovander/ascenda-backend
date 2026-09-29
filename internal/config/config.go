@@ -58,7 +58,11 @@ type SocrateConfig struct {
 	ClientSecret string
 	AppID        string // numeric app ID from Socrate admin console (avoids admin API call)
 	JWKSURL      string
-	RedirectURL  string
+	// VerifyAudience requires ClientID in the token's aud claim. Env:
+	// SOCRATE_VERIFY_AUDIENCE (default true); turn off only for an IdP that
+	// does not set aud.
+	VerifyAudience bool
+	RedirectURL    string
 }
 
 // AIConfig holds AI service configuration.
@@ -153,13 +157,14 @@ func load() *Config {
 		TrustedProxyCIDRs:          trustedProxies,
 
 		Socrate: SocrateConfig{
-			BaseURL:      envOrDefault("SOCRATE_BASE_URL", ""),
-			AdminBaseURL: envOrDefault("SOCRATE_ADMIN_URL", ""),
-			ClientID:     envOrDefault("SOCRATE_CLIENT_ID", ""),
-			ClientSecret: envOrDefault("SOCRATE_CLIENT_SECRET", ""),
-			AppID:        envOrDefault("SOCRATE_APP_ID", ""),
-			JWKSURL:      envOrDefault("SOCRATE_JWKS_URL", ""),
-			RedirectURL:  envOrDefault("SOCRATE_REDIRECT_URL", ""),
+			BaseURL:        envOrDefault("SOCRATE_BASE_URL", ""),
+			AdminBaseURL:   envOrDefault("SOCRATE_ADMIN_URL", ""),
+			ClientID:       envOrDefault("SOCRATE_CLIENT_ID", ""),
+			ClientSecret:   envOrDefault("SOCRATE_CLIENT_SECRET", ""),
+			AppID:          envOrDefault("SOCRATE_APP_ID", ""),
+			JWKSURL:        envOrDefault("SOCRATE_JWKS_URL", ""),
+			VerifyAudience: envOrDefault("SOCRATE_VERIFY_AUDIENCE", "true") != "false",
+			RedirectURL:    envOrDefault("SOCRATE_REDIRECT_URL", ""),
 		},
 
 		AI: AIConfig{
