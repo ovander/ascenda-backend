@@ -4,13 +4,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"ascenda/internal/config"
 	"ascenda/internal/repo"
 	"ascenda/internal/service"
-	"github.com/ovander/backendkit/apierror"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,39 +33,6 @@ func NewAuthHandler(cfg *config.Config, tokens *service.TokenService, registrati
 		userRepo:     userRepo,
 		logger:       logger,
 	}
-}
-
-// LoginRequest represents a login request.
-type LoginRequest struct {
-	Email string `json:"email" validate:"required,email"`
-}
-
-// LoginResponse represents a login response with OAuth2 redirect.
-type LoginResponse struct {
-	AuthURL string `json:"authUrl"`
-}
-
-// Login initiates OAuth2 authentication flow.
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req LoginRequest
-	if err := decodeAndValidate(r, &req); err != nil {
-		handleError(w, r, err)
-		return
-	}
-
-	u, err := url.Parse(h.config.Socrate.BaseURL + "/oauth/authorize")
-	if err != nil {
-		handleError(w, r, apierror.Internal("invalid OAuth2 base URL"))
-		return
-	}
-	q := u.Query()
-	q.Set("client_id", h.config.Socrate.ClientID)
-	q.Set("redirect_uri", h.config.Socrate.RedirectURL)
-	q.Set("response_type", "code")
-	q.Set("scope", "openid profile email")
-	q.Set("login_hint", req.Email)
-	u.RawQuery = q.Encode()
-	respondJSON(w, http.StatusOK, LoginResponse{AuthURL: u.String()})
 }
 
 // CallbackRequest represents the OAuth2 callback.

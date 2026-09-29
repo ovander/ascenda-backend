@@ -106,7 +106,7 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 	var rawSocrateClient *socrate.Client // exported on bundle for TenantMiddleware wiring
 	if cfg.Socrate.BaseURL != "" && cfg.Socrate.ClientID != "" {
 		if sc, err := socrate.NewClient(socrate.ClientConfig{
-			BaseURL:      cfg.Socrate.BaseURL,
+			BaseURL:      cfg.Socrate.OAuthCallURL(), // loopback when set; the issuer stays cfg.Socrate.BaseURL
 			AdminBaseURL: cfg.Socrate.AdminBaseURL,
 			ClientID:     cfg.Socrate.ClientID,
 			ClientSecret: cfg.Socrate.ClientSecret,
