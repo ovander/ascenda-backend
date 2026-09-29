@@ -9,13 +9,13 @@ The same report is in the root of both repositories. Paths are prefixed `backend
 
 **Date:** 2026-09-29. This is a read-only audit: no application code was changed.
 
-**Discovery document:** not fetched from this environment, because the egress proxy refused `https://socrate.vandermoten.eu/.well-known/openid-configuration` (`CONNECT tunnel failed, response 403`). The seven unknowns this left were then checked against the Socrate v1.3.0 source (`go-oauth2`), by a separate review with access to that repository, on 2026-09-29. Six are resolved; the Socrate-side file and line references in the table (`oauth_service.go`, `token.go`, `keys_test.go`) come from that review. Only U7, the live VPS values, remains to read at migration time.
+**Discovery document:** not fetched from this environment, because the egress proxy refused `https://socrate.vandermoten.eu/.well-known/openid-configuration` (`CONNECT tunnel failed, response 403`). The seven unknowns this left were then checked against the Socrate v1.3.0 source (`go-oauth2`), by a separate review with access to that repository, on 2026-09-29. Six are resolved; the Socrate-side file and line references in the table (`oauth_service.go`, `token.go`, `keys_test.go`) come from that review. U7, the live VPS values, was read on the VPS the same day.
 
 ---
 
 ## 1. Verdict
 
-**Compatible with changes: 2 blockers · 7 warnings · 1 unknown** (6 of the original 7 unknowns resolved from the Socrate v1.3.0 source, see §3).
+**Compatible with changes: 2 blockers · 7 warnings · 0 unknowns.** U1–U6 were resolved from the Socrate v1.3.0 source and U7 from the VPS env file (see §3).
 
 The main interactive login already fits the Socrate v1.3.0 contract:
 - Authorization Code with S256 PKCE, started by the SPA;
@@ -78,7 +78,7 @@ Ranked most severe first. The *Location* column cites the code that must change 
 | U4 | ✅ RESOLVED | JWKS format (req. 5) | `backendkit/jwtauth/middleware.go:261-264` | Socrate publishes every key with `use:"sig"`, `kty:"RSA"`, `alg:"RS256"`; this is test-enforced (`keys_test.go:398`) and was seen in the live JWKS. `backendkit` keeps only `RSA` + `use=="sig"` keys, so every key loads. | No change. |
 | U5 | ✅ RESOLVED (migration policy) | Issuer change / user identity (req. 7) | `backend/internal/middleware/tenant.go:144,172,215`; `backend/internal/repo/user_repo.go:30-60` | Ascenda matches users only by `external_id = sub`, and a user it cannot match gets **403** in production. Socrate's `sub` is its user's numeric primary key (`strconv(user.ID)`, `token.go:389`). Carrying the `users` rows over **with their `id`s** (and resetting the sequence) keeps every `sub` identical. A clean-slate user table changes them all. | **Recommended:** make the Socrate data migration keep user IDs; then Ascenda needs no identity work and T1 passes as is. Only if IDs cannot be kept, relink before cut-over: remap `users.external_id` by e-mail, or blank it so the claim-by-e-mail step relinks each account on first login (needs identical e-mails). |
 | U6 | ✅ RESOLVED | Socrate admin API | `backendkit/socrate/client.go:95-101,183-243,616-680,802-815`; `backend/internal/config/config.go:56,157` | Registration, invitations, admin user management, profile enrichment and magic-link e-mails use Socrate's admin API. It exists in v1.3.0 (`/api/admin/*`) but listens on the loopback admin port **8082**, not on the `:8081` public-host default `backendkit` derives when `SOCRATE_ADMIN_URL` is unset. Ascenda runs on the same VPS, so loopback reaches it. | Set `SOCRATE_ADMIN_URL=http://127.0.0.1:8082` explicitly, and `SOCRATE_APP_ID` (without it the app-ID lookup needs an admin JWT and fails for service calls, `client.go:196-216`). |
-| U7 | UNKNOWN | Current backend configuration | `/opt/apps/ascenda/env/.env` on the VPS (not in the repo) | The live values of `SOCRATE_BASE_URL` (also used as the expected `iss`), `SOCRATE_JWKS_URL`, `SOCRATE_ADMIN_URL`, `SOCRATE_APP_ID` and `SOCRATE_REDIRECT_URL` could not be read. | Read them on the VPS at migration time (checklist step 4). |
+| U7 | ✅ RESOLVED | Current backend configuration | `/opt/apps/ascenda/env/.env` on the VPS (not in the repo) | Read on 2026-09-29: `SOCRATE_BASE_URL=https://golfperformance.fr`, `SOCRATE_ADMIN_URL=https://socrate-admin.golfperformance.fr`, `SOCRATE_CLIENT_ID=VowmSxfnObxDKFvdk1Lucg` (the same client ID as the frontend build), `SOCRATE_JWKS_URL=https://golfperformance.fr/.well-known/jwks.json`, **`SOCRATE_APP_ID` empty**, and **`SOCRATE_REDIRECT_URL=http:httpd://ascenda.vandermoten.eu/callback`**, which is malformed. The redirect URL is used by magic-link sign-in and `/auth/login`, and as the fallback in `/auth/callback`. The SPA's own login always sends its redirect URI, so it is unaffected. With `SOCRATE_APP_ID` empty, the service-account admin calls (invitations, registration) cannot resolve the app ID (`backendkit/socrate/client.go:196-216`). | Now, independent of the migration: set `SOCRATE_REDIRECT_URL=https://ascenda.vandermoten.eu/callback` and the current numeric `SOCRATE_APP_ID`. At cut-over: replace every value as in checklist step 7. |
 | I1 | INFO | ID token | `backend/internal/handler/auth_handler.go:135-202` | The ID token is decoded without signature verification. OIDC Core §3.1.3.7 allows relying on TLS for a token received directly from the token endpoint, so this is acceptable. There is no `nonce`, and `iss`/`aud` are not checked. | Optional: verify it with the same JWKS middleware and check `iss`/`aud`. Low priority. |
 | I2 | INFO | Documentation / dev defaults | `backend/README.md:234-238`; `backend/docker-compose.yml:34-38` | The examples point at `auth.ascenda.com` / `localhost:9000`, the client `kerplan-api`, and a `/auth/callback` redirect path the SPA does not use. | Update them to the Socrate v1.3.0 values when migrating. |
 
@@ -107,10 +107,11 @@ Ordered: fix the code first, then configure, then cut over.
 
    Also fix W4 (remove `POST /auth/login`) and W5 (require `codeVerifier`; pin `redirect_uri`).
 3. **Fix W3 (logout):** send `{ token: refreshToken }` to `/auth/logout`. If discovery lists `end_session_endpoint`, add RP-initiated logout.
-4. **Read the live backend configuration (U7)** on the VPS, so you know what you are replacing:
-   ```bash
-   sudo grep -E '^SOCRATE_' /opt/apps/ascenda/env/.env | sed -E 's/(SECRET=).*/\1***/'
-   ```
+4. **Fix the live configuration now (U7).** The VPS values read on 2026-09-29 show two problems that exist today, before any migration:
+   - `SOCRATE_REDIRECT_URL` is malformed (`http:httpd://…`); set it to `https://ascenda.vandermoten.eu/callback`.
+   - `SOCRATE_APP_ID` is empty; set the numeric app ID from the current Socrate admin console.
+
+   Restart the backend afterwards (`sudo systemctl restart ascenda`).
    U1–U4 and U6 are confirmed from the Socrate v1.3.0 source. A final check of the live discovery document costs one command:
    ```bash
    curl -s https://socrate.vandermoten.eu/.well-known/openid-configuration | jq '{issuer, authorization_endpoint, token_endpoint, jwks_uri, scopes_supported, token_endpoint_auth_methods_supported}'
