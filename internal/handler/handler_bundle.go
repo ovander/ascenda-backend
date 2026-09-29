@@ -76,7 +76,7 @@ func NewHandlerBundle(services *service.ServiceBundle, repos *repo.RepoBundle, d
 		Admin: AdminHandlers{
 			Health:             NewHealthHandler(db, logger),
 			Auth:               NewAuthHandler(cfg, services.Registration, repos.User, logger),
-			MagicLink:          NewMagicLinkHandler(services.MagicLink, cfg, logger),
+			MagicLink:          NewMagicLinkHandler(services.MagicLink, repos.User, logger),
 			User:               NewUserHandler(services.User, logger),
 			Tenant:             NewTenantHandler(services.Tenant, logger),
 			Metadata:           NewMetadataHandler(buildinfo.Version, buildinfo.BuildTime, buildinfo.GitCommit, logger),

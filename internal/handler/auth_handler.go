@@ -137,7 +137,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// requests the "openid email profile" scopes. No signature verification is needed
 	// here because the token came directly from Socrate over HTTPS (trusted channel).
 	if socrateTokens.IDToken != "" && h.userRepo != nil {
-		h.enrichUserFromIDToken(socrateTokens.IDToken)
+		enrichUserFromIDToken(h.userRepo, h.logger, socrateTokens.IDToken)
 	}
 
 	respondJSON(w, http.StatusOK, TokenResponse{
@@ -149,8 +149,9 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 // enrichUserFromIDToken decodes the OIDC id_token payload (no sig verification —
 // token came directly from Socrate over HTTPS) and updates the matching user record
-// with email and name if those fields are currently empty.
-func (h *AuthHandler) enrichUserFromIDToken(idToken string) {
+// with email and name if those fields are currently empty. Used after the code
+// exchange and after a magic-link sign-in.
+func enrichUserFromIDToken(userRepo repo.UserRepository, logger *logrus.Entry, idToken string) {
 	parts := strings.Split(idToken, ".")
 	if len(parts) != 3 {
 		return
@@ -177,7 +178,7 @@ func (h *AuthHandler) enrichUserFromIDToken(idToken string) {
 		return
 	}
 
-	user, err := h.userRepo.GetByExternalID(sub)
+	user, err := userRepo.GetByExternalID(sub)
 	if err != nil || user == nil {
 		return // user hasn't been auto-provisioned yet — TenantMiddleware will do it on first request
 	}
@@ -192,10 +193,10 @@ func (h *AuthHandler) enrichUserFromIDToken(idToken string) {
 		changed = true
 	}
 	if changed {
-		if updateErr := h.userRepo.Update(user); updateErr != nil {
-			h.logger.WithError(updateErr).Warn("failed to persist user profile from id_token")
+		if updateErr := userRepo.Update(user); updateErr != nil {
+			logger.WithError(updateErr).Warn("failed to persist user profile from id_token")
 		} else {
-			h.logger.WithFields(logrus.Fields{"sub": sub, "email": email}).
+			logger.WithFields(logrus.Fields{"sub": sub, "email": email}).
 				Debug("user profile enriched from OIDC id_token")
 		}
 	}

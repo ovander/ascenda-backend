@@ -1,35 +1,33 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
-	"net/url"
-	"strings"
 
-	"ascenda/internal/config"
+	"ascenda/internal/repo"
 	"ascenda/internal/service"
-	"github.com/ovander/backendkit/apierror"
 	"github.com/sirupsen/logrus"
 )
 
-// MagicLinkHandler manages passwordless sign-in via email.
+// MagicLinkHandler manages passwordless sign-in via Socrate's magic links.
+//
+// Flow: the landing page posts the e-mail to Send; Socrate e-mails a link to
+// the magic-link URL configured on the Socrate application (the frontend's
+// /magic-link page); that page posts the token from the link to Verify, which
+// redeems it at Socrate and returns the same tokens as /auth/callback.
 type MagicLinkHandler struct {
-	svc    *service.MagicLinkService
-	cfg    *config.Config
-	logger *logrus.Entry
+	svc      *service.MagicLinkService
+	userRepo repo.UserRepository // optional; used to enrich email/name from id_token
+	logger   *logrus.Entry
 }
 
 // NewMagicLinkHandler creates a MagicLinkHandler.
-func NewMagicLinkHandler(svc *service.MagicLinkService, cfg *config.Config, logger *logrus.Entry) *MagicLinkHandler {
-	return &MagicLinkHandler{svc: svc, cfg: cfg, logger: logger}
+func NewMagicLinkHandler(svc *service.MagicLinkService, userRepo repo.UserRepository, logger *logrus.Entry) *MagicLinkHandler {
+	return &MagicLinkHandler{svc: svc, userRepo: userRepo, logger: logger}
 }
-
-// ── Send ─────────────────────────────────────────────────────────────────────
 
 // SendMagicLinkRequest is the JSON body for POST /auth/magic-link.
 type SendMagicLinkRequest struct {
-	Email    string `json:"email"    validate:"required,email"`
-	Redirect string `json:"redirect"` // optional post-auth destination
+	Email string `json:"email" validate:"required,email"`
 }
 
 // Send handles POST /auth/magic-link.
@@ -41,112 +39,41 @@ func (h *MagicLinkHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitise and validate the redirect URL — must be same origin or empty.
-	redirect := sanitiseRedirect(req.Redirect, h.cfg.AllowedOrigins)
-
-	if err := h.svc.SendMagicLink(r.Context(), req.Email, redirect); err != nil {
-		handleError(w, r, err)
-		return
-	}
+	h.svc.SendMagicLink(r.Context(), req.Email)
 
 	respondJSON(w, http.StatusAccepted, map[string]string{
 		"message": "If an account exists for that email, a sign-in link is on its way.",
 	})
 }
 
-// ── Verify ───────────────────────────────────────────────────────────────────
+// VerifyMagicLinkRequest is the JSON body for POST /auth/magic-link/verify.
+type VerifyMagicLinkRequest struct {
+	Token string `json:"token" validate:"required"`
+}
 
-// Verify handles GET /auth/magic-link/verify?token=xxx.
-// On success it redirects the browser to Socrate's OAuth2 authorize endpoint
-// with login_hint pre-filled, which completes the normal PKCE sign-in flow.
-// On failure it redirects to the frontend login page with an error query param.
+// Verify handles POST /auth/magic-link/verify. It redeems the single-use token
+// from the e-mailed link at Socrate and returns the token set, like Callback.
+// POST only: a GET would let e-mail link scanners spend the token.
 func (h *MagicLinkHandler) Verify(w http.ResponseWriter, r *http.Request) {
-	rawToken := strings.TrimSpace(r.URL.Query().Get("token"))
-	if rawToken == "" {
-		h.redirectWithError(w, r, "missing token")
+	var req VerifyMagicLinkRequest
+	if err := decodeAndValidate(r, &req); err != nil {
+		handleError(w, r, err)
 		return
 	}
 
-	result, err := h.svc.VerifyMagicLink(r.Context(), rawToken)
+	result, err := h.svc.VerifyMagicLink(r.Context(), req.Token)
 	if err != nil {
-		appErr, ok := err.(*apierror.AppError)
-		if ok && appErr.StatusCode == http.StatusUnauthorized {
-			h.redirectWithError(w, r, "link expired or already used")
-			return
-		}
-		h.redirectWithError(w, r, "verification failed")
+		handleError(w, r, err)
 		return
 	}
 
-	// Build the Socrate OAuth2 authorize URL with login_hint so the user's
-	// email is pre-filled and they can confirm sign-in with one click.
-	authURL, err := h.buildAuthURL(result.Email, result.RedirectURL)
-	if err != nil {
-		h.logger.WithError(err).Error("magic-link: failed to build auth URL")
-		h.redirectWithError(w, r, "internal error")
-		return
+	if result.IDToken != "" && h.userRepo != nil {
+		enrichUserFromIDToken(h.userRepo, h.logger, result.IDToken)
 	}
 
-	http.Redirect(w, r, authURL, http.StatusFound)
-}
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-// buildAuthURL constructs the Socrate OAuth2 authorize URL with login_hint.
-func (h *MagicLinkHandler) buildAuthURL(email, postAuthRedirect string) (string, error) {
-	u, err := url.Parse(h.cfg.Socrate.BaseURL + "/oauth/authorize")
-	if err != nil {
-		return "", fmt.Errorf("parse OAuth2 base URL: %w", err)
-	}
-
-	q := u.Query()
-	q.Set("client_id", h.cfg.Socrate.ClientID)
-	q.Set("redirect_uri", h.cfg.Socrate.RedirectURL)
-	q.Set("response_type", "code")
-	q.Set("scope", "openid profile email")
-	q.Set("login_hint", email)
-
-	// Pass the post-auth redirect so the frontend callback can honour it.
-	if postAuthRedirect != "" {
-		q.Set("state", postAuthRedirect)
-	}
-
-	u.RawQuery = q.Encode()
-	return u.String(), nil
-}
-
-// redirectWithError sends the browser to the frontend login page with an error
-// query parameter so the user sees a human-readable message.
-func (h *MagicLinkHandler) redirectWithError(w http.ResponseWriter, r *http.Request, msg string) {
-	// Best-effort: derive frontend origin from AllowedOrigins.
-	frontendBase := "/"
-	if len(h.cfg.AllowedOrigins) > 0 {
-		frontendBase = strings.TrimRight(h.cfg.AllowedOrigins[0], "/")
-	}
-	dest := frontendBase + "/?magic_error=" + url.QueryEscape(msg)
-	http.Redirect(w, r, dest, http.StatusFound)
-}
-
-// sanitiseRedirect validates that a redirect URL is same-origin (or relative).
-// Any URL pointing outside the allowed origins is replaced with "/".
-func sanitiseRedirect(redirect string, allowedOrigins []string) string {
-	if redirect == "" || redirect == "/" {
-		return redirect
-	}
-	// Allow relative paths.
-	if strings.HasPrefix(redirect, "/") && !strings.HasPrefix(redirect, "//") {
-		return redirect
-	}
-	// Allow only URLs matching an allowed origin.
-	parsed, err := url.Parse(redirect)
-	if err != nil {
-		return "/"
-	}
-	origin := fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Host)
-	for _, allowed := range allowedOrigins {
-		if strings.TrimRight(allowed, "/") == strings.TrimRight(origin, "/") {
-			return redirect
-		}
-	}
-	return "/"
+	respondJSON(w, http.StatusOK, TokenResponse{
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+		ExpiresIn:    result.ExpiresIn,
+	})
 }

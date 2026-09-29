@@ -81,9 +81,6 @@ func TableModels() []interface{} {
 		&ValuationScenario{},
 		&CapTableScenarioBranch{},
 
-		// Auth
-		&MagicLinkToken{},
-
 		// Feature policies
 		&FeaturePolicy{},
 	}

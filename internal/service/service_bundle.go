@@ -99,7 +99,7 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 	var socrateClient SocrateUserManager
 	var socrateRegistrar SocrateRegistrar
 	var socrateInviter SocrateInviter
-	var socrateMailer SocrateMailer
+	var socrateMagicLink SocrateMagicLink
 	var socrateProfiler SocrateProfileFetcher
 	var rawSocrateClient *socrate.Client // exported on bundle for TenantMiddleware wiring
 	if cfg.Socrate.BaseURL != "" && cfg.Socrate.ClientID != "" {
@@ -113,7 +113,7 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 			socrateClient = sc
 			socrateRegistrar = sc
 			socrateInviter = sc
-			socrateMailer = sc
+			socrateMagicLink = sc
 			socrateProfiler = sc
 			rawSocrateClient = sc
 		} else {
@@ -147,7 +147,7 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 		AdminUser:    NewAdminUserService(socrateClient, repos.User, repos.Tenant, logger),
 		Organization: NewOrganizationService(repos.Org, repos.Tenant, repos.User, socrateInviter, logger),
 		Registration: NewRegistrationService(socrateRegistrar, repos.User, repos.Tenant, seedSvc, logger),
-		MagicLink:    NewMagicLinkService(socrateMailer, repos.MagicLink, cfg.AppBaseURL, logger),
+		MagicLink:    NewMagicLinkService(socrateMagicLink, logger),
 		Tenant:       NewTenantService(repos.Tenant, logger),
 		Report:       reportService,
 		Plan:         NewPlanService(repos.Plan, repos.Settings, repos.Audit, repos, countryRateSvc, emitter, logger).WithFeaturePolicyService(featurePolicySvc),

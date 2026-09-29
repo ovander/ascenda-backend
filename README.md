@@ -319,8 +319,8 @@ All authenticated endpoints are prefixed with `/api/v1`. JWT bearer token requir
 | POST | `/auth/callback` | OAuth2 callback |
 | POST | `/auth/refresh` | Refresh access token |
 | POST | `/auth/logout` | Revoke session |
-| POST | `/auth/magic-link` | Request magic-link |
-| GET | `/auth/magic-link/verify` | Verify magic-link token |
+| POST | `/auth/magic-link` | Ask Socrate to e-mail a sign-in link (always 202) |
+| POST | `/auth/magic-link/verify` | Redeem the token from the link at Socrate; returns tokens like `/auth/callback` |
 
 ### Health & Observability
 
@@ -450,7 +450,7 @@ Keyed token-bucket limiters (`internal/middleware/ratelimit.go`) protect four gr
 | Routes | Key | Limit |
 |---|---|---|
 | `/auth/*` | client IP | 20 req/s, burst 10 |
-| `POST /auth/register`, `POST /auth/magic-link` | client IP | 1 req / 5 s, burst 5 |
+| `POST /auth/register`, `POST /auth/magic-link`, `POST /auth/magic-link/verify` | client IP | 1 req / 5 s, burst 5 |
 | `/api/v1/*` (authenticated) | user (JWT subject) | 100 req/s, burst 20 |
 | reports, graphs, cap-table/BEP reports, `/ai/*` | tenant → user → IP | 10 req/s, burst 5 |
 
