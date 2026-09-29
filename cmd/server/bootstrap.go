@@ -142,7 +142,10 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	// 9. Middleware
 	// =========================================================================
 	mwLog := log.WithField("phase", "middleware")
-	authMW := middleware.NewAuthMiddleware(cfg.Socrate.JWKSURL, cfg.Socrate.BaseURL, log)
+	if cfg.Socrate.ClientID != "" && !cfg.Socrate.VerifyAudience {
+		log.Warn("SOCRATE_VERIFY_AUDIENCE=false: tokens issued for other applications of the same Socrate are accepted")
+	}
+	authMW := middleware.NewAuthMiddleware(cfg.Socrate.JWKSURL, cfg.Socrate.BaseURL, cfg.Socrate.ClientID, cfg.Socrate.VerifyAudience, log)
 	tenantMW := middleware.NewTenantMiddleware(repos.User, repos.Tenant, log, newSocrateProfiler(services.SocrateClient), cfg.AllowDefaultTenantFallback)
 	if cfg.AllowDefaultTenantFallback {
 		mwLog.Warn("TENANT_DEFAULT_FALLBACK enabled — unknown users without a tenant claim are provisioned into the default workspace (development only)")
