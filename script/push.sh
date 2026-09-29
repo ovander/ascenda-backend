@@ -20,17 +20,22 @@
 #
 # --no-deploy stops after step 3: use it to inspect the upload first, e.g.
 # to dry-run a migration against the production database, then deploy with
-#   ssh -p 2222 olivier@vandermoten.eu
+#   ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST"
 #   sudo /opt/apps/ascenda/deploy-backend.sh <version>
+#
+# The VPS address is not kept in the repository. Set SSH_USER, SSH_HOST and
+# SSH_PORT in the environment or in ~/.config/ascenda/deploy.env (another file
+# with ASCENDA_DEPLOY_ENV), for example:
+#   SSH_USER=deploy
+#   SSH_HOST=vps.example.com
+#   SSH_PORT=22
 # =============================================================================
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-SSH_USER="olivier"
-SSH_HOST="vandermoten.eu"
-SSH_PORT="2222"
-REMOTE="${SSH_USER}@${SSH_HOST}"
-SSH_OPTS=(-p "${SSH_PORT}" -o StrictHostKeyChecking=accept-new)
+DEPLOY_ENV="${ASCENDA_DEPLOY_ENV:-${HOME}/.config/ascenda/deploy.env}"
+# shellcheck source=/dev/null
+[ -f "${DEPLOY_ENV}" ] && . "${DEPLOY_ENV}"
 
 REMOTE_TMP_DIR="/tmp/ascenda-backend"
 REMOTE_DEPLOY="/opt/apps/ascenda/deploy-backend.sh"
@@ -44,11 +49,21 @@ REQUESTED=""
 for arg in "$@"; do
   case "${arg}" in
     --no-deploy) DEPLOY=false ;;
-    -h|--help)   sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help)   sed -n '2,/^# ====/p' "$0"; exit 0 ;;
     -*)          echo "❌ Unknown option: ${arg}" >&2; exit 1 ;;
     *)           REQUESTED="${arg}" ;;
   esac
 done
+
+# ── VPS address (after the arguments, so --help works without it) ───────────
+for var in SSH_USER SSH_HOST SSH_PORT; do
+  if [ -z "${!var:-}" ]; then
+    echo "❌ ${var} is not set: define SSH_USER, SSH_HOST and SSH_PORT in ${DEPLOY_ENV} (see the header of this script)" >&2
+    exit 1
+  fi
+done
+REMOTE="${SSH_USER}@${SSH_HOST}"
+SSH_OPTS=(-p "${SSH_PORT}" -o StrictHostKeyChecking=accept-new)
 
 # ── 1. Version ────────────────────────────────────────────────────────────────
 VERSION="$(bash "${REPO_ROOT}/script/version-guard.sh" "${REPO_ROOT}" "${REQUESTED}")"
