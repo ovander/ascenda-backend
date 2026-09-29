@@ -49,6 +49,10 @@ test-cover: ## Run tests with coverage
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
+cover-check: ## Unit tests with coverage, checked against the CI floor (script/coverage-floor.sh)
+	$(GO) test -short -race -count=1 -coverprofile=coverage.out ./...
+	bash script/coverage-floor.sh coverage.out
+
 test-compute: ## Run only computation engine tests
 	$(GO) test -v -race ./internal/compute/...
 

@@ -40,6 +40,7 @@ Run these before opening a pull request; CI runs the same and all of them are re
 test -z "$(gofmt -l cmd internal migrations)"
 go vet ./...
 go test -short -race -count=1 ./...
+make cover-check                                     # coverage must stay above the floor
 golangci-lint run --new-from-rev=origin/main ./...   # v2.14.0
 make test-integration                                # needs Docker, or TEST_DATABASE_URL
 govulncheck ./...
@@ -49,6 +50,9 @@ govulncheck ./...
 - Database tests carry the `integration` build tag and run against a real PostgreSQL
   (testcontainers, or the database in `TEST_DATABASE_URL`).
 - A bug fix comes with a test that fails without it.
+- Total unit-test coverage must stay at or above the floor in `script/coverage-floor.sh`.
+- A new route is described in `docs/openapi.yaml`; `TestOpenAPIMatchesRouter` compares the spec
+  with the router.
 
 ## Pull requests
 
@@ -63,7 +67,8 @@ govulncheck ./...
 ## Releases
 
 The maintainer tags releases `vX.Y.Z` on `main` and deploys them with `script/push.sh`, which
-refuses an untagged or dirty tree. The deploy SSH settings come from
+refuses an untagged or dirty tree. The tag also publishes a GitHub Release, with the version's
+`CHANGELOG.md` section as notes and Linux server binaries. The deploy SSH settings come from
 `~/.config/ascenda/deploy.env`; see the script's header.
 
 ## Security

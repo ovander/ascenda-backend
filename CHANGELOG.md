@@ -10,6 +10,13 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 - Contributor files: `CLAUDE.md`, `CONTRIBUTING.md`, this changelog, `SECURITY.md`,
   `CODEOWNERS`, issue and pull-request templates.
 
+- CI gates: a unit-test coverage floor (75%, `script/coverage-floor.sh`); a test that
+  `internal/compute` imports no I/O, database or HTTP code; a test that every route is in
+  `docs/openapi.yaml` or on a shrinking list of undocumented routes, and that the spec lists no
+  route the router lacks.
+- Release workflow: a `vX.Y.Z` tag publishes a GitHub Release with its `CHANGELOG.md` section as
+  notes and Linux amd64/arm64 server binaries.
+
 ### Changed
 - CI: golangci-lint v2.14.0, built with Go 1.27; the lint check runs again (#34).
 - `github.com/moby/go-archive` 0.2.0 → 0.3.0, used by the database test tooling (#33).
