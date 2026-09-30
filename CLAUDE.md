@@ -34,8 +34,11 @@ It is multi-tenant: every business row belongs to a tenant (workspace), and plan
   never read the token's top-level `role` claim, and do not turn the audience check off.
 - **Socrate** is reached only through `backendkit` (`jwtauth` for tokens, `socrate.Client` for
   every call); no hand-written requests to its OAuth or API endpoints (the start-up
-  reachability check in `cmd/server/bootstrap.go` aside). Calls made on a user's behalf run
-  under `/auth`, where `middleware.SocrateClientAttribution` passes the browser's address on.
+  reachability check in `cmd/server/bootstrap.go` aside). OAuth calls go to the public issuer
+  URL; the admin API only through `SOCRATE_ADMIN_URL`. Calls made on a user's behalf run under
+  `/auth`, where `middleware.SocrateClientAttribution` sends Socrate one address resolved by
+  `AttributionIP` (`X-Forwarded-For` trusted from loopback only); never forward a browser's
+  `X-Forwarded-For` or `X-Real-IP`.
 - **Migrations.** A schema change is a new numbered pair in `migrations/`
   (`make migrate-create name=...`), with a working `down`. Never edit a migration that has been
   released (tagged). `AutoMigrate` is development-only.

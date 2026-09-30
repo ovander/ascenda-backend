@@ -97,8 +97,9 @@ func NewRouter(
 	r.Route("/auth", func(r chi.Router) {
 		r.Use(authLimiter.Handler)
 		// Tell Socrate which browser each sign-in, refresh, logout and magic-link
-		// redemption comes from (backendkit client attribution).
-		r.Use(middleware.SocrateClientAttribution(trustedProxies))
+		// redemption comes from (backendkit client attribution): X-Forwarded-For
+		// is trusted from loopback (Caddy) only, and replaced, never forwarded.
+		r.Use(middleware.SocrateClientAttribution())
 
 		// Self-service registration — unauthenticated, strictly rate-limited.
 		r.With(signupLimiter.Handler).Post("/register", handlers.Admin.Auth.Register)

@@ -62,12 +62,6 @@ type SocrateConfig struct {
 	// BaseURL is Socrate's public URL. It is the issuer every access token must
 	// carry (iss), compared as an exact string: no trailing slash.
 	BaseURL string
-	// InternalURL, when set, is where this server calls Socrate's OAuth
-	// endpoints (token, revoke, userinfo, magic link) instead of BaseURL: its
-	// loopback address when both run on the same host. Socrate trusts
-	// X-Forwarded-For only from loopback, so the browser's address reaches it
-	// this way (client attribution). Env: SOCRATE_INTERNAL_URL.
-	InternalURL string
 	// AdminBaseURL is Socrate's admin API, bound to loopback on the Socrate host
 	// (http://127.0.0.1:8082). Required in production: left empty, backendkit
 	// would derive <BaseURL host>:8081, a different service.
@@ -81,15 +75,6 @@ type SocrateConfig struct {
 	// does not set aud.
 	VerifyAudience bool
 	RedirectURL    string
-}
-
-// OAuthCallURL is the base URL for this server's calls to Socrate's OAuth
-// endpoints: InternalURL when set, BaseURL otherwise.
-func (s SocrateConfig) OAuthCallURL() string {
-	if s.InternalURL != "" {
-		return s.InternalURL
-	}
-	return s.BaseURL
 }
 
 // ListenAddr is the address the HTTP server listens on (BIND_ADDRESS:PORT).
@@ -191,7 +176,6 @@ func load() *Config {
 
 		Socrate: SocrateConfig{
 			BaseURL:        envOrDefault("SOCRATE_BASE_URL", ""),
-			InternalURL:    envOrDefault("SOCRATE_INTERNAL_URL", ""),
 			AdminBaseURL:   envOrDefault("SOCRATE_ADMIN_URL", ""),
 			ClientID:       envOrDefault("SOCRATE_CLIENT_ID", ""),
 			ClientSecret:   envOrDefault("SOCRATE_CLIENT_SECRET", ""),
@@ -276,7 +260,7 @@ func (c *Config) Validate() error {
 }
 
 // urlErrors reports Socrate URLs that are set but malformed. Base URLs (the
-// issuer, the internal and admin addresses) must not end with a slash: the
+// issuer and the admin address) must not end with a slash: the
 // issuer is compared exactly, and backendkit appends paths to the others.
 func (s SocrateConfig) urlErrors() []string {
 	var errs []string
@@ -294,7 +278,6 @@ func (s SocrateConfig) urlErrors() []string {
 		}
 	}
 	check("SOCRATE_BASE_URL", s.BaseURL, true)
-	check("SOCRATE_INTERNAL_URL", s.InternalURL, true)
 	check("SOCRATE_ADMIN_URL", s.AdminBaseURL, true)
 	check("SOCRATE_JWKS_URL", s.JWKSURL, false)
 	check("SOCRATE_REDIRECT_URL", s.RedirectURL, false)

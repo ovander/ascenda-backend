@@ -92,22 +92,30 @@ func newSocrateAuthHandler(t *testing.T, f *socrateServer) *AuthHandler {
 	return NewAuthHandler(cfg, service.NewTokenService(sc, logger), nil, nil, logger)
 }
 
-// serveWithAttribution runs h behind middleware.SocrateClientAttribution, with
-// loopback as the only trusted proxy (the production default).
+// serveWithAttribution runs h behind middleware.SocrateClientAttribution, as
+// the /auth routes do, with the given peer and X-Forwarded-For.
 func serveWithAttribution(t *testing.T, h http.HandlerFunc, remoteAddr, xff string, payload any) *httptest.ResponseRecorder {
 	t.Helper()
-	trusted, err := middleware.ParseTrustedProxies([]string{"127.0.0.1/32"})
-	require.NoError(t, err)
+	headers := map[string]string{}
+	if xff != "" {
+		headers["X-Forwarded-For"] = xff
+	}
+	return serveWithHeaders(t, h, remoteAddr, headers, payload)
+}
+
+// serveWithHeaders is serveWithAttribution with arbitrary request headers.
+func serveWithHeaders(t *testing.T, h http.HandlerFunc, remoteAddr string, headers map[string]string, payload any) *httptest.ResponseRecorder {
+	t.Helper()
 	body, _ := json.Marshal(payload)
 	req := httptest.NewRequest(http.MethodPost, "/auth/x", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Ascenda test)")
 	req.RemoteAddr = remoteAddr
-	if xff != "" {
-		req.Header.Set("X-Forwarded-For", xff)
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	w := httptest.NewRecorder()
-	middleware.SocrateClientAttribution(trusted)(h).ServeHTTP(w, req)
+	middleware.SocrateClientAttribution()(h).ServeHTTP(w, req)
 	return w
 }
 

@@ -39,7 +39,8 @@ Both are small, contained code fixes. Whether existing users keep their workspac
 - **B2** (magic link) is fixed in ovander/ascenda-backend#29 and ovander/ascenda-frontend#23. Magic-link sign-in now redeems Socrate's own token through the backend, with no authorize redirect. The backend PR also upgrades `backendkit` to v1.13.0, which covers **W6**.
 - **W2** is fixed in ovander/ascenda-backend#31. Tokens must name `SOCRATE_CLIENT_ID` in `aud` (`SOCRATE_VERIFY_AUDIENCE`, default on), and roles come from `app_roles[client_id]`, never the top-level `role`.
 - The code exchange, refresh and revocation no longer call `/oauth/token` and `/oauth/revoke` by hand: they go through `backendkit/socrate.Client` (v1.15.0), which also sends Socrate the browser's address and User-Agent (client attribution, used by Socrate v1.5.0+).
-- Cut-over to `https://socrate.vandermoten.eu`: production requires `SOCRATE_BASE_URL` (no trailing slash) and `SOCRATE_ADMIN_URL` (`http://127.0.0.1:8082`, which covers **U6**) and rejects a malformed `SOCRATE_REDIRECT_URL` (**U7**). The optional `SOCRATE_INTERNAL_URL` sends OAuth calls over loopback. `POST /auth/login`, which had no PKCE, is removed.
+- Cut-over to `https://socrate.vandermoten.eu`: production requires `SOCRATE_BASE_URL` (no trailing slash) and `SOCRATE_ADMIN_URL` (`http://127.0.0.1:8082`, which covers **U6**) and rejects a malformed `SOCRATE_REDIRECT_URL` (**U7**). `POST /auth/login`, which had no PKCE, is removed.
+- Client attribution (audit row 18): OAuth calls stay on the public issuer URL (`SOCRATE_INTERNAL_URL` removed); Socrate's Caddy trusts `X-Forwarded-For` from the apps VPS, so Ascenda sends one address it resolved itself, trusting `X-Forwarded-For` from loopback (its own Caddy) only and never forwarding the browser's `X-Forwarded-For` or `X-Real-IP`.
 - **W1**, **W4**, **W5** and **W7** are open.
 
 ---

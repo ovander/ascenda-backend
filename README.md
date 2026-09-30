@@ -224,7 +224,7 @@ make docker-compose-down   # stops everything
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | auto from `APP_ENV` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable` |
 | `DB_AUTO_MIGRATE` | Run migrations on startup | `true` |
-| `TRUSTED_PROXY_CIDRS` | Reverse proxies whose `X-Forwarded-For` / `X-Real-IP` are trusted to give the client IP, used for rate limiting and sent to Socrate as the browser's address on sign-in calls (comma-separated CIDRs or IPs) | `127.0.0.1/32,::1/128` |
+| `TRUSTED_PROXY_CIDRS` | Reverse proxies whose `X-Forwarded-For` / `X-Real-IP` are trusted to give the client IP for **rate limiting** (comma-separated CIDRs or IPs). Not used for the address sent to Socrate: that one trusts `X-Forwarded-For` from loopback (Caddy) only, never reads `X-Real-IP`, and replaces the header (see [Rate Limiting](#rate-limiting)) | `127.0.0.1/32,::1/128` |
 | `TENANT_DEFAULT_FALLBACK` | Provision users with no tenant claim and no user record into the seeded default workspace. **Development only** — the server refuses to start in production when enabled. | `true` in `development`, else `false` |
 | `DB_MAX_OPEN_CONNS` | Max open DB connections | `25` |
 | `DB_MAX_IDLE_CONNS` | Max idle DB connections | `5` |
@@ -233,7 +233,6 @@ make docker-compose-down   # stops everything
 | `CORS_ORIGINS` | Allowed CORS origins (comma-separated) | `http://localhost:5173` |
 | `MAX_REQUEST_BODY_BYTES` | Max request body size | `1048576` (1 MB) |
 | `SOCRATE_BASE_URL` | Socrate's public URL, which is also the issuer every access token must carry (`iss`, compared exactly: **no trailing slash**). Required in production | `https://socrate.vandermoten.eu` |
-| `SOCRATE_INTERNAL_URL` | Optional. Where this server calls Socrate's OAuth endpoints (token, revoke, userinfo, magic link) instead of `SOCRATE_BASE_URL`: Socrate's loopback address when both run on the same host, so Socrate sees the browser's address (it trusts `X-Forwarded-For` only from loopback). The issuer and JWKS stay public | `http://127.0.0.1:8080` |
 | `SOCRATE_ADMIN_URL` | Socrate's admin API, reachable only on loopback on the Socrate host. Required in production: left empty, the client would guess `<base host>:8081`, a different service | `http://127.0.0.1:8082` |
 | `SOCRATE_CLIENT_ID` | OAuth2 client ID | — |
 | `SOCRATE_CLIENT_SECRET` | OAuth2 client secret | — |
@@ -458,6 +457,15 @@ Keyed token-bucket limiters (`internal/middleware/ratelimit.go`) protect four gr
 | reports, graphs, cap-table/BEP reports, `/ai/*` | tenant → user → IP | 10 req/s, burst 5 |
 
 The client IP is the TCP peer unless the peer is listed in `TRUSTED_PROXY_CIDRS` (default: loopback, i.e. a reverse proxy on the same host), in which case the rightmost non-proxy `X-Forwarded-For` entry (or `X-Real-IP`) is used. Idle buckets are evicted after 10 minutes to bound memory usage.
+
+**Address sent to Socrate.** Sign-in, refresh, logout and magic-link redemption tell Socrate which
+browser they are for (`middleware.SocrateClientAttribution`, backendkit client attribution), and
+Socrate's Caddy trusts `X-Forwarded-For` from the apps VPS. Ascenda therefore sends exactly one
+address it resolved itself: from a loopback peer (Caddy on this host), the rightmost
+`X-Forwarded-For` entry; from any other peer, the peer's own address. A browser's
+`X-Forwarded-For` or `X-Real-IP` is never forwarded: the outgoing header is replaced, never
+appended to, and `X-Real-IP` is removed. OAuth calls always go to the public
+`SOCRATE_BASE_URL`, never through the admin tunnel.
 
 The `/graphs/annual/all` batch endpoint was specifically introduced so that the graphs dashboard can fetch all 7 annual charts in a single HTTP request — avoiding burst exhaustion when charts were previously fetched in parallel.
 
