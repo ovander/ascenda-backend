@@ -7,6 +7,8 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 ## [Unreleased]
 
 ### Changed
+- Test through the production router that the removed `POST /auth/login` answers 404/405
+  (Socrate audit row 3).
 - Production listens on `127.0.0.1` by default (`BIND_ADDRESS`), since Caddy on the same host
   proxies to it; elsewhere every interface as before. The Docker image sets `BIND_ADDRESS=0.0.0.0`.
 
