@@ -6,6 +6,10 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Added
+- `docs/SOCRATE-APP-ID-2026-09-30.md`: the closed change request on Ascenda's Socrate app ID (`3`),
+  what each Socrate call needs, and the follow-up changes; `SOCRATE_APP_ID` in the README table (#49).
+
 ## [2.8.0] - 2026-09-30
 
 Backend-for-Frontend (Phase 2): no OAuth token reaches the browser. Deploy with the frontend's
