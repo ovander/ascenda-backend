@@ -68,9 +68,13 @@ type SocrateConfig struct {
 	// X-Forwarded-For only from loopback, so the browser's address reaches it
 	// this way (client attribution). Env: SOCRATE_INTERNAL_URL.
 	InternalURL string
-	// AdminBaseURL is Socrate's admin API, bound to loopback on the Socrate host
-	// (http://127.0.0.1:8082). Required in production: left empty, backendkit
-	// would derive <BaseURL host>:8081, a different service.
+	// AdminBaseURL is Socrate's admin API. It listens on loopback on the Socrate
+	// VPS only; the apps VPS reaches it through the host's SSH tunnel
+	// (socrate-admin-tunnel.service) at http://127.0.0.1:18082. Env:
+	// SOCRATE_ADMIN_URL. It is never derived: backendkit would guess
+	// <BaseURL host>:8081, a different service, so Validate requires it
+	// whenever SOCRATE_BASE_URL is set. There is no fallback when the tunnel
+	// is down: admin calls fail.
 	AdminBaseURL string
 	ClientID     string
 	ClientSecret string
@@ -243,6 +247,11 @@ func (c *Config) Validate() error {
 	var errs []string
 	if c.DatabaseURL == "" {
 		errs = append(errs, "DATABASE_URL")
+	}
+	// In every environment: with Socrate configured, the admin URL must be
+	// explicit, or backendkit would derive <base host>:8081 (a different service).
+	if !c.IsProd() && c.Socrate.BaseURL != "" && c.Socrate.AdminBaseURL == "" {
+		errs = append(errs, "SOCRATE_ADMIN_URL (required with SOCRATE_BASE_URL; never derived)")
 	}
 	if c.IsProd() {
 		if c.Socrate.BaseURL == "" {
