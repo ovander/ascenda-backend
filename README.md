@@ -243,6 +243,11 @@ make docker-compose-down   # stops everything
 | `SOCRATE_JWKS_URL` | JWKS endpoint for JWT validation (RS256) | `https://socrate.vandermoten.eu/.well-known/jwks.json` |
 | `SOCRATE_REDIRECT_URL` | OAuth2 redirect URI, registered at Socrate exactly (no wildcards). The SPA sends its own at `/auth/callback`; this is the fallback. Must be an absolute URL in production | `https://ascenda.vandermoten.eu/callback` |
 | `SOCRATE_VERIFY_AUDIENCE` | Require `SOCRATE_CLIENT_ID` in the access token's `aud` claim, so tokens issued for other applications of the same Socrate are rejected. Set `false` only for an IdP that does not set `aud` | `true` |
+| `BFF_REDIRECT_URL` | The Backend-for-Frontend's OAuth redirect URI, registered at Socrate exactly. On the SPA's origin, where the session cookie lives. Required in production (https); empty elsewhere turns the `/bff` sign-in off | `https://ascenda.vandermoten.eu/bff/callback` |
+| `BFF_COOKIE_NAME` | Session cookie name; sent as `__Host-<name>` (HttpOnly, Secure, SameSite=Strict, Path=/, no Domain) | `ascenda_session` |
+| `BFF_SESSION_IDLE_TTL` | A session unused this long ends (Go duration) | `30m` |
+| `BFF_SESSION_ABSOLUTE_TTL` | Any session this old ends, whatever its activity | `8h` |
+| `BFF_INSECURE_COOKIE` | Drop `Secure` and the `__Host-` prefix, for local development over plain http only: refused in production and with an https `BFF_REDIRECT_URL` | `false` |
 | `AI_PROVIDER` | AI backend (`claude` or `openai`) | `claude` |
 | `AI_API_KEY` | API key for the AI provider | — |
 | `AI_MODEL` | Model identifier | `claude-sonnet-4-6` |
@@ -261,6 +266,27 @@ its own VPS. The owner deploys a tag with `script/push.sh`, which uploads the bi
 `/opt/apps/ascenda/env/.env`).
 
 - **API**: listens on loopback; Caddy on the same host proxies `api.ascenda.vandermoten.eu` to it.
+- **Backend-for-Frontend** (`/bff`): the browser signs in through the API and holds only an
+  HttpOnly session cookie on `ascenda.vandermoten.eu`; the tokens stay in the API's memory
+  (one instance: a restart signs everyone out). The cookie is sent to that host only, so the
+  `ascenda.vandermoten.eu` site in Caddy proxies `/bff/*`, `/api/*` and `/auth/*` to the API
+  and serves the SPA for everything else:
+
+  ```caddyfile
+  ascenda.vandermoten.eu {
+  	@api path /bff/* /api/* /auth/*
+  	handle @api {
+  		reverse_proxy 127.0.0.1:8080
+  	}
+  	handle {
+  		# the SPA, as today (root, try_files {path} /index.html, file_server)
+  	}
+  }
+  ```
+
+  Caddy sets `X-Forwarded-For` to the browser's address; keep it that way (no `trusted_proxies`
+  on that site), since the API trusts that header from loopback only. `/bff/callback` must be
+  registered at Socrate before the API is deployed with `BFF_REDIRECT_URL`.
 - **OAuth calls** (token, refresh, revoke, userinfo) and the JWKS go to Socrate's public URL,
   `SOCRATE_BASE_URL`, which is also the issuer.
 - **Admin API**: Socrate's admin API is bound to loopback on the Socrate VPS and is never
@@ -335,12 +361,17 @@ Handler tests use hand-rolled mocks (no code-gen required) and `httptest.NewReco
 
 ## API Overview
 
-All authenticated endpoints are prefixed with `/api/v1`. JWT bearer token required, obtained at `/auth/callback` (authorization code with PKCE S256, started by the SPA) or `/auth/magic-link/verify`.
+All authenticated endpoints are prefixed with `/api/v1`. They take a Backend-for-Frontend session: the SPA signs in at `/bff/login` (authorization code with PKCE S256, run by the server) or `/bff/magic-link/verify`, then sends the `__Host-ascenda_session` cookie and, on POST, PUT, PATCH and DELETE, the CSRF token from `/bff/session` in `X-CSRF-Token`. During the transition they also take a JWT bearer obtained at `/auth/callback` or `/auth/magic-link/verify`.
 
 ### Authentication
 
 | Method | Path | Description |
 |---|---|---|
+| GET | `/bff/login?return_to=` | Start sign-in: PKCE and state kept on the server, redirect to Socrate |
+| GET | `/bff/callback` | Socrate redirects here: exchange the code, create the session, set the cookie |
+| GET | `/bff/session` | `{"authenticated":false}` or the user and the CSRF token; never a token |
+| POST | `/bff/logout` | Revoke the refresh token, end the session, clear the cookie (CSRF) |
+| POST | `/bff/magic-link/verify` | Redeem a magic link into a session (same-origin only) |
 | POST | `/auth/register` | Self-service registration |
 | POST | `/auth/callback` | Exchange the authorization code and PKCE verifier for tokens |
 | POST | `/auth/refresh` | Refresh access token |
@@ -482,7 +513,8 @@ Keyed token-bucket limiters (`internal/middleware/ratelimit.go`) protect four gr
 
 The client IP is the TCP peer unless the peer is listed in `TRUSTED_PROXY_CIDRS` (default: loopback, i.e. a reverse proxy on the same host), in which case the rightmost non-proxy `X-Forwarded-For` entry (or `X-Real-IP`) is used. Idle buckets are evicted after 10 minutes to bound memory usage.
 
-**Address sent to Socrate.** Sign-in, refresh, logout and magic-link redemption tell Socrate which
+**Address sent to Socrate.** Sign-in, refresh, logout and magic-link redemption (under `/auth` and
+`/bff`, and the token refresh the session middleware runs on `/api/v1`) tell Socrate which
 browser they are for (`middleware.SocrateClientAttribution`, backendkit client attribution), and
 Socrate's Caddy trusts `X-Forwarded-For` from the apps VPS. Ascenda therefore sends exactly one
 address it resolved itself: from a loopback peer (Caddy on this host), the rightmost

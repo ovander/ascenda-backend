@@ -8,10 +8,12 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"ascenda/internal/handler"
 	"ascenda/internal/middleware"
 	"github.com/go-chi/chi/v5"
+	"github.com/ovander/backendkit/bff"
 	"github.com/sirupsen/logrus"
 )
 
@@ -71,6 +73,13 @@ func routerOperations(t *testing.T) map[string]bool {
 func newProductionRouter(handlers *handler.HandlerBundle, trusted middleware.TrustedProxies) *chi.Mux {
 	lg := logrus.New()
 	lg.SetOutput(nopWriter{})
+	return newProductionRouterWithBFF(handlers, trusted, newTestBFF(logrus.NewEntry(lg)))
+}
+
+// newProductionRouterWithBFF is newProductionRouter with the given BFF wiring.
+func newProductionRouterWithBFF(handlers *handler.HandlerBundle, trusted middleware.TrustedProxies, b *BFF) *chi.Mux {
+	lg := logrus.New()
+	lg.SetOutput(nopWriter{})
 	le := logrus.NewEntry(lg)
 	return NewRouter(handlers,
 		middleware.NewAuthMiddleware("http://127.0.0.1:1/jwks", "http://issuer.test", "client", true, le),
@@ -85,7 +94,28 @@ func newProductionRouter(handlers *handler.HandlerBundle, trusted middleware.Tru
 		middleware.NewRequestIDMiddleware(),
 		middleware.NewSecurityHeadersMiddleware(),
 		le, nil, 1<<20, true, trusted,
+		b,
 	)
+}
+
+// newTestBFF is the BFF as cmd/server wires it (session store, cookie, /bff
+// routes, session middleware accepting a bearer during the transition), with
+// no Socrate behind it.
+func newTestBFF(le *logrus.Entry) *BFF {
+	gw := &bff.Gateway{
+		Store:  bff.NewMemoryStore(30*time.Minute, 8*time.Hour),
+		Cookie: bff.CookieConfig{Name: "ascenda_session", Secure: true},
+	}
+	return &BFF{
+		Handler: handler.NewBFFHandler(handler.BFFOptions{
+			Gateway:     gw,
+			Issuer:      "http://issuer.test",
+			ClientID:    "client",
+			RedirectURI: "https://app.test/bff/callback",
+			Logger:      le,
+		}),
+		Session: middleware.NewSessionAuth(gw, true, le),
+	}
 }
 
 var (

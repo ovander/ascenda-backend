@@ -6,6 +6,14 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Added
+- Backend-for-Frontend, additive: `/bff/login`, `/bff/callback`, `/bff/session`, `/bff/logout` and
+  `/bff/magic-link/verify` run sign-in on the server and give the browser only an HttpOnly
+  `__Host-ascenda_session` cookie and a CSRF token; a session middleware in front of `/api/v1`
+  turns the session into the bearer (CSRF on unsafe methods, token refresh). `/api/v1` still
+  takes a bearer during the transition. New settings `BFF_REDIRECT_URL`, `BFF_COOKIE_NAME`,
+  `BFF_SESSION_IDLE_TTL`, `BFF_SESSION_ABSOLUTE_TTL`, `BFF_INSECURE_COOKIE` (#46).
+
 ## [2.7.0] - 2026-09-30
 
 Cut-over readiness for Socrate at `https://socrate.vandermoten.eu` (Phase 1). Deploy with the VPS

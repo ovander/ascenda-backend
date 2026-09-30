@@ -35,10 +35,14 @@ It is multi-tenant: every business row belongs to a tenant (workspace), and plan
 - **Socrate** is reached only through `backendkit` (`jwtauth` for tokens, `socrate.Client` for
   every call); no hand-written requests to its OAuth or API endpoints (the start-up
   reachability check in `cmd/server/bootstrap.go` aside). OAuth calls go to the public issuer
-  URL; the admin API only through `SOCRATE_ADMIN_URL`. Calls made on a user's behalf run under
-  `/auth`, where `middleware.SocrateClientAttribution` sends Socrate one address resolved by
-  `AttributionIP` (`X-Forwarded-For` trusted from loopback only); never forward a browser's
-  `X-Forwarded-For` or `X-Real-IP`.
+  URL; the admin API only through `SOCRATE_ADMIN_URL`. Every request runs under
+  `middleware.SocrateClientAttribution`, which sends Socrate one address resolved by
+  `AttributionIP` (`X-Forwarded-For` trusted from loopback only) on the calls made on a user's
+  behalf (sign-in, refresh, logout); never forward a browser's `X-Forwarded-For` or `X-Real-IP`.
+- **BFF.** The browser signs in through `/bff` and holds only the HttpOnly session cookie and a
+  CSRF token; tokens stay in the server-side session (`bff.Gateway`). Never return a token to
+  the browser. `middleware.SessionAuth` turns the session into the bearer in front of
+  `/api/v1`; keep CSRF on unsafe methods and the `__Host-` cookie.
 - **Migrations.** A schema change is a new numbered pair in `migrations/`
   (`make migrate-create name=...`), with a working `down`. Never edit a migration that has been
   released (tagged). `AutoMigrate` is development-only.

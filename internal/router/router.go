@@ -12,6 +12,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// BFF is the Backend-for-Frontend wiring: the /bff routes and the session
+// middleware in front of /api/v1. Nil leaves both out.
+type BFF struct {
+	Handler *handler.BFFHandler
+	Session *middleware.SessionAuth
+}
+
 // NewRouter creates and configures the main router with all routes and middleware.
 // allowedOrigins is sourced from cfg.AllowedOrigins (env: CORS_ORIGINS) so that
 // production deployments never rely on hardcoded localhost values.
@@ -35,6 +42,7 @@ func NewRouter(
 	maxBodyBytes int64,
 	metricsEnabled bool,
 	trustedProxies middleware.TrustedProxies,
+	bffRoutes *BFF,
 ) *chi.Mux {
 	r := chi.NewRouter()
 
@@ -46,6 +54,12 @@ func NewRouter(
 	r.Use(recoverMW.Handler)
 	r.Use(requestIDMW.Handler)
 	r.Use(loggerMW.Handler)
+	// Tell Socrate which browser each call made on a user's behalf comes from
+	// (backendkit client attribution): the sign-in, refresh and logout of
+	// /auth and /bff, and the token refresh the session middleware runs on
+	// /api/v1. X-Forwarded-For is trusted from loopback (Caddy) only, and
+	// replaced, never forwarded.
+	r.Use(middleware.SocrateClientAttribution())
 
 	// Default CRUD timeout
 	crudTimeout := middleware.TimeoutMiddleware(5 * time.Second)
@@ -96,10 +110,6 @@ func NewRouter(
 	// Auth routes (no tenant context required) — rate-limited per client IP.
 	r.Route("/auth", func(r chi.Router) {
 		r.Use(authLimiter.Handler)
-		// Tell Socrate which browser each sign-in, refresh, logout and magic-link
-		// redemption comes from (backendkit client attribution): X-Forwarded-For
-		// is trusted from loopback (Caddy) only, and replaced, never forwarded.
-		r.Use(middleware.SocrateClientAttribution())
 
 		// Self-service registration — unauthenticated, strictly rate-limited.
 		r.With(signupLimiter.Handler).Post("/register", handlers.Admin.Auth.Register)
@@ -115,11 +125,30 @@ func NewRouter(
 		r.With(signupLimiter.Handler).Post("/magic-link/verify", handlers.Admin.MagicLink.Verify)
 	})
 
+	// Backend-for-Frontend: server-side sign-in and session (cookie + CSRF).
+	// Tokens stay on the server; the browser gets an HttpOnly session cookie.
+	// Every response is Cache-Control: no-store (BFFHandler).
+	if bffRoutes != nil && bffRoutes.Handler != nil {
+		r.Route("/bff", func(r chi.Router) {
+			r.Use(authLimiter.Handler)
+			r.Get("/login", bffRoutes.Handler.Login)
+			r.Get("/callback", bffRoutes.Handler.Callback)
+			r.Get("/session", bffRoutes.Handler.Session)
+			r.Post("/logout", bffRoutes.Handler.Logout)
+			r.With(signupLimiter.Handler).Post("/magic-link/verify", bffRoutes.Handler.MagicLinkVerify)
+		})
+	}
+
 	// Version endpoint (no auth required — useful for deploy checks)
 	r.Get("/api/v1/version", handlers.Admin.Metadata.GetVersion)
 
 	// API routes that require auth but NOT tenant context
 	r.Route("/api/v1", func(r chi.Router) {
+		// The BFF session (cookie, CSRF, refresh) becomes the bearer that
+		// authMW validates, as before.
+		if bffRoutes != nil && bffRoutes.Session != nil {
+			r.Use(bffRoutes.Session.Handler)
+		}
 		r.Use(authMW.Handler)
 		r.Use(generalLimiter.Handler)
 		r.Use(crudTimeout)

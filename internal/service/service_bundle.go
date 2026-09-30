@@ -16,6 +16,7 @@ type ServiceBundle struct {
 	Registration *RegistrationService
 	MagicLink    *MagicLinkService
 	Token        *TokenService
+	SessionAuth  *SessionAuthService
 	Tenant       *TenantService
 	Plan         *PlanService
 	Settings     *SettingsService
@@ -103,6 +104,7 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 	var socrateMagicLink SocrateMagicLink
 	var socrateTokens SocrateTokens
 	var socrateProfiler SocrateProfileFetcher
+	var socrateUserInfo SocrateUserInfo
 	var rawSocrateClient *socrate.Client // exported on bundle for TenantMiddleware wiring
 	if cfg.Socrate.BaseURL != "" && cfg.Socrate.ClientID != "" {
 		if sc, err := socrate.NewClient(socrate.ClientConfig{
@@ -118,6 +120,7 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 			socrateMagicLink = sc
 			socrateTokens = sc
 			socrateProfiler = sc
+			socrateUserInfo = sc
 			rawSocrateClient = sc
 		} else {
 			logger.WithError(err).Warn("Socrate client could not be initialised — admin user management will be unavailable")
@@ -145,13 +148,17 @@ func NewServiceBundle(repos *repo.RepoBundle, cfg *config.Config, logger *logrus
 	// SeedService is needed by RegistrationService; build it early.
 	seedSvc := NewSeedService(repos, countryRateSvc, logger)
 
+	magicLinkSvc := NewMagicLinkService(socrateMagicLink, logger)
+	tokenSvc := NewTokenService(socrateTokens, logger)
+
 	bundle := &ServiceBundle{
 		Admin:        NewAdminService(repos.AdminStats, socrateClient, logger),
 		AdminUser:    NewAdminUserService(socrateClient, repos.User, repos.Tenant, logger),
 		Organization: NewOrganizationService(repos.Org, repos.Tenant, repos.User, socrateInviter, logger),
 		Registration: NewRegistrationService(socrateRegistrar, repos.User, repos.Tenant, seedSvc, logger),
-		MagicLink:    NewMagicLinkService(socrateMagicLink, logger),
-		Token:        NewTokenService(socrateTokens, logger),
+		MagicLink:    magicLinkSvc,
+		Token:        tokenSvc,
+		SessionAuth:  NewSessionAuthService(tokenSvc, magicLinkSvc, socrateUserInfo, repos.User, logger),
 		Tenant:       NewTenantService(repos.Tenant, logger),
 		Report:       reportService,
 		Plan:         NewPlanService(repos.Plan, repos.Settings, repos.Audit, repos, countryRateSvc, emitter, logger).WithFeaturePolicyService(featurePolicySvc),

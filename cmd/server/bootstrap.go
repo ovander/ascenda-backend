@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"ascenda/internal/config"
@@ -18,6 +19,7 @@ import (
 	"ascenda/internal/service"
 	sentry "github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
+	"github.com/ovander/backendkit/bff"
 	"github.com/ovander/backendkit/buildinfo"
 	logger "github.com/ovander/backendkit/gormlogger"
 	"github.com/ovander/backendkit/socrate"
@@ -52,6 +54,7 @@ type AppResources struct {
 	DB         *gorm.DB                       // closed after all requests drain
 	Emitter    *event.Emitter                 // drained after HTTP server stops accepting
 	AIAccessMW *middleware.AIAccessMiddleware // drained alongside emitter (async usage goroutines)
+	StopBFF    func()                         // stops the BFF session sweeper
 }
 
 // Bootstrap initialises the entire application in dependency order and returns
@@ -164,6 +167,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 	recoverMW := middleware.NewRecoverMiddleware(log.Logger)
 	requestIDMW := middleware.NewRequestIDMiddleware()
 	securityMW := middleware.NewSecurityHeadersMiddleware()
+	bffRoutes, stopBFF := newBFF(cfg, services, mwLog)
 	mwLog.WithField("stack", "requestID → security → recover → logger → auth → tenant → rbac → planAccess → tierGate → aiAccess").
 		Info("middleware stack initialised")
 
@@ -177,6 +181,7 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 		cfg.MaxRequestBodyBytes,
 		cfg.MetricsEnabled,
 		trustedProxies,
+		bffRoutes,
 	)
 
 	// Wrap outermost handler with Sentry HTTP middleware when DSN is set.
@@ -228,7 +233,72 @@ func Bootstrap(cfg *config.Config) (*AppResources, error) {
 		DB:         db,
 		Emitter:    services.Emitter,
 		AIAccessMW: aiAccessMW,
+		StopBFF:    stopBFF,
 	}, nil
+}
+
+// bffSweepInterval is how often expired BFF sessions and pending sign-ins are
+// dropped from memory.
+const bffSweepInterval = time.Minute
+
+// newBFF builds the Backend-for-Frontend: an in-memory session store (idle and
+// absolute lifetimes from BFF_SESSION_*_TTL), the session cookie, the /bff
+// routes and the session middleware in front of /api/v1, and a ticker that
+// sweeps expired sessions. The store is per process: one instance, and a
+// restart signs everyone out.
+//
+// It returns nil (the API then takes bearer tokens only, as before) when
+// BFF_REDIRECT_URL is unset, which Validate allows outside production only.
+func newBFF(cfg *config.Config, services *service.ServiceBundle, log *logrus.Entry) (*router.BFF, func()) {
+	if !cfg.BFF.Enabled() {
+		log.Info("BFF disabled: BFF_REDIRECT_URL not set; the API takes bearer tokens only")
+		return nil, func() {}
+	}
+	if services.SocrateClient == nil {
+		log.Warn("BFF disabled: the Socrate client is not configured")
+		return nil, func() {}
+	}
+	store := bff.NewMemoryStore(cfg.BFF.IdleTTL, cfg.BFF.AbsoluteTTL)
+	gw := &bff.Gateway{
+		Store: store,
+		Cookie: bff.CookieConfig{
+			Name:   cfg.BFF.CookieName,
+			Secure: !cfg.BFF.InsecureCookie, // Validate allows false only over http outside production
+			MaxAge: int(cfg.BFF.AbsoluteTTL.Seconds()),
+		},
+		Refresher: middleware.EndWithoutRefreshToken(services.SocrateClient),
+	}
+	h := handler.NewBFFHandler(handler.BFFOptions{
+		Gateway:     gw,
+		Auth:        services.SessionAuth,
+		Issuer:      cfg.Socrate.BaseURL,
+		ClientID:    cfg.Socrate.ClientID,
+		RedirectURI: cfg.BFF.RedirectURL,
+		Logger:      log,
+	})
+	stop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(bffSweepInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				store.Sweep()
+				h.Sweep()
+			case <-stop:
+				return
+			}
+		}
+	}()
+	log.WithFields(logrus.Fields{
+		"cookie":       gw.Cookie.CookieName(),
+		"idle_ttl":     cfg.BFF.IdleTTL.String(),
+		"absolute_ttl": cfg.BFF.AbsoluteTTL.String(),
+		"redirect_uri": cfg.BFF.RedirectURL,
+	}).Info("BFF enabled: /bff routes; /api/v1 takes a session or, during the transition, a bearer")
+	var once sync.Once
+	return &router.BFF{Handler: h, Session: middleware.NewSessionAuth(gw, true, log)},
+		func() { once.Do(func() { close(stop) }) }
 }
 
 // ── Sentry ────────────────────────────────────────────────────────────────────
