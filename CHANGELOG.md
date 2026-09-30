@@ -6,19 +6,33 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-09-30
+
+Backend-for-Frontend (Phase 2): no OAuth token reaches the browser. Deploy with the frontend's
+v1.7.0 in the same window. First register `https://ascenda.vandermoten.eu/bff/callback` at
+Socrate, set `BFF_REDIRECT_URL`, and route `/bff/*`, `/api/*` and `/auth/*` of the
+`ascenda.vandermoten.eu` Caddy site to the API (README, *Deployment*).
+
 ### Added
-- Backend-for-Frontend, additive: `/bff/login`, `/bff/callback`, `/bff/session`, `/bff/logout` and
-  `/bff/magic-link/verify` run sign-in on the server and give the browser only an HttpOnly
-  `__Host-ascenda_session` cookie and a CSRF token; a session middleware in front of `/api/v1`
-  turns the session into the bearer (CSRF on unsafe methods, token refresh). `/api/v1` still
-  takes a bearer during the transition. New settings `BFF_REDIRECT_URL`, `BFF_COOKIE_NAME`,
-  `BFF_SESSION_IDLE_TTL`, `BFF_SESSION_ABSOLUTE_TTL`, `BFF_INSECURE_COOKIE` (#46).
+- Backend-for-Frontend: `/bff/login`, `/bff/callback`, `/bff/session`, `/bff/logout` and
+  `/bff/magic-link/verify` run sign-in on the server (authorization code with PKCE, single-use
+  state, login-binding cookie) and give the browser only an HttpOnly `__Host-ascenda_session`
+  cookie and a CSRF token. A session middleware in front of `/api/v1` turns the session into
+  the bearer: 401 without a session, 403 without the CSRF token on unsafe methods, and one token
+  refresh per session that keeps the rotated refresh token; a refresh Socrate rejects ends the
+  session. Sessions are kept in memory (idle 30 min, absolute 8 h), so a restart signs users out.
+  New settings `BFF_REDIRECT_URL` (required in production), `BFF_COOKIE_NAME`,
+  `BFF_SESSION_IDLE_TTL`, `BFF_SESSION_ABSOLUTE_TTL`, `BFF_INSECURE_COOKIE` (development only)
+  (#46).
+
+### Changed
+- Client attribution runs on every request, so the token refresh on `/api/v1` also tells Socrate
+  the browser's address (#46).
 
 ### Removed
 - The browser token path: `POST /auth/callback`, `/auth/refresh`, `/auth/logout` and
-  `/auth/magic-link/verify`, which returned or took OAuth tokens. Sign-in, refresh and sign-out are
-  the `/bff` routes, and `/api/v1` takes a session only; a bearer alone is refused.
-  `SOCRATE_REDIRECT_URL`, used only by the old callback, is gone (#47).
+  `/auth/magic-link/verify`. `/api/v1` takes a session only; a bearer alone is refused.
+  `SOCRATE_REDIRECT_URL` is gone (#47).
 
 ## [2.7.0] - 2026-09-30
 
@@ -205,7 +219,8 @@ env changes in the README (*Environment Variables*, *Deployment*) before the fro
 ### Added
 - Initial platform: compute engine, AI, cap table, infrastructure.
 
-[Unreleased]: https://github.com/ovander/ascenda-backend/compare/v2.7.0...HEAD
+[Unreleased]: https://github.com/ovander/ascenda-backend/compare/v2.8.0...HEAD
+[2.8.0]: https://github.com/ovander/ascenda-backend/compare/v2.7.0...v2.8.0
 [2.7.0]: https://github.com/ovander/ascenda-backend/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/ovander/ascenda-backend/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/ovander/ascenda-backend/compare/v2.4.2...v2.5.0
