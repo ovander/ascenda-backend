@@ -99,7 +99,7 @@ func newProductionRouterWithBFF(handlers *handler.HandlerBundle, trusted middlew
 }
 
 // newTestBFF is the BFF as cmd/server wires it (session store, cookie, /bff
-// routes, session middleware accepting a bearer during the transition), with
+// routes, session middleware), with
 // no Socrate behind it.
 func newTestBFF(le *logrus.Entry) *BFF {
 	gw := &bff.Gateway{
@@ -114,7 +114,7 @@ func newTestBFF(le *logrus.Entry) *BFF {
 			RedirectURI: "https://app.test/bff/callback",
 			Logger:      le,
 		}),
-		Session: middleware.NewSessionAuth(gw, true, le),
+		Session: middleware.NewSessionAuth(gw, le),
 	}
 }
 

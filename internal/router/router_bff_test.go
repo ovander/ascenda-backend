@@ -168,7 +168,7 @@ func newBFFEnv(t *testing.T) *bffEnv {
 	})
 	trusted, err := middleware.ParseTrustedProxies([]string{"127.0.0.1/32"})
 	require.NoError(t, err)
-	e.r = newProductionRouterWithBFF(&handler.HandlerBundle{}, trusted, &BFF{Handler: h, Session: middleware.NewSessionAuth(gw, true, le)})
+	e.r = newProductionRouterWithBFF(&handler.HandlerBundle{}, trusted, &BFF{Handler: h, Session: middleware.NewSessionAuth(gw, le)})
 	return e
 }
 
@@ -505,6 +505,32 @@ func TestBFF_MagicLink(t *testing.T) {
 	c := cookie(w, bffCookie)
 	require.NotNil(t, c)
 	assert.True(t, e.session(c).Authenticated)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, post(bffOrigin, "same-origin", "").Code, "a link without a token")
+}
+
+// TestBFF_MagicLinkRedemptionIsAttributed: like the code exchange, the
+// redemption tells Socrate the resolved browser address, never a header the
+// browser wrote.
+func TestBFF_MagicLinkRedemptionIsAttributed(t *testing.T) {
+	for _, tc := range []struct{ remote, xff, want string }{
+		{"203.0.113.9:5555", "6.6.6.6", "203.0.113.9"},
+		{"127.0.0.1:40000", "198.51.100.31", "198.51.100.31"},
+	} {
+		e := newBFFEnv(t)
+		r := httptest.NewRequest(http.MethodPost, "/bff/magic-link/verify", strings.NewReader(`{"token":"good-link"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Origin", bffOrigin)
+		r.RemoteAddr = tc.remote
+		r.Header.Set("X-Forwarded-For", tc.xff)
+		r.Header.Set("X-Real-IP", "7.7.7.7")
+		require.Equal(t, http.StatusOK, e.do(r).Code)
+
+		calls := e.soc.callsTo("/api/auth/magic-link/verify")
+		require.Len(t, calls, 1)
+		assert.Equal(t, tc.want, calls[0].XFF)
+		assert.Empty(t, calls[0].XRealIP)
+	}
 }
 
 // TestBFF_SocrateSeesTheResolvedBrowserAddress: X-Forwarded-For is trusted from

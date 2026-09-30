@@ -9,6 +9,8 @@ The same report is in the root of both repositories. Paths are prefixed `backend
 
 **Date:** 2026-09-29. This is a read-only audit: no application code was changed.
 
+**Status, 2026-09-30:** sign-in has moved to the backend's Backend-for-Frontend (`/bff`, backend #46 and #47, frontend #35). No route returns a token to the browser any more; the `/auth/callback`, `/auth/refresh`, `/auth/logout` and `/auth/magic-link/verify` rows below describe the code as audited.
+
 **Discovery document:** not fetched from this environment, because the egress proxy refused `https://socrate.vandermoten.eu/.well-known/openid-configuration` (`CONNECT tunnel failed, response 403`). The seven unknowns this left were then checked against the Socrate v1.3.0 source (`go-oauth2`), by a separate review with access to that repository, on 2026-09-29. Six are resolved; the Socrate-side file and line references in the table (`oauth_service.go`, `token.go`, `keys_test.go`) come from that review. U7, the live VPS values, was read on the VPS the same day.
 
 ---

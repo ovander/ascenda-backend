@@ -113,16 +113,11 @@ func NewRouter(
 
 		// Self-service registration — unauthenticated, strictly rate-limited.
 		r.With(signupLimiter.Handler).Post("/register", handlers.Admin.Auth.Register)
-		r.Post("/callback", handlers.Admin.Auth.Callback)
-		r.Post("/refresh", handlers.Admin.Auth.Refresh)
-		r.Post("/logout", handlers.Admin.Auth.Logout)
 
-		// Passwordless magic-link sign-in through Socrate.
-		// POST /auth/magic-link        — ask Socrate to e-mail a sign-in link (always 202, anti-enumeration).
-		// POST /auth/magic-link/verify — redeem the token from the link for a token set (POST only,
-		//                                so e-mail link scanners cannot spend it).
+		// Ask Socrate to e-mail a sign-in link (always 202, anti-enumeration).
+		// The link is redeemed at POST /bff/magic-link/verify. Sign-in, refresh
+		// and sign-out are /bff routes: nothing here returns a token.
 		r.With(signupLimiter.Handler).Post("/magic-link", handlers.Admin.MagicLink.Send)
-		r.With(signupLimiter.Handler).Post("/magic-link/verify", handlers.Admin.MagicLink.Verify)
 	})
 
 	// Backend-for-Frontend: server-side sign-in and session (cookie + CSRF).

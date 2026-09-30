@@ -80,7 +80,6 @@ type SocrateConfig struct {
 	// SOCRATE_VERIFY_AUDIENCE (default true); turn off only for an IdP that
 	// does not set aud.
 	VerifyAudience bool
-	RedirectURL    string
 }
 
 // BFFConfig configures the Backend-for-Frontend: the server-side sign-in flow
@@ -222,7 +221,6 @@ func load() *Config {
 			AppID:          envOrDefault("SOCRATE_APP_ID", ""),
 			JWKSURL:        envOrDefault("SOCRATE_JWKS_URL", ""),
 			VerifyAudience: envOrDefault("SOCRATE_VERIFY_AUDIENCE", "true") != "false",
-			RedirectURL:    envOrDefault("SOCRATE_REDIRECT_URL", ""),
 		},
 
 		BFF: BFFConfig{
@@ -290,9 +288,6 @@ func (c *Config) Validate() error {
 		if c.Socrate.ClientSecret == "" {
 			errs = append(errs, "SOCRATE_CLIENT_SECRET")
 		}
-		if c.Socrate.RedirectURL == "" {
-			errs = append(errs, "SOCRATE_REDIRECT_URL")
-		}
 		errs = append(errs, c.Socrate.urlErrors()...)
 		if c.AllowDefaultTenantFallback {
 			// Hard error: the fallback places unknown users into a shared tenant.
@@ -334,7 +329,6 @@ func (s SocrateConfig) urlErrors() []string {
 	check("SOCRATE_BASE_URL", s.BaseURL, true)
 	check("SOCRATE_ADMIN_URL", s.AdminBaseURL, true)
 	check("SOCRATE_JWKS_URL", s.JWKSURL, false)
-	check("SOCRATE_REDIRECT_URL", s.RedirectURL, false)
 	return errs
 }
 

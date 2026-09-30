@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/ovander/backendkit/apierror"
@@ -31,20 +30,18 @@ const sessionTouchInterval = bff.DefaultTouchInterval
 //     replacing any the browser sent, so jwtauth, the tenant middleware and
 //     the handlers run unchanged.
 //
-// With allowBearer (the transition while the SPA still holds tokens), a
-// request that has no valid session but carries an Authorization bearer is
-// passed to AuthMiddleware untouched, as before.
+// A bearer the browser sends is never enough on its own: without a session the
+// request is refused before AuthMiddleware.
 type SessionAuth struct {
-	gw          *bff.Gateway
-	allowBearer bool
-	logger      *logrus.Entry
-	now         func() time.Time
+	gw     *bff.Gateway
+	logger *logrus.Entry
+	now    func() time.Time
 }
 
 // NewSessionAuth creates the session middleware. gw nil (BFF not configured,
 // development without Socrate) leaves requests to AuthMiddleware alone.
-func NewSessionAuth(gw *bff.Gateway, allowBearer bool, logger *logrus.Entry) *SessionAuth {
-	return &SessionAuth{gw: gw, allowBearer: allowBearer, logger: logger, now: time.Now}
+func NewSessionAuth(gw *bff.Gateway, logger *logrus.Entry) *SessionAuth {
+	return &SessionAuth{gw: gw, logger: logger, now: time.Now}
 }
 
 // Handler is the chi-compatible middleware function.
@@ -55,10 +52,6 @@ func (m *SessionAuth) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s, ok := m.gw.SessionFromRequest(r)
 		if !ok {
-			if m.allowBearer && hasBearer(r) {
-				next.ServeHTTP(w, r)
-				return
-			}
 			if _, had := m.gw.Cookie.SessionID(r); had {
 				m.gw.Cookie.ClearSession(w)
 			}
@@ -106,10 +99,4 @@ func (r refreshOrEnd) RefreshToken(ctx context.Context, refreshToken string) (*s
 		return nil, &socrate.OAuthError{Code: "invalid_grant", Description: "session has no refresh token"}
 	}
 	return r.TokenRefresher.RefreshToken(ctx, refreshToken)
-}
-
-// hasBearer reports whether r carries an Authorization bearer.
-func hasBearer(r *http.Request) bool {
-	h := r.Header.Get("Authorization")
-	return len(h) > len("Bearer ") && strings.EqualFold(h[:len("Bearer ")], "Bearer ")
 }
