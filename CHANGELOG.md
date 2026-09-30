@@ -6,47 +6,34 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
-### Changed
-- Test through the production router that the removed `POST /auth/login` answers 404/405
-  (Socrate audit row 3).
-- `SOCRATE_ADMIN_URL` is never derived: start-up fails in every environment when
-  `SOCRATE_BASE_URL` is set without it, as in production already. Documented value
-  `http://127.0.0.1:18082`, the apps VPS's SSH tunnel to Socrate's admin API (README
-  *Deployment*, new `.env.example`).
-- Production listens on `127.0.0.1` by default (`BIND_ADDRESS`), since Caddy on the same host
-  proxies to it; elsewhere every interface as before. The Docker image sets `BIND_ADDRESS=0.0.0.0`.
-- The address sent to Socrate is resolved from `X-Forwarded-For` only when the peer is loopback
-  (Caddy on this host), else from the peer; `X-Real-IP` is never read, and
-  `TRUSTED_PROXY_CIDRS` no longer applies to it (it still does to rate limiting). Uses
-  backendkit's `bff.WithClientAttribution`; a browser's `X-Forwarded-For`/`X-Real-IP` never
-  reaches Socrate.
+## [2.7.0] - 2026-09-30
 
-### Removed
-- `SOCRATE_INTERNAL_URL`: OAuth calls always go to the public issuer URL, never through the
-  admin tunnel.
-
-## [2.7.0] - 2026-09-29
+Cut-over readiness for Socrate at `https://socrate.vandermoten.eu` (Phase 1). Deploy with the VPS
+env changes in the README (*Environment Variables*, *Deployment*) before the frontend's v1.6.0.
 
 ### Added
-- Client attribution: sign-in, refresh, logout and magic-link calls tell Socrate the browser's
-  address (resolved through `TRUSTED_PROXY_CIDRS`) and User-Agent, so Socrate v1.5.0+ audits
-  and rate-limits each user instead of this server's address (#38).
-- `SOCRATE_INTERNAL_URL` (optional): calls to Socrate's OAuth endpoints go to its loopback
-  address when set, so Socrate sees the browser's address; the issuer and JWKS stay public (#39).
-- `BIND_ADDRESS` (optional, default every interface): set `127.0.0.1` to listen on loopback only (#39).
+- Client attribution: sign-in, refresh, logout and magic-link redemption tell Socrate the
+  browser's address and User-Agent, so Socrate audits and rate-limits each user (#38). The
+  address is resolved by Ascenda: `X-Forwarded-For` is trusted only from a loopback peer (Caddy
+  on the same host), any other peer is sent as itself, `X-Real-IP` is never read, and a
+  browser's own `X-Forwarded-For`/`X-Real-IP` never reaches Socrate (#44).
+- `BIND_ADDRESS`: production listens on `127.0.0.1` by default; the Docker image sets `0.0.0.0`
+  (#39, #43).
+- `.env.example` (#42).
 
 ### Changed
-- Production start-up requires `SOCRATE_BASE_URL` and `SOCRATE_ADMIN_URL`, and refuses a Socrate
-  URL that is malformed, or a base, internal or admin URL that ends with `/` (the issuer is
-  compared exactly) (#39).
-- `script/deploy-backend.sh` health-checks the port set in the VPS env file instead of 8082 (#39).
-- `backendkit` v1.13.0 → v1.15.0. The code exchange, refresh and revocation of `/auth/callback`,
-  `/auth/refresh` and `/auth/logout` go through its `socrate.Client` instead of hand-written
-  requests to `/oauth/token` and `/oauth/revoke`; responses are unchanged (#38).
+- `backendkit` v1.13.0 → v1.15.0; the code exchange, refresh and revocation go through its
+  `socrate.Client` instead of hand-written requests, with unchanged responses (#38). OAuth calls
+  always use the public issuer URL.
+- Production start-up requires `SOCRATE_BASE_URL` and `SOCRATE_ADMIN_URL`, and refuses a
+  malformed Socrate URL or a base or admin URL ending with `/` (the issuer is compared exactly)
+  (#39). `SOCRATE_ADMIN_URL` is never derived, in any environment; in production it is
+  `http://127.0.0.1:18082`, the apps VPS's SSH tunnel to Socrate's loopback admin API (#42).
+- `script/deploy-backend.sh` health-checks `127.0.0.1` on the `PORT` of the VPS env file (#39, #43).
 
 ### Removed
-- `POST /auth/login`: unused, and it built an authorize URL without PKCE or `state`, which
-  Socrate refuses. Sign-in is the SPA's PKCE flow or a magic link (#39).
+- `POST /auth/login`: unused, and its authorize URL had no PKCE or `state`, which Socrate refuses
+  (#39); a test keeps it answering 404/405 (#41).
 
 ## [2.6.0] - 2026-09-29
 
