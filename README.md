@@ -27,6 +27,7 @@ The backend is implemented in Go and exposes a comprehensive REST API designed f
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
+- [Deployment](#deployment)
 - [Database](#database)
 - [Running Tests](#running-tests)
 - [API Overview](#api-overview)
@@ -184,8 +185,11 @@ make tools   # installs golangci-lint, goimports, migrate
 
 ```bash
 cp .env.example .env
-# Edit .env with your local database URL, OAuth credentials, etc.
+# Edit .env with your local database URL and, to sign in, the Socrate settings.
 ```
+
+`.env.example` lists the main variables of the table below with development values; `.env` is
+git-ignored and never committed.
 
 ### Set up the database
 
@@ -234,7 +238,7 @@ make docker-compose-down   # stops everything
 | `MAX_REQUEST_BODY_BYTES` | Max request body size | `1048576` (1 MB) |
 | `SOCRATE_BASE_URL` | Socrate's public URL, which is also the issuer every access token must carry (`iss`, compared exactly: **no trailing slash**). Required in production | `https://socrate.vandermoten.eu` |
 | `SOCRATE_INTERNAL_URL` | Optional. Where this server calls Socrate's OAuth endpoints (token, revoke, userinfo, magic link) instead of `SOCRATE_BASE_URL`: Socrate's loopback address when both run on the same host, so Socrate sees the browser's address (it trusts `X-Forwarded-For` only from loopback). The issuer and JWKS stay public | `http://127.0.0.1:8080` |
-| `SOCRATE_ADMIN_URL` | Socrate's admin API, reachable only on loopback on the Socrate host. Required in production: left empty, the client would guess `<base host>:8081`, a different service | `http://127.0.0.1:8082` |
+| `SOCRATE_ADMIN_URL` | Socrate's admin API (registration, invitations, admin user management, magic-link e-mails). It listens on loopback on the Socrate VPS only; the apps VPS reaches it through the host's SSH tunnel `socrate-admin-tunnel.service`. **Never derived**: required whenever `SOCRATE_BASE_URL` is set, in every environment (backendkit would otherwise guess `<base host>:8081`, a different service). No fallback: when the tunnel is down, admin calls fail. See [Deployment](#deployment) | `http://127.0.0.1:18082` |
 | `SOCRATE_CLIENT_ID` | OAuth2 client ID | — |
 | `SOCRATE_CLIENT_SECRET` | OAuth2 client secret | — |
 | `SOCRATE_JWKS_URL` | JWKS endpoint for JWT validation (RS256) | `https://socrate.vandermoten.eu/.well-known/jwks.json` |
@@ -249,6 +253,26 @@ make docker-compose-down   # stops everything
 | `AI_CACHE_ENABLED` | Cache AI responses | `true` |
 
 ---
+
+## Deployment
+
+Production runs on the apps VPS (135.125.107.71), next to other applications; Socrate runs on
+its own VPS. The owner deploys a tag with `script/push.sh`, which uploads the binary and runs
+`script/deploy-backend.sh` there (systemd service `ascenda`, env file
+`/opt/apps/ascenda/env/.env`).
+
+- **API**: listens on loopback; Caddy on the same host proxies `api.ascenda.vandermoten.eu` to it.
+- **OAuth calls** (token, refresh, revoke, userinfo) and the JWKS go to Socrate's public URL,
+  `SOCRATE_BASE_URL`, which is also the issuer.
+- **Admin API**: Socrate's admin API is bound to loopback on the Socrate VPS and is never
+  exposed publicly. The apps VPS reaches it through an SSH tunnel installed on the host,
+  `socrate-admin-tunnel.service`, shared by every application there and not part of this
+  repository. Ascenda only uses `SOCRATE_ADMIN_URL=http://127.0.0.1:18082`.
+
+  **Dependency:** when the tunnel is down, every admin call fails: self-service registration,
+  workspace invitations, platform-admin user management and magic-link e-mails (magic-link
+  sign-in itself, the token redemption, uses the public URL). There is no fallback URL and no
+  public admin URL. Check the tunnel with `systemctl status socrate-admin-tunnel` on the apps VPS.
 
 ## Database
 

@@ -60,7 +60,7 @@ func TestTrustedProxyCIDRs(t *testing.T) {
 func validProdSocrate() SocrateConfig {
 	return SocrateConfig{
 		BaseURL:      "https://socrate.vandermoten.eu",
-		AdminBaseURL: "http://127.0.0.1:8082",
+		AdminBaseURL: "http://127.0.0.1:18082",
 		JWKSURL:      "https://socrate.vandermoten.eu/.well-known/jwks.json",
 		ClientID:     "id",
 		ClientSecret: "secret",
@@ -87,7 +87,7 @@ func TestValidate_ProductionSocrateURLs(t *testing.T) {
 		{"admin URL missing (backendkit would guess :8081)", func(s *SocrateConfig) { s.AdminBaseURL = "" }, "SOCRATE_ADMIN_URL"},
 		{"issuer with trailing slash", func(s *SocrateConfig) { s.BaseURL = "https://socrate.vandermoten.eu/" }, "SOCRATE_BASE_URL must not end with /"},
 		{"internal URL with trailing slash", func(s *SocrateConfig) { s.InternalURL = "http://127.0.0.1:8080/" }, "SOCRATE_INTERNAL_URL must not end with /"},
-		{"admin URL with trailing slash", func(s *SocrateConfig) { s.AdminBaseURL = "http://127.0.0.1:8082/" }, "SOCRATE_ADMIN_URL must not end with /"},
+		{"admin URL with trailing slash", func(s *SocrateConfig) { s.AdminBaseURL = "http://127.0.0.1:18082/" }, "SOCRATE_ADMIN_URL must not end with /"},
 		{"malformed redirect URL", func(s *SocrateConfig) { s.RedirectURL = "http:httpd://ascenda.vandermoten.eu/callback" }, "SOCRATE_REDIRECT_URL must be an absolute http(s) URL"},
 		{"relative JWKS URL", func(s *SocrateConfig) { s.JWKSURL = "/.well-known/jwks.json" }, "SOCRATE_JWKS_URL must be an absolute http(s) URL"},
 	}
@@ -125,4 +125,20 @@ func TestLoad_SocrateInternalURL(t *testing.T) {
 	cfg := Load()
 	assert.Equal(t, "https://socrate.vandermoten.eu", cfg.Socrate.BaseURL)
 	assert.Equal(t, "http://127.0.0.1:8080", cfg.Socrate.OAuthCallURL())
+}
+
+func TestValidate_AdminURLNeverDerivedOutsideProduction(t *testing.T) {
+	dev := func(base, admin string) error {
+		return (&Config{Env: "development", DatabaseURL: "postgres://x",
+			Socrate: SocrateConfig{BaseURL: base, AdminBaseURL: admin}}).Validate()
+	}
+
+	// Without Socrate (local development) nothing is required.
+	require.NoError(t, dev("", ""))
+	// With Socrate, the admin URL must be explicit: backendkit would otherwise
+	// derive <base host>:8081, a different service.
+	err := dev("https://socrate.vandermoten.eu", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SOCRATE_ADMIN_URL")
+	require.NoError(t, dev("https://socrate.vandermoten.eu", "http://127.0.0.1:18082"))
 }

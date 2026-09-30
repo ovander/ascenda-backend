@@ -6,6 +6,12 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Changed
+- `SOCRATE_ADMIN_URL` is never derived: start-up fails in every environment when
+  `SOCRATE_BASE_URL` is set without it, as in production already. Documented value
+  `http://127.0.0.1:18082`, the apps VPS's SSH tunnel to Socrate's admin API (README
+  *Deployment*, new `.env.example`).
+
 ## [2.7.0] - 2026-09-29
 
 ### Added
