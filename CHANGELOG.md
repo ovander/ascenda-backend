@@ -13,6 +13,8 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
   `SOCRATE_BASE_URL` is set without it, as in production already. Documented value
   `http://127.0.0.1:18082`, the apps VPS's SSH tunnel to Socrate's admin API (README
   *Deployment*, new `.env.example`).
+- Production listens on `127.0.0.1` by default (`BIND_ADDRESS`), since Caddy on the same host
+  proxies to it; elsewhere every interface as before. The Docker image sets `BIND_ADDRESS=0.0.0.0`.
 
 ## [2.7.0] - 2026-09-29
 

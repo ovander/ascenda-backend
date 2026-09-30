@@ -14,9 +14,9 @@ type Config struct {
 	Env  string
 	Port int
 	// BindAddress is the interface the HTTP server listens on. Env: BIND_ADDRESS.
-	// Default: empty, i.e. every interface (what a container needs). On a host
-	// shared with Socrate, set 127.0.0.1 so only the local reverse proxy
-	// reaches the API.
+	// Default: 127.0.0.1 in production, where Caddy on the same host proxies to
+	// the API and nothing else may reach it; every interface elsewhere. A
+	// container sets BIND_ADDRESS=0.0.0.0 (see the Dockerfile).
 	BindAddress    string
 	LogLevel       string
 	DatabaseURL    string
@@ -94,6 +94,14 @@ func (s SocrateConfig) OAuthCallURL() string {
 		return s.InternalURL
 	}
 	return s.BaseURL
+}
+
+// defaultBindAddress is loopback in production, every interface otherwise.
+func defaultBindAddress(env string) string {
+	if env == "production" {
+		return "127.0.0.1"
+	}
+	return ""
 }
 
 // ListenAddr is the address the HTTP server listens on (BIND_ADDRESS:PORT).
@@ -182,7 +190,7 @@ func load() *Config {
 	return &Config{
 		Env:                        env,
 		Port:                       envOrDefaultInt("PORT", 8080),
-		BindAddress:                envOrDefault("BIND_ADDRESS", ""),
+		BindAddress:                envOrDefault("BIND_ADDRESS", defaultBindAddress(env)),
 		LogLevel:                   envOrDefault("LOG_LEVEL", ""),
 		DatabaseURL:                envOrDefault("DATABASE_URL", "postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable"),
 		AllowedOrigins:             origins,

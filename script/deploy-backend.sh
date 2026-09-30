@@ -41,8 +41,8 @@ SERVICE="ascenda"
 USER="olivier"
 
 # The health check calls the port the service listens on, as set in the env
-# file (PORT, default 8080 like the server). The API binds to loopback on this
-# host (BIND_ADDRESS=127.0.0.1), and Socrate's admin API owns 127.0.0.1:8082.
+# file (PORT, default 8080 like the server). In production the API listens on
+# 127.0.0.1 only; Caddy on this host proxies to it.
 env_value() { sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null | tail -n 1 | tr -d "\"' "; }
 API_PORT="$(env_value PORT)"
 API_URL="http://127.0.0.1:${API_PORT:-8080}/health"
