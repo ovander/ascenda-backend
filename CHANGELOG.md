@@ -6,6 +6,12 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Fixed
+- Self sign-up (`POST /auth/register`) and the user list's name and e-mail look-up work again with
+  app-scoped Socrate: backendkit v1.15.1 sends `RegisterUser` and `GetUserAsService` to the
+  service-account routes `/api/apps/{id}/service/users…` (they called the app-admin routes and
+  got 401). Needs a Socrate later than v1.5.3.
+
 ## [2.8.0] - 2026-09-30
 
 Backend-for-Frontend (Phase 2): no OAuth token reaches the browser. Deploy with the frontend's
