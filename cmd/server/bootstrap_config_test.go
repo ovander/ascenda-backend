@@ -21,7 +21,6 @@ func prodConfig() *config.Config {
 			JWKSURL:        "https://socrate.vandermoten.eu/.well-known/jwks.json",
 			ClientID:       "VowmSxfnObxDKFvdk1Lucg",
 			ClientSecret:   "test-secret",
-			RedirectURL:    "https://ascenda.vandermoten.eu/callback",
 			VerifyAudience: true,
 		},
 		BFF: config.BFFConfig{

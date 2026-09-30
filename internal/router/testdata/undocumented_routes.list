@@ -112,7 +112,6 @@ POST /api/v1/plans/{}/scenarios/{}/fiplan/capital-increase/{}/create-round
 POST /api/v1/plans/{}/unlock
 POST /api/v1/users/{}/reactivate
 POST /auth/magic-link
-POST /auth/magic-link/verify
 POST /auth/register
 PUT /api/v1/admin/country-configs/{}
 PUT /api/v1/admin/feature-policies/{}

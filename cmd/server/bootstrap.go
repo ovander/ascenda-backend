@@ -247,8 +247,9 @@ const bffSweepInterval = time.Minute
 // sweeps expired sessions. The store is per process: one instance, and a
 // restart signs everyone out.
 //
-// It returns nil (the API then takes bearer tokens only, as before) when
-// BFF_REDIRECT_URL is unset, which Validate allows outside production only.
+// It returns nil (the API then takes bearer tokens, for local development
+// without Socrate) when BFF_REDIRECT_URL is unset, which Validate allows
+// outside production only.
 func newBFF(cfg *config.Config, services *service.ServiceBundle, log *logrus.Entry) (*router.BFF, func()) {
 	if !cfg.BFF.Enabled() {
 		log.Info("BFF disabled: BFF_REDIRECT_URL not set; the API takes bearer tokens only")
@@ -295,9 +296,9 @@ func newBFF(cfg *config.Config, services *service.ServiceBundle, log *logrus.Ent
 		"idle_ttl":     cfg.BFF.IdleTTL.String(),
 		"absolute_ttl": cfg.BFF.AbsoluteTTL.String(),
 		"redirect_uri": cfg.BFF.RedirectURL,
-	}).Info("BFF enabled: /bff routes; /api/v1 takes a session or, during the transition, a bearer")
+	}).Info("BFF enabled: /bff routes; /api/v1 takes a session")
 	var once sync.Once
-	return &router.BFF{Handler: h, Session: middleware.NewSessionAuth(gw, true, log)},
+	return &router.BFF{Handler: h, Session: middleware.NewSessionAuth(gw, log)},
 		func() { once.Do(func() { close(stop) }) }
 }
 
@@ -467,10 +468,9 @@ func checkSocrateConnectivity(cfg *config.Config, log *logrus.Entry) error {
 	}
 
 	log.WithFields(logrus.Fields{
-		"base_url":     cfg.Socrate.BaseURL,
-		"client_id":    cfg.Socrate.ClientID,
-		"redirect_url": cfg.Socrate.RedirectURL,
-		"jwks_url":     cfg.Socrate.JWKSURL,
+		"base_url":  cfg.Socrate.BaseURL,
+		"client_id": cfg.Socrate.ClientID,
+		"jwks_url":  cfg.Socrate.JWKSURL,
 	}).Debug("Socrate OAuth2 configuration")
 
 	client := &http.Client{Timeout: 5 * time.Second}

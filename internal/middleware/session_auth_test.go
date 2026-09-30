@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -65,7 +64,7 @@ type sessionFixture struct {
 }
 
 // newSessionFixture wires SessionAuth → AuthMiddleware → a probe handler.
-func newSessionFixture(t *testing.T, allowBearer bool) (*sessionFixture, http.Handler) {
+func newSessionFixture(t *testing.T) (*sessionFixture, http.Handler) {
 	t.Helper()
 	f := &sessionFixture{idp: newTestIdP(t)}
 	f.store = bff.NewMemoryStore(30*time.Minute, 8*time.Hour)
@@ -95,7 +94,7 @@ func newSessionFixture(t *testing.T, allowBearer bool) (*sessionFixture, http.Ha
 		f.mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	})
-	return f, NewSessionAuth(f.gw, allowBearer, le).Handler(auth.Handler(probe))
+	return f, NewSessionAuth(f.gw, le).Handler(auth.Handler(probe))
 }
 
 // session stores a session whose access token expires in expiresIn seconds.
@@ -128,8 +127,8 @@ func serveSession(h http.Handler, r *http.Request) *httptest.ResponseRecorder {
 }
 
 func TestSessionAuth_NoSessionIs401AndHandlerNeverRuns(t *testing.T) {
-	for _, allowBearer := range []bool{true, false} {
-		f, h := newSessionFixture(t, allowBearer)
+	{
+		f, h := newSessionFixture(t)
 
 		w := serveSession(h, sessionRequest(http.MethodGet, nil, ""))
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -146,7 +145,7 @@ func TestSessionAuth_NoSessionIs401AndHandlerNeverRuns(t *testing.T) {
 }
 
 func TestSessionAuth_SessionReachesHandlerAsTheUser(t *testing.T) {
-	f, h := newSessionFixture(t, false)
+	f, h := newSessionFixture(t)
 	s := f.session(t, 900)
 
 	// A bearer the browser sends is replaced by the session's.
@@ -162,7 +161,7 @@ func TestSessionAuth_SessionReachesHandlerAsTheUser(t *testing.T) {
 }
 
 func TestSessionAuth_CSRF(t *testing.T) {
-	f, h := newSessionFixture(t, false)
+	f, h := newSessionFixture(t)
 	s := f.session(t, 900)
 
 	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
@@ -182,7 +181,7 @@ func TestSessionAuth_CSRF(t *testing.T) {
 }
 
 func TestSessionAuth_RefreshesOnceUnderConcurrency(t *testing.T) {
-	f, h := newSessionFixture(t, false)
+	f, h := newSessionFixture(t)
 	f.ref.delay = 50 * time.Millisecond
 	// Warm jwtauth's key cache, as any earlier request would in production.
 	require.Equal(t, http.StatusOK, serveSession(h, sessionRequest(http.MethodGet, f.session(t, 900), "")).Code)
@@ -211,7 +210,7 @@ func TestSessionAuth_RefreshesOnceUnderConcurrency(t *testing.T) {
 }
 
 func TestSessionAuth_RejectedRefreshEndsSession(t *testing.T) {
-	f, h := newSessionFixture(t, false)
+	f, h := newSessionFixture(t)
 	s := f.session(t, 5)
 	f.ref.valid = "someone-else" // Socrate answers invalid_grant (spent or revoked)
 
@@ -226,7 +225,7 @@ func TestSessionAuth_RejectedRefreshEndsSession(t *testing.T) {
 }
 
 func TestSessionAuth_UnreachableSocrateKeepsSession(t *testing.T) {
-	f, h := newSessionFixture(t, false)
+	f, h := newSessionFixture(t)
 	s := f.session(t, 5)
 	f.ref.err = context.DeadlineExceeded
 
@@ -236,43 +235,21 @@ func TestSessionAuth_UnreachableSocrateKeepsSession(t *testing.T) {
 	assert.Zero(t, f.ran.Load())
 }
 
-func TestSessionAuth_BearerDuringTransitionOnly(t *testing.T) {
-	good := func(f *sessionFixture) string {
-		return f.idp.token(t, []string{ascendaClient}, "user", map[string]string{ascendaClient: "editor"})
-	}
+func TestSessionAuth_ABearerAloneIsRefused(t *testing.T) {
+	f, h := newSessionFixture(t)
+	valid := f.idp.token(t, []string{ascendaClient}, "user", map[string]string{ascendaClient: "admin"})
 
-	f, h := newSessionFixture(t, true)
 	r := sessionRequest(http.MethodGet, nil, "")
-	r.Header.Set("Authorization", "Bearer "+good(f))
-	require.Equal(t, http.StatusOK, serveSession(h, r).Code, "today's SPA keeps working")
-	assert.Equal(t, "editor", f.gotRole)
-
-	r = sessionRequest(http.MethodGet, nil, "")
-	r.Header.Set("Authorization", "Bearer not-a-jwt")
-	assert.Equal(t, http.StatusUnauthorized, serveSession(h, r).Code, "the bearer is still validated")
-
-	f, h = newSessionFixture(t, false)
-	r = sessionRequest(http.MethodGet, nil, "")
-	r.Header.Set("Authorization", "Bearer "+good(f))
-	assert.Equal(t, http.StatusUnauthorized, serveSession(h, r).Code, "without the transition, a bearer alone is refused")
+	r.Header.Set("Authorization", "Bearer "+valid)
+	assert.Equal(t, http.StatusUnauthorized, serveSession(h, r).Code, "a valid Socrate token without a session is not enough")
 	assert.Zero(t, f.ran.Load())
 }
 
 func TestSessionAuth_NilGatewayPassesThrough(t *testing.T) {
 	ran := false
-	h := NewSessionAuth(nil, false, logrus.NewEntry(logrus.New())).Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { ran = true }))
+	h := NewSessionAuth(nil, logrus.NewEntry(logrus.New())).Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { ran = true }))
 	serveSession(h, httptest.NewRequest(http.MethodGet, "/", nil))
 	assert.True(t, ran)
-}
-
-func TestHasBearer(t *testing.T) {
-	for h, want := range map[string]bool{"": false, "Bearer ": false, "Bearer x": true, "bearer x": true, "Basic x": false} {
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		if h != "" {
-			r.Header.Set("Authorization", h)
-		}
-		assert.Equal(t, want, hasBearer(r), strings.TrimSpace(h))
-	}
 }
 
 func TestEndWithoutRefreshToken(t *testing.T) {

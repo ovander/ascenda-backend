@@ -67,7 +67,6 @@ func validProdSocrate() SocrateConfig {
 		JWKSURL:      "https://socrate.vandermoten.eu/.well-known/jwks.json",
 		ClientID:     "id",
 		ClientSecret: "secret",
-		RedirectURL:  "https://ascenda.vandermoten.eu/callback",
 	}
 }
 
@@ -153,7 +152,6 @@ func TestValidate_ProductionSocrateURLs(t *testing.T) {
 		{"admin URL missing (backendkit would guess :8081)", func(s *SocrateConfig) { s.AdminBaseURL = "" }, "SOCRATE_ADMIN_URL"},
 		{"issuer with trailing slash", func(s *SocrateConfig) { s.BaseURL = "https://socrate.vandermoten.eu/" }, "SOCRATE_BASE_URL must not end with /"},
 		{"admin URL with trailing slash", func(s *SocrateConfig) { s.AdminBaseURL = "http://127.0.0.1:18082/" }, "SOCRATE_ADMIN_URL must not end with /"},
-		{"malformed redirect URL", func(s *SocrateConfig) { s.RedirectURL = "http:httpd://ascenda.vandermoten.eu/callback" }, "SOCRATE_REDIRECT_URL must be an absolute http(s) URL"},
 		{"relative JWKS URL", func(s *SocrateConfig) { s.JWKSURL = "/.well-known/jwks.json" }, "SOCRATE_JWKS_URL must be an absolute http(s) URL"},
 	}
 	for _, tc := range cases {

@@ -14,6 +14,12 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
   takes a bearer during the transition. New settings `BFF_REDIRECT_URL`, `BFF_COOKIE_NAME`,
   `BFF_SESSION_IDLE_TTL`, `BFF_SESSION_ABSOLUTE_TTL`, `BFF_INSECURE_COOKIE` (#46).
 
+### Removed
+- The browser token path: `POST /auth/callback`, `/auth/refresh`, `/auth/logout` and
+  `/auth/magic-link/verify`, which returned or took OAuth tokens. Sign-in, refresh and sign-out are
+  the `/bff` routes, and `/api/v1` takes a session only; a bearer alone is refused.
+  `SOCRATE_REDIRECT_URL`, used only by the old callback, is gone (#47).
+
 ## [2.7.0] - 2026-09-30
 
 Cut-over readiness for Socrate at `https://socrate.vandermoten.eu` (Phase 1). Deploy with the VPS
