@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -108,9 +109,10 @@ func TestSocrateConfig_OAuthCallURL(t *testing.T) {
 }
 
 func TestListenAddr(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
 	t.Setenv("PORT", "8100")
 	t.Setenv("BIND_ADDRESS", "")
-	assert.Equal(t, ":8100", Load().ListenAddr(), "every interface by default (containers)")
+	assert.Equal(t, ":8100", Load().ListenAddr(), "every interface by default outside production")
 
 	t.Setenv("BIND_ADDRESS", "127.0.0.1")
 	assert.Equal(t, "127.0.0.1:8100", Load().ListenAddr())
@@ -125,4 +127,25 @@ func TestLoad_SocrateInternalURL(t *testing.T) {
 	cfg := Load()
 	assert.Equal(t, "https://socrate.vandermoten.eu", cfg.Socrate.BaseURL)
 	assert.Equal(t, "http://127.0.0.1:8080", cfg.Socrate.OAuthCallURL())
+}
+
+func TestListenAddr_LoopbackByDefaultInProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("PORT", "")
+	t.Setenv("BIND_ADDRESS", "")
+	assert.Equal(t, "127.0.0.1:8080", Load().ListenAddr(), "Caddy on the same host proxies to loopback")
+
+	t.Setenv("BIND_ADDRESS", "0.0.0.0")
+	assert.Equal(t, "0.0.0.0:8080", Load().ListenAddr(), "explicit override, e.g. in a container")
+}
+
+// The image runs with APP_ENV=production; loopback inside a container would be
+// unreachable through a published port, so the Dockerfile must listen on every
+// interface explicitly.
+func TestDockerfileListensOnEveryInterface(t *testing.T) {
+	data, err := os.ReadFile("../../Dockerfile")
+	require.NoError(t, err)
+	df := string(data)
+	require.Contains(t, df, "ENV APP_ENV=production")
+	assert.Contains(t, df, "ENV BIND_ADDRESS=0.0.0.0")
 }
