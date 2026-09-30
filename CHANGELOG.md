@@ -15,6 +15,15 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
   *Deployment*, new `.env.example`).
 - Production listens on `127.0.0.1` by default (`BIND_ADDRESS`), since Caddy on the same host
   proxies to it; elsewhere every interface as before. The Docker image sets `BIND_ADDRESS=0.0.0.0`.
+- The address sent to Socrate is resolved from `X-Forwarded-For` only when the peer is loopback
+  (Caddy on this host), else from the peer; `X-Real-IP` is never read, and
+  `TRUSTED_PROXY_CIDRS` no longer applies to it (it still does to rate limiting). Uses
+  backendkit's `bff.WithClientAttribution`; a browser's `X-Forwarded-For`/`X-Real-IP` never
+  reaches Socrate.
+
+### Removed
+- `SOCRATE_INTERNAL_URL`: OAuth calls always go to the public issuer URL, never through the
+  admin tunnel.
 
 ## [2.7.0] - 2026-09-29
 
