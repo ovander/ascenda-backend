@@ -7,6 +7,8 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 ## [Unreleased]
 
 ### Changed
+- Test through the production router that the removed `POST /auth/login` answers 404/405
+  (Socrate audit row 3).
 - The address sent to Socrate is resolved from `X-Forwarded-For` only when the peer is loopback
   (Caddy on this host), else from the peer; `X-Real-IP` is never read, and
   `TRUSTED_PROXY_CIDRS` no longer applies to it (it still does to rate limiting). Uses
