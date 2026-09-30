@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"ascenda/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,12 @@ func prodConfig() *config.Config {
 			RedirectURL:    "https://ascenda.vandermoten.eu/callback",
 			VerifyAudience: true,
 		},
+		BFF: config.BFFConfig{
+			RedirectURL: "https://ascenda.vandermoten.eu/bff/callback",
+			CookieName:  "ascenda_session",
+			IdleTTL:     30 * time.Minute,
+			AbsoluteTTL: 8 * time.Hour,
+		},
 	}
 }
 
@@ -39,6 +46,8 @@ func TestBootstrap_RefusesToStartInProduction(t *testing.T) {
 	}{
 		{"SOCRATE_ADMIN_URL empty (never derived)", func(c *config.Config) { c.Socrate.AdminBaseURL = "" }, "SOCRATE_ADMIN_URL"},
 		{"issuer with a trailing slash", func(c *config.Config) { c.Socrate.BaseURL = "https://socrate.vandermoten.eu/" }, "SOCRATE_BASE_URL must not end with /"},
+		{"BFF redirect URI missing", func(c *config.Config) { c.BFF.RedirectURL = "" }, "BFF_REDIRECT_URL"},
+		{"session cookie without Secure", func(c *config.Config) { c.BFF.InsecureCookie = true }, "BFF_INSECURE_COOKIE must not be enabled in production"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

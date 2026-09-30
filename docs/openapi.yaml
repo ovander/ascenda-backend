@@ -16,6 +16,14 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ascenda_session
+      description: >-
+        Backend-for-Frontend session: an opaque, HttpOnly cookie set by /bff/callback or
+        /bff/magic-link/verify. On /api/v1 it stands for the bearer. POST, PUT, PATCH and
+        DELETE also need the session's CSRF token in X-CSRF-Token (from GET /bff/session).
 
   schemas:
     ErrorResponse:
@@ -30,6 +38,26 @@ components:
       required:
         - code
         - message
+
+    BFFSession:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          type: object
+          properties:
+            sub:
+              type: string
+            email:
+              type: string
+            name:
+              type: string
+        csrf:
+          type: string
+          description: Send back in X-CSRF-Token on POST, PUT, PATCH and DELETE.
+      required:
+        - authenticated
 
     HealthStatus:
       type: object
@@ -310,6 +338,141 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bff/login:
+    get:
+      tags:
+        - BFF
+      operationId: bffLogin
+      summary: Start a sign-in (authorization code with PKCE, run by the server)
+      description: >-
+        Keeps a PKCE verifier and a single-use state on the server, sets a short-lived
+        login-binding cookie, and redirects to Socrate's /oauth/authorize. Cache-Control: no-store.
+      parameters:
+        - name: return_to
+          in: query
+          required: false
+          description: Same-origin path to return to after sign-in; anything else becomes /.
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to Socrate's /oauth/authorize
+        '503':
+          description: Sign-in not configured, or too many sign-ins in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bff/callback:
+    get:
+      tags:
+        - BFF
+      operationId: bffCallback
+      summary: Finish a sign-in (Socrate redirects the browser here)
+      description: >-
+        Checks the state (issued here, unused, unexpired) and the login-binding cookie,
+        exchanges the code with the PKCE verifier, reads the profile, stores a session and
+        sets the session cookie. No token reaches the browser. Cache-Control: no-store.
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: >-
+            Redirect to the return_to path with the session cookie set, or to
+            /login?error=sign_in_failed (or access_denied) without a session.
+
+  /bff/session:
+    get:
+      tags:
+        - BFF
+      operationId: bffSession
+      summary: Current session
+      description: Never returns a token. Cache-Control no-store.
+      security:
+        - SessionCookie: []
+        - {}
+      responses:
+        '200':
+          description: The session, or authenticated false
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BFFSession'
+
+  /bff/logout:
+    post:
+      tags:
+        - BFF
+      operationId: bffLogout
+      summary: Sign out
+      description: >-
+        Revokes the session's refresh token at Socrate, deletes the session and clears the
+        cookie. Needs X-CSRF-Token when a session exists. Cache-Control: no-store.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: X-CSRF-Token
+          in: header
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Signed out (also without a session)
+        '403':
+          description: Missing or wrong CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bff/magic-link/verify:
+    post:
+      tags:
+        - BFF
+      operationId: bffVerifyMagicLink
+      summary: Sign in with a magic link
+      description: >-
+        Redeems the token from a Socrate magic link and starts a session. Same-origin only
+        (Origin must be the app's). Cache-Control: no-store.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+              required:
+                - token
+      responses:
+        '200':
+          description: Signed in; the session cookie is set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BFFSession'
+        '401':
+          description: Link invalid, expired or already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Cross-origin request
           content:
             application/json:
               schema:

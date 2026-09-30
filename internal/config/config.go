@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config holds all application configuration loaded from environment variables.
@@ -52,6 +53,7 @@ type Config struct {
 	AllowDefaultTenantFallback bool
 
 	Socrate SocrateConfig
+	BFF     BFFConfig
 	AI      AIConfig
 	DBPool  DBPoolConfig
 	Sentry  SentryConfig
@@ -80,6 +82,32 @@ type SocrateConfig struct {
 	VerifyAudience bool
 	RedirectURL    string
 }
+
+// BFFConfig configures the Backend-for-Frontend: the server-side sign-in flow
+// (/bff/login, /bff/callback), the session cookie and the session store. The
+// browser holds only the opaque session cookie; tokens stay on the server.
+type BFFConfig struct {
+	// RedirectURL is the BFF's OAuth redirect URI, registered at Socrate
+	// exactly: https://ascenda.vandermoten.eu/bff/callback in production. Its
+	// origin is the SPA's, where the session cookie lives. Env: BFF_REDIRECT_URL.
+	// Empty outside production disables the BFF sign-in routes.
+	RedirectURL string
+	// CookieName is the session cookie's name; with Secure it is sent as
+	// "__Host-" + CookieName. Env: BFF_COOKIE_NAME (default ascenda_session).
+	CookieName string
+	// IdleTTL ends a session unused for that long; AbsoluteTTL ends any session
+	// that old. Env: BFF_SESSION_IDLE_TTL (default 30m), BFF_SESSION_ABSOLUTE_TTL
+	// (default 8h).
+	IdleTTL     time.Duration
+	AbsoluteTTL time.Duration
+	// InsecureCookie drops Secure and the __Host- prefix, for local development
+	// over plain http only. Env: BFF_INSECURE_COOKIE (default false). Validate
+	// refuses it in production and with an https redirect URL.
+	InsecureCookie bool
+}
+
+// Enabled reports whether the BFF sign-in routes are configured.
+func (b BFFConfig) Enabled() bool { return b.RedirectURL != "" }
 
 // defaultBindAddress is loopback in production, every interface otherwise.
 func defaultBindAddress(env string) string {
@@ -197,6 +225,14 @@ func load() *Config {
 			RedirectURL:    envOrDefault("SOCRATE_REDIRECT_URL", ""),
 		},
 
+		BFF: BFFConfig{
+			RedirectURL:    envOrDefault("BFF_REDIRECT_URL", ""),
+			CookieName:     envOrDefault("BFF_COOKIE_NAME", "ascenda_session"),
+			IdleTTL:        envOrDefaultDuration("BFF_SESSION_IDLE_TTL", 30*time.Minute),
+			AbsoluteTTL:    envOrDefaultDuration("BFF_SESSION_ABSOLUTE_TTL", 8*time.Hour),
+			InsecureCookie: envOrDefault("BFF_INSECURE_COOKIE", "false") == "true",
+		},
+
 		AI: AIConfig{
 			Provider:      envOrDefault("AI_PROVIDER", "claude"),
 			APIKey:        envOrDefault("AI_API_KEY", ""),
@@ -237,6 +273,7 @@ func (c *Config) Validate() error {
 	if !c.IsProd() && c.Socrate.BaseURL != "" && c.Socrate.AdminBaseURL == "" {
 		errs = append(errs, "SOCRATE_ADMIN_URL (required with SOCRATE_BASE_URL; never derived)")
 	}
+	errs = append(errs, c.BFF.errors(c.IsProd())...)
 	if c.IsProd() {
 		if c.Socrate.BaseURL == "" {
 			errs = append(errs, "SOCRATE_BASE_URL")
@@ -301,6 +338,49 @@ func (s SocrateConfig) urlErrors() []string {
 	return errs
 }
 
+// errors reports a BFF setting that is missing or unsafe. In production the
+// redirect URL is required and must be https, and the insecure cookie is
+// refused; elsewhere the insecure cookie needs an http redirect URL, so it is
+// never used on an https origin.
+func (b BFFConfig) errors(prod bool) []string {
+	var errs []string
+	if prod && b.RedirectURL == "" {
+		errs = append(errs, "BFF_REDIRECT_URL")
+	}
+	var scheme string
+	if b.RedirectURL != "" {
+		u, err := url.Parse(b.RedirectURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			errs = append(errs, "BFF_REDIRECT_URL must be an absolute http(s) URL, got "+strconv.Quote(b.RedirectURL))
+		} else {
+			scheme = u.Scheme
+		}
+	}
+	if prod && scheme == "http" {
+		errs = append(errs, "BFF_REDIRECT_URL must be https in production")
+	}
+	if b.InsecureCookie {
+		switch {
+		case prod:
+			errs = append(errs, "BFF_INSECURE_COOKIE must not be enabled in production")
+		case scheme != "http":
+			errs = append(errs, "BFF_INSECURE_COOKIE needs an http:// BFF_REDIRECT_URL (local development only)")
+		}
+	}
+	if !b.Enabled() {
+		return errs
+	}
+	if b.CookieName == "" || strings.ContainsAny(b.CookieName, " \t;,=\"") {
+		errs = append(errs, "BFF_COOKIE_NAME must be a plain cookie name")
+	}
+	if b.IdleTTL <= 0 || b.AbsoluteTTL <= 0 {
+		errs = append(errs, "BFF_SESSION_IDLE_TTL and BFF_SESSION_ABSOLUTE_TTL must be positive durations")
+	} else if b.IdleTTL > b.AbsoluteTTL {
+		errs = append(errs, "BFF_SESSION_IDLE_TTL must not exceed BFF_SESSION_ABSOLUTE_TTL")
+	}
+	return errs
+}
+
 func envOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -315,6 +395,20 @@ func envOrDefaultInt(key string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// envOrDefaultDuration parses a Go duration ("30m", "8h"). A value that does
+// not parse becomes 0, which Validate rejects, rather than silently the default.
+func envOrDefaultDuration(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0
+	}
+	return d
 }
 
 func envOrDefaultFloat(key string, fallback float64) float64 {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,6 +41,7 @@ func TestValidate_RefusesDefaultTenantFallbackInProduction(t *testing.T) {
 		DatabaseURL:                "postgres://x",
 		AllowDefaultTenantFallback: true,
 		Socrate:                    validProdSocrate(),
+		BFF:                        validProdBFF(),
 	}
 	err := cfg.Validate()
 	require.Error(t, err)
@@ -69,11 +71,75 @@ func validProdSocrate() SocrateConfig {
 	}
 }
 
+// validProdBFF is a complete production BFF configuration.
+func validProdBFF() BFFConfig {
+	return BFFConfig{
+		RedirectURL: "https://ascenda.vandermoten.eu/bff/callback",
+		CookieName:  "ascenda_session",
+		IdleTTL:     30 * time.Minute,
+		AbsoluteTTL: 8 * time.Hour,
+	}
+}
+
+func TestBFFConfig_Defaults(t *testing.T) {
+	for _, k := range []string{"BFF_REDIRECT_URL", "BFF_COOKIE_NAME", "BFF_SESSION_IDLE_TTL", "BFF_SESSION_ABSOLUTE_TTL", "BFF_INSECURE_COOKIE"} {
+		t.Setenv(k, "")
+	}
+	b := Load().BFF
+	assert.Equal(t, "ascenda_session", b.CookieName)
+	assert.Equal(t, 30*time.Minute, b.IdleTTL)
+	assert.Equal(t, 8*time.Hour, b.AbsoluteTTL)
+	assert.False(t, b.InsecureCookie, "Secure unless explicitly turned off")
+	assert.False(t, b.Enabled())
+
+	t.Setenv("BFF_SESSION_IDLE_TTL", "thirty minutes")
+	assert.Zero(t, Load().BFF.IdleTTL, "an unparsable duration is 0, which Validate rejects, not the default")
+}
+
+func TestValidate_BFF(t *testing.T) {
+	validate := func(env string, mutate func(*BFFConfig)) error {
+		b := validProdBFF()
+		mutate(&b)
+		return (&Config{Env: env, DatabaseURL: "postgres://x", Socrate: validProdSocrate(), BFF: b}).Validate()
+	}
+	require.NoError(t, validate("production", func(*BFFConfig) {}))
+
+	cases := []struct {
+		name, env string
+		mutate    func(*BFFConfig)
+		want      string
+	}{
+		{"redirect URL missing in production", "production", func(b *BFFConfig) { b.RedirectURL = "" }, "BFF_REDIRECT_URL"},
+		{"http redirect URL in production", "production", func(b *BFFConfig) { b.RedirectURL = "http://ascenda.vandermoten.eu/bff/callback" }, "must be https in production"},
+		{"malformed redirect URL", "production", func(b *BFFConfig) { b.RedirectURL = "http:httpd://ascenda.vandermoten.eu/bff/callback" }, "BFF_REDIRECT_URL must be an absolute http(s) URL"},
+		{"Secure:false in production", "production", func(b *BFFConfig) { b.InsecureCookie = true }, "BFF_INSECURE_COOKIE must not be enabled in production"},
+		{"Secure:false on an https origin", "development", func(b *BFFConfig) { b.InsecureCookie = true }, "BFF_INSECURE_COOKIE needs an http://"},
+		{"cookie name with a separator", "production", func(b *BFFConfig) { b.CookieName = "a;b" }, "BFF_COOKIE_NAME"},
+		{"zero TTL", "production", func(b *BFFConfig) { b.IdleTTL = 0 }, "must be positive durations"},
+		{"idle longer than absolute", "production", func(b *BFFConfig) { b.IdleTTL = 9 * time.Hour }, "must not exceed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validate(tc.env, tc.mutate)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.want)
+		})
+	}
+
+	// Local development over plain http may drop Secure, and only there.
+	require.NoError(t, validate("development", func(b *BFFConfig) {
+		b.RedirectURL = "http://localhost:5173/bff/callback"
+		b.InsecureCookie = true
+	}))
+	// Without a redirect URL outside production the BFF is off and its other settings are not checked.
+	require.NoError(t, (&Config{Env: "development", DatabaseURL: "postgres://x"}).Validate())
+}
+
 func TestValidate_ProductionSocrateURLs(t *testing.T) {
 	prod := func(mutate func(*SocrateConfig)) error {
 		s := validProdSocrate()
 		mutate(&s)
-		return (&Config{Env: "production", DatabaseURL: "postgres://x", Socrate: s}).Validate()
+		return (&Config{Env: "production", DatabaseURL: "postgres://x", Socrate: s, BFF: validProdBFF()}).Validate()
 	}
 
 	require.NoError(t, prod(func(*SocrateConfig) {}))

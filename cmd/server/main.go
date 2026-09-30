@@ -110,6 +110,10 @@ func main() {
 		shutLog.Info("AI usage recording goroutines finished")
 	}
 
+	if resources.StopBFF != nil {
+		resources.StopBFF()
+	}
+
 	// ── Step 2b: drain the async event emitter ───────────────────────────────
 	//
 	// Must happen AFTER the HTTP server stops so that no new events are
