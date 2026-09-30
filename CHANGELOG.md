@@ -6,6 +6,10 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Changed
+- Test through the production router that the removed `POST /auth/login` answers 404/405
+  (Socrate audit row 3).
+
 ## [2.7.0] - 2026-09-29
 
 ### Added
