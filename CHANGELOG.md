@@ -6,6 +6,12 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-09-30
+
+Patch release: self sign-up and the user list's profile look-up work with Ascenda's app-scoped
+Socrate client. No migration and no new setting; the frontend is unchanged (v1.7.0). Before
+deploying, set `SOCRATE_APP_ID=3` and check that Socrate is later than v1.5.3.
+
 ### Added
 - `docs/SOCRATE-APP-ID-2026-09-30.md`: the closed change request on Ascenda's Socrate app ID (`3`),
   what each Socrate call needs, and the follow-up changes; `SOCRATE_APP_ID` in the README table (#49).
@@ -229,7 +235,8 @@ env changes in the README (*Environment Variables*, *Deployment*) before the fro
 ### Added
 - Initial platform: compute engine, AI, cap table, infrastructure.
 
-[Unreleased]: https://github.com/ovander/ascenda-backend/compare/v2.8.0...HEAD
+[Unreleased]: https://github.com/ovander/ascenda-backend/compare/v2.8.1...HEAD
+[2.8.1]: https://github.com/ovander/ascenda-backend/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/ovander/ascenda-backend/compare/v2.7.0...v2.8.0
 [2.7.0]: https://github.com/ovander/ascenda-backend/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/ovander/ascenda-backend/compare/v2.5.0...v2.6.0
