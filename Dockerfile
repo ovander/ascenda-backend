@@ -41,6 +41,9 @@ COPY --from=builder /app/migrations /app/migrations
 # Default environment
 ENV APP_ENV=production
 ENV PORT=8080
+# Production defaults to 127.0.0.1 (Caddy on the host); a container must listen
+# on every interface to be reachable through a published port.
+ENV BIND_ADDRESS=0.0.0.0
 
 EXPOSE 8080
 

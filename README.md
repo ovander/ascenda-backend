@@ -206,7 +206,7 @@ make run             # development mode (uses air for live reload)
 make run-prod        # production mode
 ```
 
-The server listens on port `8080` on every interface by default (override with `PORT=` and `BIND_ADDRESS=`).
+The server listens on port `8080`: on every interface in development, on `127.0.0.1` in production (override with `PORT=` and `BIND_ADDRESS=`).
 
 ### Docker
 
@@ -223,8 +223,8 @@ make docker-compose-down   # stops everything
 |---|---|---|
 | `APP_ENV` | Environment (`development`, `staging`, `production`) | `development` |
 | `APP_VERSION` | Application version string | `0.1.0` |
-| `PORT` | HTTP listen port. In production on the Socrate host: `8100` (Socrate uses `8080` and `8082` there) | `8080` |
-| `BIND_ADDRESS` | Interface to listen on; empty means every interface (containers). On the Socrate host set `127.0.0.1`, so only the local reverse proxy reaches the API | empty |
+| `PORT` | HTTP listen port | `8080` |
+| `BIND_ADDRESS` | Interface to listen on. In production the default is `127.0.0.1`: Caddy on the same host proxies to the API, and nothing else can reach it. Elsewhere the default is every interface. The Docker image sets `0.0.0.0` | `127.0.0.1` in production, else every interface |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | auto from `APP_ENV` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgres://ascenda:ascenda@localhost:5432/ascenda?sslmode=disable` |
 | `DB_AUTO_MIGRATE` | Run migrations on startup | `true` |
