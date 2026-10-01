@@ -12,6 +12,9 @@ import (
 
 // Config holds all application configuration loaded from environment variables.
 type Config struct {
+	// Env is development, staging or production. Env: APP_ENV, required: with
+	// no default, a deploy that forgets it cannot run with the production
+	// checks silently off (Validate refuses to start).
 	Env  string
 	Port int
 	// BindAddress is the interface the HTTP server listens on. Env: BIND_ADDRESS.
@@ -156,7 +159,7 @@ func Load() *Config {
 
 // load does the actual work.
 func load() *Config {
-	env := envOrDefault("APP_ENV", "development")
+	env := strings.TrimSpace(os.Getenv("APP_ENV")) // required, no default: see Validate
 	isProd := env == "production"
 
 	// DB_AUTO_MIGRATE: default true in dev/staging, false in production.
@@ -263,6 +266,11 @@ func (c *Config) IsProd() bool {
 // Validate checks that all required configuration fields are set.
 func (c *Config) Validate() error {
 	var errs []string
+	switch c.Env {
+	case "development", "staging", "production":
+	default:
+		errs = append(errs, "APP_ENV (development, staging or production; no default)")
+	}
 	if c.DatabaseURL == "" {
 		errs = append(errs, "DATABASE_URL")
 	}
