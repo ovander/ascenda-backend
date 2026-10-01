@@ -6,6 +6,11 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Changed
+- `APP_ENV` is required and has no default: unset or misspelt, the server refuses to start
+  instead of running as `development`, with the production checks off and the default-tenant
+  fallback on. Set it before deploying (production already has `APP_ENV=production`) (#54).
+
 ### Added
 - `docs/SOCRATE-MIGRATION-2026-10-01.md`: the retrospective of the move to the new Socrate (final
   settings, the PR sequence, lessons with their symptoms, a checklist for the next application);
