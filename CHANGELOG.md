@@ -12,6 +12,10 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
   fallback on. Set it before deploying (production already has `APP_ENV=production`) (#53).
 
 ### Added
+- The Socrate migration retrospective links Parashift's, adds its lessons to the checklist and
+  records where Ascenda stands on each (#54).
+
+### Added
 - `docs/SOCRATE-MIGRATION-2026-10-01.md`: the retrospective of the move to the new Socrate (final
   settings, the PR sequence, lessons with their symptoms, a checklist for the next application);
   fix 2 of the app ID record marked as shipped in v2.8.1.

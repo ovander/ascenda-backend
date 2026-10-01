@@ -5,8 +5,10 @@
 token reaches the browser. In production: backend **v2.8.1** (`7645d74`, Go 1.27.1), frontend
 **v1.7.0** (`5d13bfb`, Node 24.21.0, Vite 8.3.1, Vue 3.5.43, TypeScript 6.0.3).
 
-This is the retrospective, meant for the next application that moves onto Socrate (the same
-checklist applies to Parashift). The detailed records stay where they are:
+This is the retrospective, meant for the next application that moves onto Socrate. Parashift
+followed it on 2026-10-01; what that move added is in §6 and in the checklist, and its own
+retrospective is [`parashift-backend/docs/SOCRATE-MIGRATION-2026-10-01.md`](https://github.com/ovander/parashift-backend/blob/main/docs/SOCRATE-MIGRATION-2026-10-01.md). The detailed
+records stay where they are:
 
 - [`SOCRATE-COMPAT-REPORT.md`](../SOCRATE-COMPAT-REPORT.md): the read-only audit against Socrate
   v1.3.0 and its fix status.
@@ -150,6 +152,12 @@ Each lesson is the symptom we saw, the cause, and the rule we keep.
 Before code:
 - [ ] New client ID, app ID, issuer and admin URL from the provider; `sub` values carried over?
 - [ ] Read-only compatibility report against the provider's source, dated, with a status table.
+- [ ] The server as it is: the reverse-proxy block, the service unit
+      (`systemctl show -p User -p WorkingDirectory`), the env variable names (values cut to four
+      characters) and the running release (`/api/v1/version`, `readlink` of the current link).
+- [ ] Every provider URL in the env file compared with the provider's discovery document.
+- [ ] A secret ever committed is presumed live: rotate it at the provider and replace it on the
+      server in the same step.
 
 Code (one PR each):
 - [ ] Every provider call through backendkit (`jwtauth`, `socrate.Client`, `bff`); no hand-written
@@ -160,11 +168,24 @@ Code (one PR each):
 - [ ] Client attribution from a loopback-trusted `X-Forwarded-For`.
 - [ ] BFF additive → SPA switch with a no-token test → old token routes removed.
 - [ ] Magic-link landing page on the SPA, redeemed through the BFF.
+- [ ] One environment variable (`APP_ENV` here), required, no default outside tests.
+- [ ] Accounts linked by e-mail only on a verified e-mail from the profile, never from the token.
+- [ ] e2e: the catch-all API mock answers 404 JSON (a same-origin preview answers `index.html`).
+- [ ] govulncheck in CI; a unit test that builds the tracing resource, if there is one.
 
 Cut-over:
 - [ ] Register the BFF redirect URI and the magic-link URL on the app at the provider.
-- [ ] Reverse proxy: `/bff/*`, `/api/*`, `/auth/*` → API; the rest → SPA.
-- [ ] Env: compare names with the app's README table; keep the existing secret.
+- [ ] Reverse proxy: `/bff/*`, `/api/*`, `/auth/*` → API on `127.0.0.1:<PORT>` (not `localhost`,
+      which may resolve to `::1`); the rest → SPA.
+- [ ] Env: compare names with the app's README table; keep the existing secret. Keep the file valid
+      for the old release too until the new one is confirmed, or restore the backup on rollback.
+- [ ] A new or changed deploy script runs first against a sandbox copy of the layout; migrations
+      run as the service user from its working directory; any failure after the stop restarts a
+      release.
+- [ ] Backups first: database, env file, proxy config, the old web app.
+- [ ] Release section in `CHANGELOG.md`, tag on the merge commit, then `git ls-remote --tags` and
+      the release workflow run checked before deploying.
+- [ ] `ls .env*` (names only) in the build checkout; deploy settings copied from a sibling app.
 - [ ] Deploy the API, then the SPA; check `/api/v1/version` and `/VERSION`.
 - [ ] Sign in from a fresh private window; then magic link, sign-up, invitation, team list.
 - [ ] Remove the old redirect URI; trim `CORS_ORIGINS`.
@@ -181,3 +202,22 @@ Cut-over:
 | Magic-link e-mail opens a `405` | provider link is POST-only | 6 |
 | Every service-account call `401` | app ID looked up instead of configured | 4 |
 | Invitations and magic-link e-mails fail, sign-in works | admin SSH tunnel down | 7 |
+
+## 6. After Parashift
+
+Parashift moved on 2026-10-01 with this checklist from the start ([its retrospective](https://github.com/ovander/parashift-backend/blob/main/docs/SOCRATE-MIGRATION-2026-10-01.md)). What
+it added, and where Ascenda stands (checked 2026-10-01):
+
+| Parashift lesson | Ascenda |
+|---|---|
+| Look at the server before planning: the API was not on the app's own host | Done at the cut-over (Caddy routes `/bff`, `/api`, `/auth`). |
+| The VPS ran a release five months older than the latest tag | Running releases checked: v2.8.1 and v1.7.0. |
+| The committed secret was the live one, already revoked by Socrate | No secret was ever committed here. |
+| An issuer from the old provider in the env file | Ascenda has no `SOCRATE_ISSUER`; the issuer is `SOCRATE_BASE_URL`. |
+| The code read `ENV`, the VPS set `APP_ENV`: production checks silently off | VPS has `APP_ENV=production` and listens on `127.0.0.1:8082`; `APP_ENV` is now required (#53). |
+| Linking by e-mail without a verified e-mail | Ascenda provisions users by `sub`, not by e-mail. |
+| Same-origin e2e: unmocked calls get `index.html` | `mockApiCalls` handles every `/api/v1/**` call. |
+| The deploy script had never run as written (user, working directory, rollback) | Migrations are embedded in the binary; `PREVIOUS` is read before the stop; the rollback restarts the service. |
+| An env file edited for the new release broke the rollback | Rule added to the checklist; no pending env change. |
+| `localhost` upstream after binding `127.0.0.1` | Caddy already proxies to `127.0.0.1:8082`. |
+
