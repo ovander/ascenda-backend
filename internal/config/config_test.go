@@ -11,18 +11,34 @@ import (
 )
 
 func TestAllowDefaultTenantFallback_DefaultsByEnvironment(t *testing.T) {
-	cases := map[string]bool{"development": true, "staging": false, "production": false, "": true}
+	cases := map[string]bool{"development": true, "staging": false, "production": false, "": false}
 	for env, want := range cases {
 		t.Run("env="+env, func(t *testing.T) {
-			if env != "" {
-				t.Setenv("APP_ENV", env)
-			} else {
-				t.Setenv("APP_ENV", "") // envOrDefault treats "" as unset → development
-			}
+			t.Setenv("APP_ENV", env) // "" is unset: no environment, no development default
 			t.Setenv("TENANT_DEFAULT_FALLBACK", "")
 			assert.Equal(t, want, Load().AllowDefaultTenantFallback)
 		})
 	}
+}
+
+// APP_ENV has no default: unset or misspelt, it stops the server instead of
+// running it with the production checks off.
+func TestValidate_RequiresAppEnv(t *testing.T) {
+	for _, env := range []string{"", "prod", "Production", "dev"} {
+		t.Run("env="+env, func(t *testing.T) {
+			err := (&Config{Env: env, DatabaseURL: "postgres://x"}).Validate()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "APP_ENV")
+		})
+	}
+	for _, env := range []string{"development", "staging"} {
+		require.NoError(t, (&Config{Env: env, DatabaseURL: "postgres://x"}).Validate(), env)
+	}
+
+	t.Setenv("APP_ENV", "")
+	assert.Equal(t, "", Load().Env, "Load must not invent an environment")
+	t.Setenv("APP_ENV", " production ")
+	assert.Equal(t, "production", Load().Env)
 }
 
 func TestAllowDefaultTenantFallback_ExplicitOverride(t *testing.T) {

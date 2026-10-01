@@ -221,7 +221,7 @@ make docker-compose-down   # stops everything
 
 | Variable | Description | Default / Example |
 |---|---|---|
-| `APP_ENV` | Environment (`development`, `staging`, `production`) | `development` |
+| `APP_ENV` | Environment: `development`, `staging` or `production`. Required, with no default: the server refuses to start without it, so production checks are never silently off | `production` on the VPS |
 | `APP_VERSION` | Application version string | `0.1.0` |
 | `PORT` | HTTP listen port | `8080` |
 | `BIND_ADDRESS` | Interface to listen on. In production the default is `127.0.0.1`: Caddy on the same host proxies to the API, and nothing else can reach it. Elsewhere the default is every interface. The Docker image sets `0.0.0.0` | `127.0.0.1` in production, else every interface |

@@ -6,6 +6,11 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Changed
+- `APP_ENV` is required and has no default: unset or misspelt, the server refuses to start
+  instead of running as `development`, with the production checks off and the default-tenant
+  fallback on. Set it before deploying (production already has `APP_ENV=production`) (#53).
+
 ### Added
 - The Socrate migration retrospective links Parashift's, adds its lessons to the checklist and
   records where Ascenda stands on each (#54).
