@@ -1,8 +1,9 @@
 # Socrate app ID for Ascenda: change request, closed
 
 **Opened and closed:** 2026-09-30. **From:** Ascenda owner. **To:** Socrate team.
-**Status:** closed, answered. Ascenda's app ID is `3`. Two gaps remain that the ID does not fix;
-they are tracked as Socrate changes 1 and 2 below.
+**Status:** closed, answered. Ascenda's app ID is `3`. Two gaps remained that the ID does not fix,
+tracked as Socrate changes 1 and 2 below; change 2 shipped in v2.8.1 (2026-09-30). See also the
+[migration retrospective](SOCRATE-MIGRATION-2026-10-01.md).
 
 | | |
 |---|---|
@@ -39,8 +40,8 @@ the new Socrate.
 | Sign-in (password or SSO via `/bff/login`), session, refresh, sign-out | OAuth calls | `/oauth/*` | works | n/a (no app ID needed) |
 | Workspace invitations | `InviteUserAsService` | `POST /api/apps/3/service/users` | works | n/a |
 | Magic-link sign-in | `SendMagicLink` | `POST /api/apps/3/service/magic-link` | e-mail sent, link answers 405 | Socrate change 1 |
-| Self-service sign-up | `RegisterUser` | `POST /api/apps/3/users` | fails (401; Ascenda answers 500) | Socrate change 2 and a backendkit release |
-| Names and e-mails in team lists | `GetUserAsService` | `GET /api/apps/3/users/{id}` | skipped (fails silently, logged) | Socrate change 2 and a backendkit release |
+| Self-service sign-up | `RegisterUser` | `POST /api/apps/3/service/users` (was `/api/apps/3/users`) | fixed in v2.8.1 (backendkit v1.15.1) | Socrate change 2 and a backendkit release |
+| Names and e-mails in team lists | `GetUserAsService` | `GET /api/apps/3/service/users/{id}` (was `/api/apps/3/users/{id}`) | fixed in v2.8.1 (backendkit v1.15.1) | Socrate change 2 and a backendkit release |
 | Platform-admin user management | `ListUsers`, `GetUser`, `CreateUser`, `UpdateUserRole`, `DeleteUser`, … | `/api/apps/3/users…` | app admins only | The signed-in admin must be an app admin of app 3 on Socrate |
 
 ## Follow-up changes
@@ -58,7 +59,8 @@ the new Socrate.
 - Grant app-admin rights on app 3 at Socrate to the people who manage users in Ascenda's platform
   admin.
 - After change 1: set the landing URL above on app 3 and test a magic link end to end.
-- After change 2: bump backendkit in Ascenda (one-line PR) and test self-service sign-up.
+- After change 2: bump backendkit in Ascenda (one-line PR) and test self-service sign-up. Done:
+  backendkit v1.15.1 in #50, released in v2.8.1.
 - Optional until then: route sign-up through `InviteUserAsService` in a small Ascenda PR. The new
   user would get an invitation-style e-mail, and duplicate-account handling must be checked first.
 
