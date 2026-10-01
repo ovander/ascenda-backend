@@ -14,8 +14,9 @@ It is multi-tenant: every business row belongs to a tenant (workspace), and plan
 ## Sources of truth, in order
 
 1. The code. Read it before proposing changes; do not describe code you have not opened.
-2. `docs/AUDIT-2026-09-25.md` (with its dated status table) and `SOCRATE-COMPAT-REPORT.md` for
-   known findings and the identity-provider contract.
+2. `docs/AUDIT-2026-09-25.md` (with its dated status table), `SOCRATE-COMPAT-REPORT.md` and
+   `docs/SOCRATE-MIGRATION-2026-10-01.md` (the cut-over retrospective) for known findings and
+   the identity-provider contract.
 3. `docs/openapi.yaml` describes part of the API only; the router (`internal/router/router.go`)
    is authoritative.
 

@@ -6,6 +6,11 @@ in this repository. Entries before 2.4.0 are rebuilt from the release tags.
 
 ## [Unreleased]
 
+### Added
+- `docs/SOCRATE-MIGRATION-2026-10-01.md`: the retrospective of the move to the new Socrate (final
+  settings, the PR sequence, lessons with their symptoms, a checklist for the next application);
+  fix 2 of the app ID record marked as shipped in v2.8.1.
+
 ## [2.8.1] - 2026-09-30
 
 Patch release: self sign-up and the user list's profile look-up work with Ascenda's app-scoped
